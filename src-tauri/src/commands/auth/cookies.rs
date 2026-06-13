@@ -468,7 +468,7 @@ pub fn get_cookie_from_roblox_studio_inner(
                 return Ok(Some(cookie));
             }
         }
-        return Ok(None);
+        Ok(None)
     }
 
     #[cfg(target_os = "linux")]
