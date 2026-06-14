@@ -183,22 +183,24 @@ export default function SettingsView() {
                   {discordAuth?.user ? (
                     <div className="flex items-center justify-between gap-4">
                       <div className="flex items-center gap-3">
-                        {discordAuth.user.avatarUrl ? (
+                        {discordAuth.user?.avatarUrl ? (
                           <img
                             src={discordAuth.user.avatarUrl}
-                            alt=""
+                            alt="Avatar"
                             className="w-9 h-9 rounded-full border border-border-subtle"
                           />
                         ) : (
                           <div className="w-9 h-9 rounded-full bg-bg-elevated border border-border-subtle flex items-center justify-center text-sm font-bold text-text-secondary">
-                            {(discordAuth.user.globalName || discordAuth.user.username)
+                            {(discordAuth.user?.globalName || discordAuth.user?.username || 'U')
                               .charAt(0)
                               .toUpperCase()}
                           </div>
                         )}
                         <div className="flex flex-col">
                           <span className="text-sm font-semibold text-text-primary">
-                            {discordAuth.user.globalName || discordAuth.user.username}
+                            {discordAuth.user?.globalName ||
+                              discordAuth.user?.username ||
+                              'Unknown User'}
                           </span>
                           <span className="text-xs text-text-muted">
                             Connected · Cloud themes sync enabled
@@ -244,7 +246,7 @@ export default function SettingsView() {
                             variant="solid"
                             className="font-semibold"
                             onClick={startLogin}
-                            isDisabled={loginState === 'opening'}
+                            disabled={loginState === 'opening'}
                           >
                             {loginState === 'opening' ? (
                               <>

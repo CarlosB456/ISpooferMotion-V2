@@ -48,7 +48,7 @@ tmp/
 
 # Secrets and credentials
 .env
-.env.*
+
 !.env.example
 *.local
 *.cookie
@@ -85,3 +85,7 @@ desktop.ini
 *.swp
 *.swo
 /docs
+
+# Allow env files
+!.env.development
+!.env.production

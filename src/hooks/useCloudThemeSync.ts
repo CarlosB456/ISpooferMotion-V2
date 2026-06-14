@@ -30,7 +30,8 @@ async function sendThemeReceipt(
   error: string | null,
   signal: AbortSignal,
 ) {
-  await fetch('https://ispoofermotion.com/api/cloud-theme/receipt', {
+  const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://ispoofermotion.com';
+  await fetch(`${baseUrl}/api/cloud-theme/receipt`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     signal,
@@ -66,13 +67,11 @@ export function useCloudThemeSync() {
         10,
       );
 
-      const response = await fetch(
-        `https://ispoofermotion.com/api/cloud-theme/state?since=${localVersion}`,
-        {
-          headers: { Authorization: `Bearer ${auth.loginToken}` },
-          signal: controller.signal,
-        },
-      );
+      const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://ispoofermotion.com';
+      const response = await fetch(`${baseUrl}/api/cloud-theme/state?since=${localVersion}`, {
+        headers: { Authorization: `Bearer ${auth.loginToken}` },
+        signal: controller.signal,
+      });
 
       if (response.status === 404) {
         if (localVersion > 0) {

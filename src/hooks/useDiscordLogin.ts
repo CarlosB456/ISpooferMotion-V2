@@ -72,7 +72,31 @@ export function useDiscordLogin(onSuccess?: () => void) {
           if (pollData?.loginToken) {
             stopPolling();
 
-            const authPayload = { loginToken: pollData.loginToken };
+            let userId = 'unknown';
+            let userName = 'Unknown User';
+            let userAvatarUrl: string | null = null;
+            try {
+              const payloadBase64 = pollData.loginToken.split('.')[1];
+              if (payloadBase64) {
+                const payloadJson = atob(payloadBase64);
+                const payload = JSON.parse(payloadJson);
+                userId = payload.sub || payload.id || 'unknown';
+                userName = payload.name || 'Unknown User';
+                userAvatarUrl = payload.image || null;
+              }
+            } catch (e) {
+              console.error('Failed to decode JWT payload:', e);
+            }
+
+            const authPayload = {
+              loginToken: pollData.loginToken,
+              user: {
+                id: userId,
+                username: userName,
+                globalName: userName,
+                avatarUrl: userAvatarUrl,
+              },
+            };
             await commands.saveDiscordReportAuth(JSON.stringify(authPayload));
 
             await emit('discord-login-success', {}).catch(() => {});
