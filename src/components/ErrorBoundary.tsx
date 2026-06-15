@@ -27,7 +27,8 @@ export class ErrorBoundary extends Component<Props, State> {
       const osName = await getOsType();
       const osVersion = await getOsVersion();
 
-      await fetch('https://ispoofermotion.com/api/app-errors', {
+      const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://ispoofermotion.com';
+      await fetch(`${baseUrl}/api/app-errors`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
