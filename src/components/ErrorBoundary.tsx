@@ -1,6 +1,6 @@
-import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { getVersion } from '@tauri-apps/api/app';
 import { type as getOsType, version as getOsVersion } from '@tauri-apps/plugin-os';
+import { Component, ErrorInfo, ReactNode } from 'react';
 
 interface Props {
   children?: ReactNode;
@@ -27,7 +27,7 @@ export class ErrorBoundary extends Component<Props, State> {
       const osName = await getOsType();
       const osVersion = await getOsVersion();
 
-      await fetch('https://ispoofermotion.com/api/crash-reports', {
+      await fetch('https://ispoofermotion.com/api/app-errors', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -67,11 +67,13 @@ export class ErrorBoundary extends Component<Props, State> {
           </div>
           <h1 className="text-3xl font-bold tracking-tight">Oops, something broke.</h1>
           <p className="text-text-muted max-w-md">
-            ISpooferMotion encountered a fatal error and could not continue. 
-            A crash report has been silently sent to the developers.
+            ISpooferMotion encountered a fatal error and could not continue. A crash report has been
+            silently sent to the developers.
           </p>
           <div className="bg-bg-card border border-border p-4 rounded-xl mt-4 max-w-2xl text-left overflow-auto max-h-48 text-sm w-full font-mono shadow-inner">
-            <div className="text-red-400 font-semibold mb-2">{this.state.error?.name}: {this.state.error?.message}</div>
+            <div className="text-red-400 font-semibold mb-2">
+              {this.state.error?.name}: {this.state.error?.message}
+            </div>
           </div>
           <button
             onClick={() => window.location.reload()}

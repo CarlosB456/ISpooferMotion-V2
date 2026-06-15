@@ -51,7 +51,10 @@ export default function App() {
   const isExplorerOpen = config.ui.assetExplorerOpen;
   const [showRat, setShowRat] = useState(false);
   const [isRobloxApiDown, setIsRobloxApiDown] = useState(false);
-  const [maintenance, setMaintenance] = useState<{ mode: boolean; message: string }>({ mode: false, message: '' });
+  const [maintenance, setMaintenance] = useState<{ mode: boolean; message: string }>({
+    mode: false,
+    message: '',
+  });
 
   useCloudThemeSync();
 
@@ -206,7 +209,8 @@ export default function App() {
         </div>
         <h1 className="text-3xl font-bold tracking-tight">Maintenance Break</h1>
         <p className="text-text-muted max-w-md">
-          {maintenance.message || "ISpooferMotion is currently down for maintenance. Please check back later!"}
+          {maintenance.message ||
+            'ISpooferMotion is currently down for maintenance. Please check back later!'}
         </p>
       </div>
     );
