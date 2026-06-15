@@ -23,6 +23,7 @@ export default function ExperimentalView() {
   const [memoryInjectionSupported, setMemoryInjectionSupported] = useState(false);
 
   useEffect(() => {
+    // check if the current OS actually supports memory injection (windows only)
     isMemoryInjectionSupported().then(setMemoryInjectionSupported);
   }, []);
 

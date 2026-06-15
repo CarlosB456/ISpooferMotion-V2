@@ -1,3 +1,4 @@
+// sanity check the first few bytes of a download to make sure we didn't just save an html error page
 pub async fn validate_downloaded_payload(
     file_path: &str,
     asset_type: Option<&str>,

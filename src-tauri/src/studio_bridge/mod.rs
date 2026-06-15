@@ -1,3 +1,5 @@
+// Sets up the HTTP server that talks locally to the Roblox Studio plugin.
+// This acts as the "bridge" between the Tauri app and Studio.
 pub mod messages;
 pub mod middleware;
 pub mod server;
@@ -17,7 +19,10 @@ use std::sync::{Arc, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter};
 use tokio::sync::RwLock;
-use tower_http::{cors::{AllowOrigin, CorsLayer}, limit::RequestBodyLimitLayer};
+use tower_http::{
+    cors::{AllowOrigin, CorsLayer},
+    limit::RequestBodyLimitLayer,
+};
 use uuid::Uuid;
 
 use messages::plan_patches;
@@ -163,6 +168,8 @@ pub async fn start_server(_app_handle: AppHandle) {
     };
     *active_bridge_port().write().await = Some(addr.port());
 
+    // We allow localhost/tauri origins so the web frontend can actually hit this API.
+    // Pretty permissive because it's only running on localhost anyway.
     let cors = CorsLayer::new()
         .allow_origin(AllowOrigin::predicate(
             |origin: &HeaderValue, _req_parts: &axum::http::request::Parts| {
@@ -286,6 +293,8 @@ pub async fn get_plugin_bridge_port() -> Option<u16> {
     *active_bridge_port().read().await
 }
 
+// Try a few ports in sequence. People run multiple studio instances sometimes
+// or have weird port bindings so we try a small range.
 async fn bind_available_listener() -> Option<(tokio::net::TcpListener, SocketAddr)> {
     for port in PLUGIN_PORT_START..=PLUGIN_PORT_END {
         let addr = SocketAddr::from(([127, 0, 0, 1], port));

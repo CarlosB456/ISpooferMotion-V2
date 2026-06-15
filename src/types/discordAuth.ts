@@ -1,3 +1,4 @@
+// Discord oauth user data types
 export type DiscordUser = {
   id: string;
   username: string;

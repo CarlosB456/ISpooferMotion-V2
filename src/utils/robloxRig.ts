@@ -1,3 +1,4 @@
+// Hardcoded rig data for R6 and R15 since we can't easily extract it from roblox on the fly
 export interface RigBone {
   name: string;
   parent: string | null;
@@ -191,6 +192,7 @@ export function getBones(rigType: RigType): RigBone[] {
   return rigType === 'R6' ? R6_BONES : R15_BONES;
 }
 
+// Try to guess if an animation is R6 or R15 based on the bones it touches
 export function detectRigType(poseNames: Set<string>): RigType {
   const r15Bones = new Set([
     'LowerTorso',

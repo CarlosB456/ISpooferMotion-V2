@@ -13,9 +13,14 @@ export default function CreditsModal({
   const { data, isLoading: loading } = useQuery({
     queryKey: ['supporters'],
     queryFn: async () => {
+      // fetch supporters from the main api, cache it for 5 mins
+      // so we don't spam requests every time they open the credits modal
       const { fetch: tauriFetch } = await import('@tauri-apps/plugin-http');
       const res = await tauriFetch('https://www.incredidev.com/api/supporters', { method: 'GET' });
-      return (await res.json()) as { supporters?: string[]; boosters?: string[] };
+      return (await res.json()) as {
+        supporters?: string[];
+        boosters?: string[];
+      };
     },
     staleTime: 5 * 60 * 1000,
   });
@@ -23,13 +28,18 @@ export default function CreditsModal({
   const supporters = data?.supporters || [];
   const boosters = data?.boosters || [];
 
+  // some simple framer-motion variants to make the list pop in nicely
   const stagger: Variants = {
     hidden: {},
     show: { transition: { staggerChildren: 0.06 } },
   };
   const item: Variants = {
     hidden: { opacity: 0, y: 10 },
-    show: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 400, damping: 28 } },
+    show: {
+      opacity: 1,
+      y: 0,
+      transition: { type: 'spring', stiffness: 400, damping: 28 },
+    },
   };
 
   return (

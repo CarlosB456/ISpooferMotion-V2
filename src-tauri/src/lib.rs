@@ -6,6 +6,8 @@ pub mod utils;
 
 use tauri::{Emitter, Listener, Manager};
 
+// This giant macro handles tossing all our backend commands over to the frontend.
+// Gotta make sure any new command gets added here otherwise the UI won't be able to invoke it.
 macro_rules! specta_commands {
     () => {
         tauri_specta::collect_commands![
@@ -107,6 +109,7 @@ macro_rules! specta_commands {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Export typescript bindings in debug mode so our frontend always has up-to-date types
     #[cfg(debug_assertions)]
     {
         println!("ISpooferMotion: Exporting Specta bindings in a high-stack thread...");
@@ -147,6 +150,7 @@ pub fn run() {
                 let _ = app.deep_link().register_all();
             }
 
+            // Deep link handling (mainly used for Discord OAuth returning back to the app)
             app.listen("deep-link://new-url", {
                 let app_handle = app.handle().clone();
                 move |event| {
@@ -159,6 +163,7 @@ pub fn run() {
                                 ) {
                                     log::error!("Failed to save discord auth payload from deep link: {:?}", e);
                                 }
+                                // let the UI know we got it
                                 let _ = app_handle.emit("discord-login-success", ());
                             }
                         }
@@ -185,8 +190,10 @@ pub fn run() {
                 )?;
             }
 
+            // Spin up the bridge server in the background
             tauri::async_runtime::spawn(crate::studio_bridge::start_server(app.handle().clone()));
 
+            // Setup tray icon so people don't lose the app when they close the main window
             use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
             let _tray = TrayIconBuilder::new()
                 .icon(

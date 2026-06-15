@@ -18,6 +18,7 @@ export const stopRobloxAudio = () => {
   notifyPlaybackChange(null);
 };
 
+// handles playing audio previews through the tauri backend to bypass cors and auth issues
 export const playRobloxAudio = async (assetId: string, config: AppConfig) => {
   if (!assetId.trim()) {
     logIsm('warn', 'No Roblox audio asset id was provided.');
@@ -37,6 +38,7 @@ export const playRobloxAudio = async (assetId: string, config: AppConfig) => {
     const audio = new Audio(audioUrl);
     currentAudio = audio;
 
+    // hook up event listeners so the UI knows when to show the play/pause button
     audio.addEventListener('error', () => {
       if (currentAudio === audio) {
         currentAudio = null;

@@ -6,6 +6,8 @@ interface RobloxStatusBannerProps {
 }
 
 export function RobloxStatusBanner({ isVisible }: RobloxStatusBannerProps) {
+  // simple banner that drops down when roblox APIs are having a bad time
+  // helps prevent users from thinking the app is broken when it's actually roblox's fault
   return (
     <AnimatePresence>
       {isVisible && (

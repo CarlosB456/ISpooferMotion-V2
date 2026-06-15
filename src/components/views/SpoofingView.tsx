@@ -77,6 +77,7 @@ async function getStudioPlaceIdFallback(pluginPort: string): Promise<string> {
     if (/^\d+$/.test(cached) && cached !== '0') return cached;
   } catch {}
 
+  // try to ping the studio plugin directly for the place id if the tauri state hasn't synced yet
   try {
     const activePort = await findPluginBridgePort(pluginPort);
     if (!activePort) return '';
@@ -126,7 +127,9 @@ export default function SpoofingView() {
     loadCachedGroups(config.spoofing.selectedUser),
   );
   const [loadingGroups, setLoadingGroups] = useState(false);
-  const [audioQuota, setAudioQuota] = useState<AudioQuotaDisplay>({ status: 'idle' });
+  const [audioQuota, setAudioQuota] = useState<AudioQuotaDisplay>({
+    status: 'idle',
+  });
   const [pendingQuotaRun, setPendingQuotaRun] = useState<{
     assetIds: string[];
     audioCount: number;
@@ -200,6 +203,7 @@ export default function SpoofingView() {
         if (text && text !== lastClipboardText) {
           lastClipboardText = text;
 
+          // silently watch the clipboard for roblox asset URLs, and auto-queue them if they are new
           const robloxUrlRegex =
             /(?:roblox\.com\/(?:library|catalog)\/|create\.roblox\.com\/store\/asset\/)(\d+)/i;
           const match = text.match(robloxUrlRegex);
@@ -227,7 +231,9 @@ export default function SpoofingView() {
               window.clipboardSpoofAssetId = assetId;
               window.setTimeout(() => {
                 document.dispatchEvent(
-                  new CustomEvent('trigger-clipboard-spoof', { detail: { assetId } }),
+                  new CustomEvent('trigger-clipboard-spoof', {
+                    detail: { assetId },
+                  }),
                 );
               }, 0);
             }
@@ -290,7 +296,11 @@ export default function SpoofingView() {
 
   const handleSelectedUserChange = async (userId: string) => {
     if (!userId || userId === 'none') {
-      updateCategory('spoofing', { selectedUser: 'none', selectedGroup: 'none', cookie: '' });
+      updateCategory('spoofing', {
+        selectedUser: 'none',
+        selectedGroup: 'none',
+        cookie: '',
+      });
       setGroups([]);
       return;
     }
@@ -322,7 +332,12 @@ export default function SpoofingView() {
   };
 
   const spoofOptions = [
-    { value: 'animation', assetType: 'animation', label: 'Animations', icon: AnimationIcon },
+    {
+      value: 'animation',
+      assetType: 'animation',
+      label: 'Animations',
+      icon: AnimationIcon,
+    },
     { value: 'audio', assetType: 'audio', label: 'Audio', icon: SoundIcon },
     { value: 'images', assetType: 'image', label: 'Images', icon: DecalIcon },
     { value: 'meshes', assetType: 'mesh', label: 'Meshes', icon: MeshIcon },
@@ -472,6 +487,7 @@ export default function SpoofingView() {
           selectedUser !== 'none' &&
           normalizeId(result.ownerUserId) !== normalizeId(selectedUser)
         ) {
+          // warn them if the api key belongs to a different user than the one they selected
           setLogs((prev) =>
             appendSpoofingLog(
               prev,
@@ -539,6 +555,8 @@ export default function SpoofingView() {
 
     const extraIdsSet = new Set(extraIdsParsed);
     const assetInfoMap = new Map<string, { type: string; name: string }>();
+
+    // recursively grab asset details from the parsed rbxl tree
     const gatherAllInfo = (nodes: RbxInstance[]) => {
       for (const node of nodes) {
         for (const asset of node.assets) {

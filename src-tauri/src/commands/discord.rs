@@ -22,6 +22,7 @@ async fn report_api_url() -> crate::error::Result<String> {
 
     #[cfg(debug_assertions)]
     {
+        // if we're in debug mode, try hitting the dev server first, then fallback to local or prod
         if crate::utils::get_http_client().get(format!("{dev_url}/api/cache")).send().await.is_ok()
         {
             configured = dev_url.to_string();
@@ -113,6 +114,7 @@ fn stored_login_token() -> crate::error::Result<Option<String>> {
     }
 
     let entry = report_auth_entry()?;
+    // try to read the token out of the secure store, if it fails just return none silently
     let Ok(serialized) = entry.get_password() else {
         return Ok(None);
     };
@@ -143,9 +145,11 @@ pub fn clear_discord_report_auth() -> bool {
 async fn read_api_response(response: Response, action: &str) -> crate::error::Result<Value> {
     let status = response.status();
     let payload = response.json::<Value>().await?;
+    // standard ok response
     if status.is_success() {
         Ok(payload)
     } else {
+        // attempt to extract a useful error message from the payload, otherwise give a generic failure message
         let message = payload
             .get("error")
             .and_then(Value::as_str)
@@ -216,6 +220,7 @@ pub async fn start_discord_login(
         .get("authorizationUrl")
         .and_then(Value::as_str)
         .ok_or("Discord login response did not include an authorization URL.")?;
+    // make sure the auth url isn't sketchy
     let is_discord = authorization_url.starts_with("https://discord.com/");
     let is_ism = authorization_url.starts_with("https://ispoofermotion.com/")
         || authorization_url.starts_with("http://localhost:")
@@ -312,6 +317,7 @@ pub async fn submit_discord_poll_vote(
     let token = stored_login_token()?.unwrap_or_default();
     validate_login_token(&token)?;
     let base_url = report_api_url().await?;
+    // toss the vote to our api so it can count it
     let response = crate::utils::get_http_client()
         .post(format!("{base_url}/api/polls/vote"))
         .json(&json!({

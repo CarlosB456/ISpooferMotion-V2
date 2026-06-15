@@ -24,6 +24,7 @@ interface AnimationPreviewProps {
 }
 
 function disposeMaterial(material: THREE.Material) {
+  // make sure we don't leak memory when the preview modal closes
   for (const value of Object.values(material)) {
     if (value instanceof THREE.Texture) {
       value.dispose();
@@ -49,6 +50,8 @@ function lerp(a: number, b: number, t: number) {
   return a + (b - a) * t;
 }
 
+// trying to accurately mimic roblox's internal easing styles
+// not perfect but gets the job done for the previewer
 function applyEasing(t: number, style: number, dir: number): number {
   t = Math.max(0, Math.min(1, t));
   const ease = (fn: (x: number) => number) => {
@@ -69,6 +72,8 @@ function applyEasing(t: number, style: number, dir: number): number {
 }
 
 function flattenPoses(poses: RobloxPose[]): Map<string, RobloxPose> {
+  // flattens the nested pose tree into a map so we can look up bones instantly by name
+  // much faster than traversing the tree every single frame
   const map = new Map<string, RobloxPose>();
   const walk = (list: RobloxPose[]) => {
     for (const p of list) {
@@ -127,9 +132,13 @@ export default function AnimationPreview({ assetId, assetName, onClose }: Animat
     (async () => {
       try {
         let activeCookie = cookie;
+        // if they don't have a cookie set in config, try to auto-detect one as a fallback
+        // we need this to view private animations
         if (!activeCookie) {
           try {
-            const detected = await invoke('get_cookie_from_auto_detect', { userId: null });
+            const detected = await invoke('get_cookie_from_auto_detect', {
+              userId: null,
+            });
             if (detected && typeof detected === 'string') {
               activeCookie = detected;
             }
@@ -178,6 +187,7 @@ export default function AnimationPreview({ assetId, assetName, onClose }: Animat
         for (const kf of parsed.keyframes) uniqueTimes.add(kf.time);
         setKeyframeTimes(Array.from(uniqueTimes).sort((a, b) => a - b));
 
+        // try to figure out if this is R6 or R15 based on the bone names present
         const rig = detectRigType(allPoseNames);
         setDetectedRig(rig);
 
@@ -222,6 +232,8 @@ export default function AnimationPreview({ assetId, assetName, onClose }: Animat
       const kfs = c.keyframes;
       let kfA = kfs[0],
         kfB = kfs[0];
+
+      // find which two keyframes we are currently sitting between
       for (let i = 0; i < kfs.length - 1; i++) {
         if (kfs[i].time <= wt && kfs[i + 1].time >= wt) {
           kfA = kfs[i];
@@ -284,6 +296,7 @@ export default function AnimationPreview({ assetId, assetName, onClose }: Animat
         const transformMat = new THREE.Matrix4();
 
         if (pa && pb) {
+          // both keyframes have this bone, so we interpolate between them
           const pose = pa || pb!;
           const alpha = applyEasing(raw, pose.easingStyle, pose.easingDirection);
           const pos = new THREE.Vector3(
@@ -322,6 +335,7 @@ export default function AnimationPreview({ assetId, assetName, onClose }: Animat
     const W = container.clientWidth || 560;
     const H = container.clientHeight || 340;
 
+    // basic three.js setup
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setSize(W, H);
@@ -419,10 +433,16 @@ export default function AnimationPreview({ assetId, assetName, onClose }: Animat
 
     const materials = {
       Head: new THREE.MeshStandardMaterial({ color: 0xe3c16f, roughness: 0.6 }),
-      Torso: new THREE.MeshStandardMaterial({ color: 0x0d69ac, roughness: 0.6 }),
+      Torso: new THREE.MeshStandardMaterial({
+        color: 0x0d69ac,
+        roughness: 0.6,
+      }),
       Arm: new THREE.MeshStandardMaterial({ color: 0xfcc734, roughness: 0.6 }),
       Leg: new THREE.MeshStandardMaterial({ color: 0x4b974b, roughness: 0.6 }),
-      Default: new THREE.MeshStandardMaterial({ color: 0xa3a3a3, roughness: 0.6 }),
+      Default: new THREE.MeshStandardMaterial({
+        color: 0xa3a3a3,
+        roughness: 0.6,
+      }),
     };
 
     const getMaterialForBone = (boneName: string) => {
@@ -445,6 +465,7 @@ export default function AnimationPreview({ assetId, assetName, onClose }: Animat
         const mat = getMaterialForBone(bone.name);
 
         if (bone.name === 'Head') {
+          // load the actual head obj model so it doesn't just look like a generic block
           const headFile = rigType === 'R6' ? '/headr6.obj' : '/headr15.obj';
           const loader = new OBJLoader();
           loader.load(headFile, (loadedObj) => {
@@ -495,6 +516,7 @@ export default function AnimationPreview({ assetId, assetName, onClose }: Animat
             obj.add(faceMesh);
           });
         } else {
+          // fallback for other body parts, just use a nice rounded box
           const boxGeo = new RoundedBoxGeometry(bone.size[0], bone.size[1], bone.size[2], 2, 0.1);
           const mesh = new THREE.Mesh(boxGeo, mat);
           mesh.castShadow = true;
@@ -673,6 +695,7 @@ export default function AnimationPreview({ assetId, assetName, onClose }: Animat
               className="relative w-full h-1.5 bg-bg-base rounded-full cursor-pointer select-none"
               ref={scrubBarRef}
               onPointerDown={(e) => {
+                // drag timeline to scrub through animation manually
                 isScrubbing.current = true;
                 e.currentTarget.setPointerCapture(e.pointerId);
                 const rect = e.currentTarget.getBoundingClientRect();

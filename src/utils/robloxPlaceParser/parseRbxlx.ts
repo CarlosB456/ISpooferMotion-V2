@@ -4,6 +4,7 @@ import type { ParseProgressCallback, PlaceParseResult, RbxInstance } from './typ
 
 const CONTENT_CLOSE_BYTES = new TextEncoder().encode('</Content>');
 
+// streaming xml parser for rbxlx files, avoids loading massive DOM trees into memory which would crash the browser
 export async function parseRbxlx(
   bytesOrText: Uint8Array | string,
   _fileName: string,
@@ -61,6 +62,7 @@ export async function parseRbxlx(
   let inProperties = false;
   let iterations = 0;
 
+  // loop over the raw bytes directly to find tags, way faster than converting massive files to strings
   while (pos < totalLength) {
     if (iterations++ % 5000 === 0) {
       reportProgress('Scanning XML structure', pos, totalLength);
@@ -154,6 +156,7 @@ export async function parseRbxlx(
 
       const currentItem = pathStack[pathStack.length - 1];
       if (currentItem && propName && textContent) {
+        // handle shared strings (roblox hashes duplicate long strings to save space)
         if (tagPrefix.startsWith('<SharedString')) {
           unresolvedAssets.push({
             instance: currentItem,

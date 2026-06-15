@@ -56,6 +56,7 @@ fn is_process_alive(pid: u32) -> bool {
 #[tauri::command]
 #[specta::specta]
 #[must_use]
+// scans the system for a running instance of roblox studio and caches the pid so we don't spam the OS
 pub fn find_studio_process() -> Option<u32> {
     static LAST_SCAN_SECS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
@@ -122,6 +123,7 @@ unsafe extern "system" fn enum_windows_proc(
 
 #[tauri::command]
 #[specta::specta]
+// brutally force the studio window to the front and send ctrl+s to trigger an autosave
 pub async fn focus_and_save_studio(pid: u32) -> crate::error::Result<()> {
     tokio::task::spawn_blocking(move || {
         let mut target_hwnd = std::ptr::null_mut();
@@ -154,7 +156,9 @@ pub async fn focus_and_save_studio(pid: u32) -> crate::error::Result<()> {
         }
 
         if target_hwnd.is_null() {
-            return Err(crate::error::AppError::Custom("Could not find visible window for process".to_string()));
+            return Err(crate::error::AppError::Custom(
+                "Could not find visible window for process".to_string(),
+            ));
         }
 
         unsafe {
@@ -218,6 +222,7 @@ struct MemoryRegion {
 unsafe impl Send for MemoryRegion {}
 unsafe impl Sync for MemoryRegion {}
 
+// requests deep permissions from the windows kernel to read/write another app's memory
 fn open_process_for_memory(pid: u32) -> Result<ProcessHandle, String> {
     let handle = unsafe { OpenProcess(PROCESS_MEMORY_ACCESS, 0, pid) };
     if !handle.is_null() {
@@ -235,6 +240,7 @@ fn open_process_for_memory(pid: u32) -> Result<ProcessHandle, String> {
     })
 }
 
+// make sure the old and new ids are the exact same length, otherwise we'll corrupt memory by shifting bytes around
 fn validate_asset_id_pair(target: &str, replacement: &str) -> Result<(), String> {
     if target.is_empty() {
         return Err("Memory injection requires a numeric Roblox asset ID target.".into());
@@ -256,6 +262,7 @@ fn validate_asset_id_pair(target: &str, replacement: &str) -> Result<(), String>
     Ok(())
 }
 
+// checks if the match is surrounded by non-numbers to avoid accidentally replacing part of a larger number
 fn is_bounded_numeric_match(buffer: &[u8], offset: usize, len: usize) -> bool {
     if len == 0 {
         return false;
@@ -353,6 +360,7 @@ fn read_process_chunk(
 
 #[tauri::command]
 #[specta::specta]
+// the core memory scanner. loops through every read/write page in the target process and bulk replaces utf8 and utf16 strings
 pub async fn scan_and_replace_multiple_strings(
     app: AppHandle,
     pid: u32,

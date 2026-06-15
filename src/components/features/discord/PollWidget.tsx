@@ -12,6 +12,7 @@ export default function PollWidget() {
   const { data } = useQuery({
     queryKey: ['discord-poll'],
     queryFn: async (): Promise<FeaturePollResponse | null> => {
+      // fetch poll data from rust backend, making sure we are actually in tauri first
       if (!isTauriRuntime()) return null;
       try {
         return await invoke<FeaturePollResponse>('fetch_discord_poll');
@@ -28,10 +29,12 @@ export default function PollWidget() {
     return null;
   }
 
+  // prevent division by zero when the poll is fresh
   const highestCount = Math.max(...Object.values(poll.counts), 1);
 
   const handleVoteOnDiscord = () => {
     if (poll.guildId && poll.channelId && poll.id) {
+      // try deep linking to the discord app first, fallback to browser if it fails
       open(`discord://-/channels/${poll.guildId}/${poll.channelId}/${poll.id}`).catch(() => {
         open(`https://discord.com/channels/${poll.guildId}/${poll.channelId}/${poll.id}`);
       });

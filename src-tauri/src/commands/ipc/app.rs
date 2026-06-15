@@ -55,6 +55,7 @@ pub fn get_runtime_info() -> AnyValue {
 #[tauri::command]
 #[specta::specta]
 pub fn open_external(url: String) -> crate::error::Result<bool> {
+    // just a tiny sanity check so we don't accidentally run arbitrary schemes
     if url.starts_with("https://") || url.starts_with("http://") {
         let _ = open::that(&url);
         Ok(true)
@@ -81,6 +82,7 @@ pub async fn select_folder(app: AppHandle) -> crate::error::Result<Option<String
 #[tauri::command]
 #[specta::specta]
 pub async fn uninstall_app(app: AppHandle) -> crate::error::Result<bool> {
+    // nuke all user data and credentials before exiting
     let _ = clear_profile_secrets(app.clone(), None).await;
     let _ = crate::commands::discord::clear_discord_report_auth();
     if let Ok(data_dir) = app.path().app_data_dir() {

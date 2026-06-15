@@ -1,3 +1,4 @@
+// Payloads for events that the Rust backend fires off to the frontend
 export type TauriEventPayload<T> = {
   payload: T;
 };

@@ -6,6 +6,7 @@ import type { PlaceParseResult, RbxInstance } from './types';
 const MAGIC = '<roblox!\x89\xff\r\n\x1a\n';
 const MAGIC_BYTES = new Uint8Array(MAGIC.split('').map((c) => c.charCodeAt(0)));
 
+// roblox uses a slightly modified lz4 algorithm for compression on older chunks
 function lz4Decompress(src: Uint8Array, uncompressedSize: number): Uint8Array {
   const dst = new Uint8Array(uncompressedSize);
   let sPos = 0;
@@ -136,6 +137,7 @@ interface Chunk {
   data: Uint8Array;
 }
 
+// read the raw chunks out of the binary file and decompress them
 function readChunks(reader: BinaryReader, warnings: string[]): Chunk[] {
   const chunks: Chunk[] = [];
 
@@ -193,6 +195,7 @@ interface InstEntry {
   referents: number[];
 }
 
+// parses the instance type definitions so we know what class each referent is
 function parseInstChunk(data: Uint8Array, warnings: string[]): Map<number, InstEntry> {
   const map = new Map<number, InstEntry>();
   try {
@@ -339,6 +342,7 @@ function parsePrntChunk(
   return edges;
 }
 
+// main entrypoint for parsing a binary .rbxl file into our generic AST
 export function parseRbxl(buffer: ArrayBuffer, fileName: string): PlaceParseResult {
   const warnings: string[] = [];
 

@@ -1,3 +1,4 @@
+// empty fallback implementations for mac/linux since we can only inject memory on windows
 #[tauri::command]
 #[specta::specta]
 pub const fn find_studio_process() -> Option<u32> {

@@ -7,6 +7,7 @@ export type RobloxAssetType =
   | 'script_ref'
   | 'unknown';
 
+// represents a single external asset reference found in a place file
 export interface ParsedAssetRef {
   type: RobloxAssetType;
 
@@ -42,6 +43,7 @@ export interface PlaceParseResult {
   warnings: string[];
 }
 
+// our generic AST node that holds instance hierarchy and any found assets
 export interface RbxInstance {
   referent: string;
   className: string;

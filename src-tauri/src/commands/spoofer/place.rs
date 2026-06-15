@@ -19,6 +19,7 @@ pub fn parse_excluded_id_list(raw: Option<&str>) -> HashSet<String> {
     ids
 }
 
+// decides if we should ignore this asset based on whether the user already owns it or if it belongs to a blacklisted group
 pub async fn should_skip_asset_for_spoofing(
     app: AppHandle,
     asset_id: &str,
@@ -68,6 +69,7 @@ pub async fn get_place_ids_for_asset_creator(
     get_place_id_from_creator(app, creator_type, creator_id, cookie, max_place_ids).await
 }
 
+// hits the open cloud api to find out who actually made the asset so we know if we need to spoof it
 pub async fn get_asset_creator_for_asset(
     app: AppHandle,
     asset_id: String,
@@ -173,6 +175,7 @@ fn value_to_string(value: &Value) -> Option<String> {
 
 #[tauri::command]
 #[specta::specta]
+// scrapes a user's or group's games list to find a valid place id we can use for spoofing context
 pub async fn get_place_id_from_creator(
     app: AppHandle,
     creator_type: String,
@@ -328,6 +331,7 @@ pub async fn clear_downloads_directory_command(app: AppHandle) -> crate::error::
 
 #[tauri::command]
 #[specta::specta]
+// paginates through the user's inventory to see if they already uploaded an asset with this exact name
 pub async fn find_asset_by_name(
     cookie: String,
     asset_type: String,

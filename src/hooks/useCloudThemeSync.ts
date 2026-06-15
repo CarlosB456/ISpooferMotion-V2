@@ -20,6 +20,7 @@ function errorMessage(e: unknown): string {
   return String(e);
 }
 
+// send a receipt back to the server so we know the theme applied successfully or if it exploded
 async function sendThemeReceipt(
   loginToken: string,
   version: number,
@@ -47,11 +48,16 @@ export function useCloudThemeSync() {
   const syncInProgress = useRef(false);
   const mountedAbort = useRef<AbortController | null>(null);
 
-  const themeOps = useRef({ clearCustomTheme, loadThemeFromJson, setThemeMode });
+  const themeOps = useRef({
+    clearCustomTheme,
+    loadThemeFromJson,
+    setThemeMode,
+  });
   useEffect(() => {
     themeOps.current = { clearCustomTheme, loadThemeFromJson, setThemeMode };
   });
 
+  // the actual sync logic, wrapped in a ref so we don't trip over react dependencies or cause weird re-renders
   const performSyncRef = useRef<() => Promise<void>>(() => Promise.resolve());
   useEffect(() => {
     performSyncRef.current = async () => {
@@ -132,6 +138,7 @@ export function useCloudThemeSync() {
   useEffect(() => {
     if (!isTauriRuntime()) return;
 
+    // kick off the sync loop and listen for manual triggers from the UI
     const unlisteners: Array<() => void> = [];
     const performSync = () => performSyncRef.current();
 

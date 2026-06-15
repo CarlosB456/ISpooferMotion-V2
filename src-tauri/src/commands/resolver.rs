@@ -60,6 +60,7 @@ struct RobloxAssetAuthResponse {
 
 #[tauri::command]
 #[specta::specta]
+// try to resolve the original creator of an asset so we can check ownership and permissions later
 pub async fn resolve_asset_creators(
     app: AppHandle,
     assets: Vec<ResolverAsset>,
@@ -90,6 +91,7 @@ pub async fn resolve_asset_creators(
 
     let cookie_header_value = HeaderValue::from_str(&cookie_header)?;
 
+    // limit concurrent requests so we don't get instantly rate limited by roblox
     let semaphore = Arc::new(Semaphore::new(8));
     let client = Arc::new(client);
     let cookie_header_value = Arc::new(cookie_header_value);
@@ -122,6 +124,7 @@ pub async fn resolve_asset_creators(
             let mut success = false;
             let mut msg = String::new();
 
+            // retry loop for rate limits or random network hiccups
             for attempt in 0..3 {
                 if attempt > 0 {
                     tokio::time::sleep(Duration::from_secs(5)).await;
@@ -227,6 +230,7 @@ fn emit_script_ref_progress(app: &AppHandle, payload: ScriptRefProgress) {
 
 #[tauri::command]
 #[specta::specta]
+// scrape the economy api to figure out what type of asset a given id actually is
 pub async fn resolve_script_references(
     app: AppHandle,
     asset_ids: Vec<String>,

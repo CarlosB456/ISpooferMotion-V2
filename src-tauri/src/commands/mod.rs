@@ -1,3 +1,4 @@
+// main commands module root. registers all the submodules for tauri ipc endpoints
 pub mod assets;
 pub mod auth;
 pub mod discord;

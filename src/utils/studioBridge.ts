@@ -2,6 +2,7 @@ import { invoke } from '@tauri-apps/api/core';
 
 import { DEFAULT_PLUGIN_PORT, findPluginBridgePort } from './pluginBridge';
 
+// pushes a batch of replaced asset IDs to the roblox studio plugin so it can rewrite scripts and instances
 export async function queueStudioReplacements(
   replacements: Record<string, string>,
   preferredPort?: string,

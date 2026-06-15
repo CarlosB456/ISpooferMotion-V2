@@ -47,6 +47,7 @@ struct UploadMetadata {
     pub asset_id: Option<String>,
 }
 
+// repeatedly pings the operation endpoint until roblox finishes processing the uploaded asset and gives us the final id
 async fn poll_roblox_operation(
     app: &AppHandle,
     client: &reqwest::Client,
@@ -182,6 +183,7 @@ fn upload_kind_for_type(asset_type_name: Option<&str>) -> UploadKind {
     }
 }
 
+// security check to make sure they aren't trying to upload sensitive files from completely random directories on their pc
 async fn upload_path_allowed(
     app: &AppHandle,
     file_path: &std::path::Path,
@@ -209,6 +211,7 @@ async fn upload_path_allowed(
 
 #[tauri::command]
 #[specta::specta]
+// the main upload loop. sends the file to the open cloud api, handling retries, random failures, and chunk injection
 pub async fn publish_asset_with_progress(
     app: AppHandle,
     file_path: String,

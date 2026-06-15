@@ -9,6 +9,7 @@ import { ru } from './ru';
 
 export const locales: Record<string, TranslationTree> = { en, es, ru, fr };
 
+// deep fetch a translation string using a dot-notation key path, falling back to english if missing
 export function getTranslation(lang: string, keyPath: string): string {
   const dictionary = locales[lang] || locales.en;
   const keys = keyPath.split('.');

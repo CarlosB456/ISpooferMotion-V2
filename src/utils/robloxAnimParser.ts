@@ -21,6 +21,7 @@ export interface RobloxAnimationClip {
   keyframes: RobloxKeyframe[];
 }
 
+// rip out the CFrame data from the ugly XML format
 function parseCFrame(cfEl: Element): {
   position: [number, number, number];
   rotation: [number, number, number, number, number, number, number, number, number];
@@ -80,6 +81,7 @@ function parseInt_(s: string | null): number {
   return isNaN(v) ? 0 : v;
 }
 
+// recursively parse the skeleton hierarchy for this keyframe
 function parsePoses(itemElements: Element[]): RobloxPose[] {
   return itemElements
     .filter((el) => el.getAttribute('class') === 'Pose')
@@ -126,6 +128,7 @@ function parsePoses(itemElements: Element[]): RobloxPose[] {
     });
 }
 
+// entry point for parsing roblox's custom animation XML format into a JS object
 export function parseAnimationXml(xml: string): RobloxAnimationClip | null {
   try {
     const parser = new DOMParser();

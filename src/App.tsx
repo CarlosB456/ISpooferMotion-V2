@@ -25,6 +25,8 @@ import { useThemeAccent } from './contexts/ThemeContext';
 import { useCloudThemeSync } from './hooks/useCloudThemeSync';
 import { isTauriRuntime } from './utils/tauriRuntime';
 
+// Resolves custom background paths to something the browser/tauri can actually render
+// kinda hacky but it handles local files, blobs, and web URLs
 function resolveThemeBackgroundUrl(path: string) {
   if (/^(?:blob:|data:|https?:|asset:|tauri:)/i.test(path)) {
     return path;
@@ -55,6 +57,7 @@ export default function App() {
   useEffect(() => {
     if (!isTauriRuntime()) return;
 
+    // Check if the Roblox API is throwing a fit so we can warn the user
     const checkStatus = async () => {
       try {
         const isUp: boolean = await invoke('check_roblox_api_status');
@@ -74,6 +77,7 @@ export default function App() {
 
   useEffect(() => {
     const allowedTabs = ['home', 'spoofing', 'settings', 'config'];
+    // only show the experimental tab if they've explicitly enabled it in debug settings
     if (config.debug?.enableExperimentalTab) {
       allowedTabs.push('experimental');
     }
@@ -87,6 +91,7 @@ export default function App() {
     const handleCredits = () => setCreditsOpen(true);
     document.addEventListener('open-credits', handleCredits);
 
+    // prevent default drag behavior globally so dropping files doesn't randomly open them and ruin the app state
     const preventDrag = (e: Event) => e.preventDefault();
     window.addEventListener('dragover', preventDrag);
     window.addEventListener('drop', preventDrag);
@@ -145,6 +150,7 @@ export default function App() {
     let disposed = false;
     let unlisten: (() => void) | undefined;
     let hideRatTimeout: ReturnType<typeof setTimeout> | undefined;
+    // secret easter egg trigger, don't tell anyone
     listen('trigger-easter-egg', () => {
       if (import.meta.env.DEV || Math.random() < 0.01) {
         setShowRat(true);
@@ -230,7 +236,10 @@ export default function App() {
                 onClick={() => setIsExplorerOpen(true)}
               >
                 <motion.div
-                  whileHover={{ width: 28, backgroundColor: 'var(--bg-elevated)' }}
+                  whileHover={{
+                    width: 28,
+                    backgroundColor: 'var(--bg-elevated)',
+                  }}
                   className="w-6 h-28 bg-bg-elevated/60 backdrop-blur-xl border border-border-subtle border-r-0 rounded-l-2xl flex items-center justify-center shadow-floating transition-colors"
                 >
                   <ChevronLeft
@@ -245,7 +254,9 @@ export default function App() {
 
           <div
             className="absolute bottom-0 left-0 right-0 h-32 pointer-events-none z-[60] opacity-[0.03] mix-blend-screen"
-            style={{ background: 'linear-gradient(to top, var(--primary), transparent)' }}
+            style={{
+              background: 'linear-gradient(to top, var(--primary), transparent)',
+            }}
           />
 
           <StatusBar />

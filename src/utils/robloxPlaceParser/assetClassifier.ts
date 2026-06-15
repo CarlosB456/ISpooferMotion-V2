@@ -1,5 +1,6 @@
 import type { ParsedAssetRef, RobloxAssetType } from './types';
 
+// patterns to extract just the numeric asset ID out of whatever weird url format roblox spits out
 const ASSET_URL_PATTERNS = [/^rbxassetid:\/\/(\d+)/i, /[?&]id=(\d+)/i, /^(\d{7,})$/];
 
 export function extractAssetId(raw: string): string | null {
@@ -14,6 +15,7 @@ export function extractAssetId(raw: string): string | null {
   return null;
 }
 
+// map of instance properties to the type of asset they hold so we know what we're looking at
 const PROPERTY_MAP: Array<{
   className: string | null;
   property: string;

@@ -1,3 +1,4 @@
+// Typings for our Discord poll feature
 export interface FeaturePollOption {
   id: string;
   label: string;

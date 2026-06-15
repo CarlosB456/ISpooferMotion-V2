@@ -11,6 +11,8 @@ export default function StatusBar() {
   const { studioConnected } = useStudioConnectionState();
 
   useEffect(() => {
+    // check if they linked their discord account for crash reporting
+    // if so, we can show their tiny avatar down in the corner
     invoke<StoredDiscordAuth | null>('load_discord_report_auth')
       .then((auth) => {
         if (auth?.user) setDiscordUser(auth.user);

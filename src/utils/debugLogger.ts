@@ -39,6 +39,7 @@ declare global {
   }
 }
 
+// grab or initialize the global logger state so we don't lose logs across hot reloads
 function getState(): DebugLoggerState {
   if (!window.__ismDebugLogger) {
     window.__ismDebugLogger = {
@@ -65,6 +66,7 @@ function formatArg(arg: unknown): string {
   }
 }
 
+// pipe the log to our internal state, the console, and optionally the rust backend
 export function addDebugLog(
   level: LogLevel,
   args: unknown[],
@@ -134,6 +136,7 @@ export function installDebugLogger() {
   const state = getState();
   if (state.patched) return;
 
+  // monkey-patch the native console so we can intercept and record everything
   const originals = {
     log: Reflect.get(console, 'log').bind(console),
     info: Reflect.get(console, 'info').bind(console),

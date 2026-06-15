@@ -1,9 +1,11 @@
 import type { ParseProgressCallback } from './types';
 
+// gives the event loop a chance to breathe so the UI doesn't completely freeze during heavy parsing
 export async function yieldToUI(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+// builds a progress reporter that calculates ETA without spamming messages too fast and killing performance
 export function createProgressReporter(
   onProgress?: ParseProgressCallback,
   throttleMs: number = 100,

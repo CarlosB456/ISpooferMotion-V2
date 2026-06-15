@@ -117,6 +117,7 @@ export default function QuickSettingsMenu() {
 
   const openMenu = () => {
     if (buttonRef.current) {
+      // calculate position so the menu pops out correctly aligned under the button
       const rect = buttonRef.current.getBoundingClientRect();
       const menuWidth = 320;
       setCoords({
@@ -139,6 +140,7 @@ export default function QuickSettingsMenu() {
 
     const handlePointerDown = (event: PointerEvent) => {
       const target = event.target as Node;
+      // close the menu if they click outside of it and not on the toggle button
       if (!buttonRef.current?.contains(target) && !menuRef.current?.contains(target)) {
         setOpen(false);
       }
@@ -147,10 +149,12 @@ export default function QuickSettingsMenu() {
     return () => document.removeEventListener('pointerdown', handlePointerDown);
   }, [open]);
 
+  // filter the main config to only show settings they pinned
   const activeSettings = config.ui.quickSettings
     .map((id) => AVAILABLE_QUICK_SETTINGS.find((s) => s.id === id))
     .filter((setting): setting is QuickSetting => Boolean(setting));
 
+  // group them by section so it doesn't look like a total mess
   const groupedSettings = activeSettings.reduce(
     (acc, setting) => {
       const groupKey = `${setting.page} > ${setting.section}`;
@@ -161,6 +165,7 @@ export default function QuickSettingsMenu() {
     {} as Record<string, typeof AVAILABLE_QUICK_SETTINGS>,
   );
 
+  // kinda repetitive but safely maps IDs to their actual config fields
   const quickSettingValue = (id: QuickSetting['id']) => {
     switch (id) {
       case 'spoofing.cookie':
@@ -249,7 +254,11 @@ export default function QuickSettingsMenu() {
               onPointerDown={(e) => e.stopPropagation()}
               onWheel={(e) => e.stopPropagation()}
               className="fixed z-[500] rounded-[var(--radius-md)] border border-border-subtle bg-bg-surface shadow-floating overflow-hidden flex flex-col"
-              style={{ top: coords.top, left: coords.left, width: coords.width }}
+              style={{
+                top: coords.top,
+                left: coords.left,
+                width: coords.width,
+              }}
             >
               <div className="px-4 py-3 border-b border-border-subtle bg-bg-elevated/30 flex justify-between items-center">
                 <h3 className="text-[12px] font-bold text-text-primary uppercase tracking-wider">

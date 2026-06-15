@@ -1,3 +1,5 @@
+// This is the big one. Handles parsing asset references out of everything Studio throws at us.
+// Warning: Lots of messy regex in here because Roblox strings are chaotic.
 #![allow(clippy::unwrap_used)]
 use base64::{engine::general_purpose::STANDARD as B64, Engine as _};
 use regex::{Captures, Regex};
@@ -7,6 +9,7 @@ use std::collections::{HashMap, HashSet};
 
 use std::time::Instant;
 
+// Basic container for parsed assets we send back to the UI
 #[derive(Clone, Default, Serialize, Debug, specta::Type)]
 pub struct AssetStore {
     #[specta(type = Vec<String>)]
@@ -24,6 +27,8 @@ impl AssetStore {
     }
 }
 
+// Holds all the active state for the Studio bridge.
+// Keeps track of the current scan status and what we've found so far.
 #[derive(Default, Debug)]
 pub struct AssetServerStateData {
     pub request_sounds: bool,
@@ -58,6 +63,7 @@ pub struct StudioRecord {
     pub value: String,
 }
 
+// Tries to match any valid Roblox asset URL or just a raw ID.
 fn asset_id_pattern() -> &'static Regex {
     static RE: std::sync::OnceLock<Regex> = std::sync::OnceLock::new();
     RE.get_or_init(|| {
@@ -117,6 +123,7 @@ fn rich_text_pattern() -> &'static Regex {
     })
 }
 
+// Looks for require() or InsertService calls that pull assets dynamically
 fn runtime_load_pattern() -> &'static Regex {
     static RE: std::sync::OnceLock<Regex> = std::sync::OnceLock::new();
     RE.get_or_init(|| {

@@ -20,6 +20,7 @@ export function useDiscordLogin(onSuccess?: (auth: StoredDiscordAuth) => void) {
   };
 
   const startLogin = useCallback(async () => {
+    // start the oauth flow and wait for the user to approve in their browser
     if (loginState === 'opening' || loginState === 'waiting') return;
     setLoginState('opening');
     setErrorMessage(null);
@@ -44,6 +45,7 @@ export function useDiscordLogin(onSuccess?: (auth: StoredDiscordAuth) => void) {
       let attempts = 0;
       const maxAttempts = 60;
 
+      // poll the server to see if they finished logging in
       pollRef.current = setInterval(async () => {
         if (abortRef.current) {
           stopPolling();
@@ -77,6 +79,7 @@ export function useDiscordLogin(onSuccess?: (auth: StoredDiscordAuth) => void) {
             let userName = 'Unknown User';
             let userAvatarUrl: string | null = null;
             try {
+              // crack open the JWT to extract user info (just basic decode, real validation happens server-side)
               const payloadBase64Url = pollData.loginToken.split('.')[1];
               if (payloadBase64Url) {
                 // Convert Base64URL to standard Base64

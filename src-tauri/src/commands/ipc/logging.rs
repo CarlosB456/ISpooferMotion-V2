@@ -5,6 +5,7 @@ use super::{
 use crate::commands::discord::AnyValue;
 
 pub(super) fn cleanup_logs_dir(logs_dir: &Path) {
+    // automatically delete log files older than 30 days so we don't fill up their hard drive
     const MAX_LOG_AGE: std::time::Duration = std::time::Duration::from_secs(60 * 60 * 24 * 30);
 
     let Ok(entries) = std::fs::read_dir(logs_dir) else {
@@ -32,6 +33,7 @@ pub(super) fn cleanup_logs_dir(logs_dir: &Path) {
     }
 }
 
+// recursively scrub out tokens and secrets from json objects so they don't get logged or exported
 fn redact_json_value(value: &mut Value) {
     match value {
         Value::String(text) => *text = redact_log_message(text),
@@ -79,6 +81,7 @@ pub async fn append_debug_log(
 #[tauri::command]
 #[specta::specta]
 pub async fn open_logs_folder(app: AppHandle) -> crate::error::Result<bool> {
+    // pop open the local logs folder for debugging
     let logs_dir = app.path().app_data_dir()?.join("ispoofer_logs");
     let _ = std::fs::create_dir_all(&logs_dir);
     cleanup_logs_dir(&logs_dir);

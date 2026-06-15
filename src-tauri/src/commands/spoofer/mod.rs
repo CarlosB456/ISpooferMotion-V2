@@ -25,6 +25,7 @@ static ADAPTIVE_LIMITER: std::sync::OnceLock<AdaptiveLimiter> = std::sync::OnceL
 static ROBLOX_GAME_IDS: std::sync::OnceLock<dashmap::DashMap<String, String>> =
     std::sync::OnceLock::new();
 
+// different buckets so we can independently throttle uploads, downloads, and scrapes
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub(crate) enum RateLimitBucket {
     Upload,
@@ -58,6 +59,7 @@ fn is_valid_numeric_id(value: &str) -> bool {
     !value.is_empty() && value.chars().all(|character| character.is_ascii_digit())
 }
 
+// a smart concurrency limiter that backs off when roblox starts rejecting requests, and ramps up when things are going well
 struct AdaptiveLimiter {
     max: AtomicUsize,
     current: AtomicUsize,
@@ -194,6 +196,7 @@ fn game_ids_by_place() -> &'static dashmap::DashMap<String, String> {
     ROBLOX_GAME_IDS.get_or_init(dashmap::DashMap::new)
 }
 
+// fakes a studio session for a specific game so we can download 'copylocked' assets that belong to that game
 fn roblox_game_context(place_id: Option<&str>) -> Option<RobloxGameContext> {
     let place_id =
         place_id.map(str::trim).filter(|value| is_valid_numeric_id(value) && *value != "0")?;
@@ -251,6 +254,7 @@ fn apply_upload_auth(
     }
 }
 
+// pauses the current task if we've hit a rate limit, optionally obeying a global circuit breaker if the api is totally down
 pub(crate) async fn wait_rate_limit(bucket: RateLimitBucket) {
     let wait_dur = {
         let mut max_until: Option<Instant> = None;

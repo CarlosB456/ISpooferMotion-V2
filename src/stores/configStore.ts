@@ -114,6 +114,8 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
   },
 };
 
+// helper to safely merge saved config with defaults
+// so we don't crash the app if a new setting gets added in an update
 const mergeKnownKeys = <T extends Record<string, unknown>>(
   defaults: T,
   saved: Partial<T> | undefined,
@@ -127,6 +129,7 @@ const mergeKnownKeys = <T extends Record<string, unknown>>(
   return next;
 };
 
+// makes sure they don't get stuck with invalid UI sections if we remove or rename one
 const mergeSections = (savedSections: unknown, defaultSections: string[]) => {
   if (!Array.isArray(savedSections)) return defaultSections;
   const next = savedSections.filter((section: string) => defaultSections.includes(section));
@@ -147,6 +150,7 @@ interface ConfigState {
 }
 
 export const useConfigStore = create<ConfigState>((set, get) => {
+  // rip config from localstorage and fallback to defaults if they haven't run the app yet
   const saved = localStorage.getItem('ISpooferMotion_Config');
   let initConfig = DEFAULT_APP_CONFIG;
   if (saved) {
@@ -176,6 +180,7 @@ export const useConfigStore = create<ConfigState>((set, get) => {
   }
 
   const saveToStorage = (c: AppConfig) => {
+    // don't ever save cookies or api keys directly to standard config storage, those belong in the rust keyring
     localStorage.setItem(
       'ISpooferMotion_Config',
       JSON.stringify({
@@ -189,7 +194,10 @@ export const useConfigStore = create<ConfigState>((set, get) => {
     config: initConfig,
     updateConfig: (cat, key, val) =>
       set((state) => {
-        const n = { ...state.config, [cat]: { ...state.config[cat], [key]: val } };
+        const n = {
+          ...state.config,
+          [cat]: { ...state.config[cat], [key]: val },
+        };
         saveToStorage(n);
         return { config: n };
       }),

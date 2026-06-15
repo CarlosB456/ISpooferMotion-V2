@@ -10,8 +10,7 @@ export interface ScanStatus {
   total: number;
 }
 
-const STUDIO_PLACE_ID_CACHE_KEY = 'ISpooferMotion_LastStudioPlaceId';
-
+const STUDIO_PLACE_ID_CACHE_KEY = 'ISpooferMotion_LastStudioPlaceId'; // cache the last place ID so we don't have to wait for studio to reconnect just to show basic place info
 const readCachedStudioPlaceId = () => {
   try {
     const value = window.localStorage.getItem(STUDIO_PLACE_ID_CACHE_KEY) || '';
@@ -22,6 +21,7 @@ const readCachedStudioPlaceId = () => {
 };
 
 export function useStudioConnection(port: string, onPortDiscovered?: (port: string) => void) {
+  // keeps an eye on the plugin bridge port and pulls health info to ensure studio is actually there
   const [studioConnected, setStudioConnected] = useState(false);
   const [scanStatus, setScanStatus] = useState<ScanStatus | null>(null);
   const [studioPlaceId, setStudioPlaceId] = useState(readCachedStudioPlaceId);

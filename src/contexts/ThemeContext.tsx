@@ -15,6 +15,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 const ThemeSync = () => {
   const { themeMode } = useThemeAccent();
 
+  // syncs the tailwind dark mode class to our current theme state so styles apply correctly
   useEffect(() => {
     if (themeMode === 'light') {
       document.documentElement.classList.remove('dark');
@@ -31,6 +32,7 @@ const ThemeSync = () => {
 const ThemeModeGuard = () => {
   const { clearCustomTheme, setThemeMode, loadThemeFromJson } = useThemeAccent();
 
+  // listen for custom themes being injected via postMessage (mostly used by the external theme editor)
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
       if (event.data?.type === 'INJECT_THEME' && event.data.theme) {
@@ -46,6 +48,7 @@ const ThemeModeGuard = () => {
   }, [loadThemeFromJson]);
 
   useEffect(() => {
+    // prevents the app from getting stuck in a weird theme state if localstorage gets corrupted
     const normalizeThemeMode = () => {
       const savedTheme = localStorage.getItem('theme');
 

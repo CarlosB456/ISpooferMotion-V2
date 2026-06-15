@@ -59,11 +59,21 @@ export default function ConfigView() {
   const cookieReadOnly = autoDetectEnabled && !manualCookieEdit;
 
   const uploadOptions = [
-    { value: 'animation', assetType: 'animation', label: 'Animations', icon: AnimationIcon },
+    {
+      value: 'animation',
+      assetType: 'animation',
+      label: 'Animations',
+      icon: AnimationIcon,
+    },
     { value: 'audio', assetType: 'audio', label: 'Audio', icon: SoundIcon },
     { value: 'image', assetType: 'image', label: 'Images', icon: DecalIcon },
     { value: 'mesh', assetType: 'mesh', label: 'Meshes', icon: MeshIcon },
-    { value: 'script_ref', assetType: 'script_ref', label: 'Script Refs', icon: ScriptIcon },
+    {
+      value: 'script_ref',
+      assetType: 'script_ref',
+      label: 'Script Refs',
+      icon: ScriptIcon,
+    },
   ];
 
   const getCookieDetectionMode = () => {
@@ -87,6 +97,8 @@ export default function ConfigView() {
     if (mode === 'none') return;
     setAuthStatus('loading');
     logIsm('info', `Auto detecting Roblox cookie from ${mode}.`);
+
+    // attempts to snag a fresh roblosecurity cookie from studio or browser
     try {
       const detected = await detectCookie(
         mode as 'studio' | 'browser',
@@ -121,6 +133,8 @@ export default function ConfigView() {
     if (cookieReadOnly) return;
 
     if (!cookie || cookie.length < 50) return;
+
+    // debounce the validation so we don't hit the API on every single keystroke
     const timer = window.setTimeout(async () => {
       try {
         const result = await validateCookieProfile(cookie);
@@ -148,6 +162,7 @@ export default function ConfigView() {
       return;
     }
 
+    // hit our local rust endpoint to verify if the api key actually works and has the right scopes
     setApiKeyStatus('loading');
     try {
       const result = await invoke<ApiKeyOwnerDetectResult>('detect_opencloud_api_key_owner', {

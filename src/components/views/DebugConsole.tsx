@@ -34,6 +34,7 @@ export default function DebugConsole({ isOpen, onClose }: DebugConsoleProps) {
 
   const handleScroll = () => {
     if (scrollContainerRef.current) {
+      // auto-scroll to bottom like a real terminal unless they scroll up manually
       const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
       const atBottom = scrollHeight - scrollTop - clientHeight < 50;
       isAutoScrollEnabled.current = atBottom;
@@ -63,6 +64,7 @@ export default function DebugConsole({ isOpen, onClose }: DebugConsoleProps) {
 
   const groupedLogs = filteredLogs.reduce(
     (acc, currentLog) => {
+      // group identical spammy logs together so they don't blow up the view
       const lastLog = acc[acc.length - 1];
       if (
         lastLog &&

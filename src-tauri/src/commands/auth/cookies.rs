@@ -38,6 +38,8 @@ pub const PROFILE_COOKIE_SERVICE: &str = "ISpooferMotion.RobloxProfileCookie";
 
 #[must_use]
 pub fn extract_roblox_cookie(raw_value: &str) -> Option<String> {
+    // regex to rip the actual ROBLOSECURITY token out of whatever raw text we give it
+    // kinda messy but it's the most reliable way to find it
     let re = Regex::new(r#"(?i)_\|WARNING:-DO-NOT-SHARE-THIS\.--Sharing-this-will-allow-someone-to-log-in-as-you-and-to-steal-your-ROBUX-and-items\.\|_[^\s"';,]+"#).ok()?;
     re.find(raw_value).map(|m| m.as_str().to_string())
 }
@@ -71,6 +73,7 @@ fn browser_cookie_file_candidates() -> Vec<PathBuf> {
             app_support.join("BraveSoftware").join("Brave-Browser"),
             app_support.join("com.operasoftware.Opera"),
         ];
+        // checking the standard profile names, hopefully the user doesn't have like 20 of them
         let profiles = ["Default", "Profile 1", "Profile 2", "Profile 3"];
 
         for root in chromium_roots {
@@ -187,6 +190,7 @@ fn chromium_cookie_candidates() -> Vec<ChromiumCookieCandidate> {
 
 #[cfg(target_os = "windows")]
 fn decrypt_dpapi(data: &[u8]) -> crate::error::Result<Vec<u8>> {
+    // ask windows nicely to decrypt this blob for us
     unsafe {
         let in_blob =
             CRYPT_INTEGER_BLOB { cbData: data.len() as u32, pbData: data.as_ptr().cast_mut() };
@@ -268,6 +272,7 @@ fn decrypt_chromium_cookie(encrypted_value: &[u8], master_key: &[u8]) -> Option<
         return None;
     }
 
+    // chromium uses aes-256-gcm now, indicated by these prefixes
     if encrypted_value.starts_with(b"v10")
         || encrypted_value.starts_with(b"v11")
         || encrypted_value.starts_with(b"v20")
@@ -292,6 +297,7 @@ impl Drop for TempDb {
     }
 }
 
+// copy the db to temp dir before reading so we don't run into sqlite file lock issues if the browser is actively open
 fn copy_cookie_db(path: &Path) -> Option<TempDb> {
     let temp_path = std::env::temp_dir().join(format!(
         "ispoofermotion-cookies-{}-{}.sqlite",

@@ -37,6 +37,7 @@ fn emit_spoofer_log(app: &AppHandle, level: &str, message: &str) {
 }
 
 #[tauri::command]
+// the main download orchestration function. handles discovery, resolution, fallback urls, and retries
 pub async fn download_animation_asset_with_progress(
     app: AppHandle,
     direct_url: Option<String>,
@@ -183,6 +184,7 @@ pub async fn download_animation_asset_with_progress(
     let user_agents =
         ["RobloxStudio/WinInet", "RobloxApp/WinInet", "Roblox/WinInet", "roblox/9.0.0.0 (WinInet)"];
 
+    // try every candidate url we found until one actually gives us the file
     for download_url in &candidate_urls {
         let is_cdn_url = download_url.contains("rbxcdn.com");
 
@@ -233,24 +235,28 @@ pub async fn download_animation_asset_with_progress(
             if status.is_success() {
                 crate::commands::spoofer::record_adaptive_success();
 
-                if let Some(valid_place_id) = request_place_id.clone() {
-                    crate::commands::spoofer::remote_cache::push_discovery(
-                        asset_id.clone(),
-                        valid_place_id,
-                    );
-                }
-
-                return write_download_response(
+                let result = write_download_response(
                     &app,
                     download_resp,
                     file_path,
                     transfer_id,
                     name,
-                    asset_id,
+                    asset_id.clone(),
                     asset_type.clone(),
                     resume_offset,
                 )
                 .await;
+
+                if result.is_ok() {
+                    if let Some(valid_place_id) = request_place_id.clone() {
+                        crate::commands::spoofer::remote_cache::push_discovery(
+                            asset_id.clone(),
+                            valid_place_id,
+                        );
+                    }
+                }
+
+                return result;
             }
 
             let mut status_reason = status.to_string();
@@ -310,6 +316,7 @@ pub async fn download_animation_asset_with_progress(
         }
     }
 
+    // if we still failed and don't have a place id, try falling back to the wayback machine as a last resort
     if place_ids.is_empty()
         && (last_error.contains("Permission Denied") || last_error.contains("Conflict"))
     {

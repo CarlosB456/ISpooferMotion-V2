@@ -61,7 +61,12 @@ export default function SettingsView() {
     logIsm('success', 'Account connected! Cloud themes will now sync.');
   });
 
-  const langOptions = { en: '🇬🇧 English', es: '🇪🇸 Español', ru: '🇷🇺 Русский', fr: '🇫🇷 Français' };
+  const langOptions = {
+    en: '🇬🇧 English',
+    es: '🇪🇸 Español',
+    ru: '🇷🇺 Русский',
+    fr: '🇫🇷 Français',
+  };
 
   const langDropdownOptions = Object.entries(langOptions).map(([value, label]) => ({
     value,
@@ -95,6 +100,7 @@ export default function SettingsView() {
 
   async function handleClearCache(successMessage = 'Cache cleared.') {
     try {
+      // nuke all the local storage and invoke rust cache clearer, useful if things get corrupted
       await Promise.all([
         invoke('clear_asset_cache'),
         invoke('clear_plugin_cache'),
@@ -123,6 +129,7 @@ export default function SettingsView() {
       return;
     }
 
+    // fire a test notification to make sure OS permissions are actually granted
     try {
       const shown = await invoke<boolean>('show_notification', {
         options: {
@@ -316,13 +323,17 @@ export default function SettingsView() {
                 </div>
 
                 <div className="relative">
+                  {/* little custom color picker overlay to set the app accent color */}
                   <FormColorPickerRow
                     label={t('settings.accentColor')}
                     color={accentColor}
                     onClick={(e: any) => {
                       e.stopPropagation();
                       const rect = e.currentTarget.getBoundingClientRect();
-                      setPickerCoords({ top: rect.bottom + 8, left: rect.right - 200 });
+                      setPickerCoords({
+                        top: rect.bottom + 8,
+                        left: rect.right - 200,
+                      });
                       setIsColorPickerOpen((prev) => !prev);
                     }}
                   />

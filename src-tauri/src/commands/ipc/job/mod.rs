@@ -12,6 +12,7 @@ use types::SpooferActionRequest;
 
 #[tauri::command]
 #[specta::specta]
+// main entry point for kicking off a spoofer job
 pub async fn run_spoofer_action(
     app: AppHandle,
     data: SpooferActionRequest,
@@ -22,6 +23,7 @@ pub async fn run_spoofer_action(
 #[tauri::command]
 #[specta::specta]
 #[must_use]
+// flip the pause flag on the job control state
 pub fn spoofer_pause(job_id: String) -> bool {
     update_spoofer_control(&job_id, |control| control.paused = true)
 }

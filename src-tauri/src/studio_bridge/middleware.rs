@@ -7,6 +7,8 @@ use axum::{
     response::Response,
 };
 
+// We strictly enforce JSON for POST requests.
+// Have had weird bugs when the client sends unexpected content types.
 pub async fn require_json_for_post(req: Request, next: Next) -> Result<Response, StatusCode> {
     if req.method() == Method::POST {
         let has_body = req
@@ -28,6 +30,7 @@ pub async fn require_json_for_post(req: Request, next: Next) -> Result<Response,
     Ok(next.run(req).await)
 }
 
+// Paths that don't need auth, mostly just for pairing flows or health checks
 #[must_use]
 pub fn is_public_bridge_path(path: &str) -> bool {
     path == "/health"

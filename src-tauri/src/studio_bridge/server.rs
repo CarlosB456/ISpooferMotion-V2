@@ -1,3 +1,5 @@
+// This file contains all the Axum route handlers for the bridge server.
+// We keep the state locked down so we don't accidentally race between the UI and Studio requests.
 use axum::{
     extract::{Json, State},
     http::StatusCode,
@@ -39,6 +41,8 @@ pub async fn handle_studio_health(State(state): State<AppState>) -> Json<Value> 
     }))
 }
 
+// Fired when Studio starts dumping the entire workspace to us.
+// We reset all the old state so we're working with fresh data.
 pub async fn handle_scan_start(
     State(state): State<AppState>,
     Json(payload): Json<Value>,
@@ -167,6 +171,8 @@ pub async fn handle_scan_abort(State(state): State<AppState>) -> &'static str {
     "ok"
 }
 
+// Studio long-polls this endpoint waiting for us to tell it to do something.
+// If we have nothing to do for 25 seconds we just return empty so it can loop again.
 pub async fn handle_poll(State(state): State<AppState>) -> Json<Value> {
     let timeout = tokio::time::Duration::from_secs(25);
     let start = Instant::now();
@@ -215,6 +221,8 @@ pub async fn handle_poll_replacements(State(state): State<AppState>) -> Json<Val
     }
 }
 
+// When the UI is done spoofing and wants to swap out old IDs for new ones,
+// we queue up the patches here for Studio to grab on its next poll.
 pub async fn handle_replace_ids(
     State(state): State<AppState>,
     Json(payload): Json<Value>,

@@ -1,6 +1,7 @@
 use crate::commands::discord::AnyValue;
 
 #[derive(serde::Deserialize, specta::Type)]
+// this struct defines all the settings you can pass into a spoofer job from the frontend ui
 pub struct SpooferActionRequest {
     pub assets: Option<String>,
     pub cookie: Option<String>,

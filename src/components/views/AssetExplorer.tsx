@@ -37,6 +37,7 @@ const ASSET_EXPLORER_WIDTH = 340;
 const AnimationPreview = lazy(() => import('../AnimationPreview'));
 
 function dedupePluginAssets(assets: PluginAsset[]): PluginAsset[] {
+  // filter out exact duplicates so we don't spam the tree view
   const seen = new Set<string>();
   const deduped: PluginAsset[] = [];
 
@@ -88,6 +89,7 @@ function pluginAssetsToNode(
   assets: PluginAsset[],
   assetType: ParsedAssetRef['type'],
 ): RbxInstance {
+  // turn flat plugin asset lists into the same nested tree structure we use for rbxl files
   return {
     referent: `studio-${folderName}`,
     className,
@@ -120,7 +122,10 @@ function hidePluginAssets(nodes: RbxInstance[]): RbxInstance[] {
 export default function AssetExplorer({ isOpen, setIsOpen }: AssetExplorerProps) {
   const [parseState, setParseState] = useState<ParseProgress | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
-  const [enlargedImage, setEnlargedImage] = useState<{ id: string; name: string } | null>(null);
+  const [enlargedImage, setEnlargedImage] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
   const [previewingAnimation, setPreviewingAnimation] = useState<{
     id: string;
     name: string;
@@ -224,6 +229,7 @@ export default function AssetExplorer({ isOpen, setIsOpen }: AssetExplorerProps)
         ['script_ref', scriptRefAssets],
       ];
 
+      // quickly check if anything actually changed before we rebuild the entire tree
       const snapshot =
         snapshotEntries
           .flatMap(([type, assets]) =>
@@ -310,6 +316,7 @@ export default function AssetExplorer({ isOpen, setIsOpen }: AssetExplorerProps)
       setLoadedFileName((prev) => prev ?? 'Studio Session');
 
       if (scriptRefAssets.length > 0) {
+        // if we got script refs, try to resolve their actual asset type on the rust backend
         setResolvingScriptRefs(true);
         const uniqueIds = Array.from(
           new Set<string>(
@@ -327,7 +334,9 @@ export default function AssetExplorer({ isOpen, setIsOpen }: AssetExplorerProps)
           return;
         }
 
-        invoke<Record<string, string>>('resolve_script_references', { assetIds: uniqueIds })
+        invoke<Record<string, string>>('resolve_script_references', {
+          assetIds: uniqueIds,
+        })
           .then((resolvedMap) => {
             setResolvingScriptRefs(false);
             setResolverProgress(null);
@@ -401,6 +410,7 @@ export default function AssetExplorer({ isOpen, setIsOpen }: AssetExplorerProps)
     setParseState({ phase: 'Reading file', current: 0, total: 1 });
     try {
       let result;
+      // use the rust worker to parse the file quickly without blocking the UI thread
       if (isTauriRuntime()) {
         try {
           const bytes = await readFile(filePath);
@@ -633,7 +643,8 @@ export default function AssetExplorer({ isOpen, setIsOpen }: AssetExplorerProps)
                         <span className="text-primary font-bold">Scanning Studio...</span>
                         <span className="text-text-muted">
                           {scanStatus.current_service} (
-                          {Math.round((scanStatus.scanned / Math.max(1, scanStatus.total)) * 100)}%)
+                          {Math.round((scanStatus.scanned / Math.max(1, scanStatus.total)) * 100)}
+                          %)
                         </span>
                       </div>
                     ) : studioConnected ? (
@@ -702,9 +713,10 @@ export default function AssetExplorer({ isOpen, setIsOpen }: AssetExplorerProps)
                       <span>⚠️</span> Un-uploaded Animations Found
                     </p>
                     <p className="text-[10px] leading-tight opacity-90">
-                      {keyframeWarningCount} animation{keyframeWarningCount !== 1 ? 's are' : ' is'}{' '}
-                      present as raw <code>KeyframeSequence</code> data. These must be published to
-                      Roblox before they can be spoofed.
+                      {keyframeWarningCount} animation
+                      {keyframeWarningCount !== 1 ? 's are' : ' is'} present as raw{' '}
+                      <code>KeyframeSequence</code> data. These must be published to Roblox before
+                      they can be spoofed.
                     </p>
                   </div>
                 )}

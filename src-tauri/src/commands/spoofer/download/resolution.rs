@@ -4,6 +4,7 @@ use reqwest::header::{COOKIE, USER_AGENT};
 use std::collections::HashSet;
 use tauri::AppHandle;
 
+// checks the standard v1 asset delivery api to see if roblox will just give us the direct url
 pub async fn resolve_asset_id_location(
     app: &AppHandle,
     _client: &reqwest::Client,
@@ -39,6 +40,7 @@ pub async fn resolve_asset_id_location(
         }))
 }
 
+// scrapes the economy api to find alternate cdn links or asset version ids
 pub async fn resolve_asset_economy_urls(asset_id: &str, cookie_header: &str) -> Vec<String> {
     let mut urls = Vec::new();
     let client = crate::utils::get_http_client();
@@ -291,6 +293,7 @@ pub async fn build_library_scraping_urls(asset_id: &str, cookie_header: &str) ->
     urls
 }
 
+// tries to find what games this asset is used in, so we can pretend to be a server for that game and bypass copylocks
 pub async fn attempt_asset_usage_place_id_discovery(
     asset_id: &str,
     cookie_header: &str,
@@ -511,6 +514,7 @@ pub async fn get_games_for_creator(
     results
 }
 
+// desperate attempt to find a place id by crawling the asset creator's social graph (groups, friends, games)
 pub async fn attempt_social_graph_place_id_discovery(
     asset_id: &str,
     cookie_header: &str,
@@ -635,6 +639,7 @@ pub async fn attempt_social_graph_place_id_discovery(
     discovered_place_ids.into_iter().collect()
 }
 
+// queries the internet archive's wayback machine to see if someone else saved a valid download url for this asset years ago
 pub async fn attempt_deep_place_id_discovery(
     app: &AppHandle,
     asset_id: &str,

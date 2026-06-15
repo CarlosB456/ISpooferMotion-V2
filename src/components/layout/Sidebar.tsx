@@ -17,6 +17,8 @@ function DonateButton() {
       return;
     }
 
+    // cool little effect where hearts float up when you hover over the support button
+    // looks nice and grabs attention without being annoying
     const intervalId = setInterval(() => {
       setHearts((prev) => [...prev.slice(-5), { id: Date.now(), left: 10 + Math.random() * 80 }]);
     }, 300);
@@ -108,8 +110,13 @@ export default function Sidebar({
   ];
 
   const { config } = useConfig();
+  // only show the experimental tab if they actually enabled it in their debug config
   if (config.debug?.enableExperimentalTab) {
-    tabs.push({ id: 'experimental', label: 'Experimental', icon: <Beaker size={18} /> });
+    tabs.push({
+      id: 'experimental',
+      label: 'Experimental',
+      icon: <Beaker size={18} />,
+    });
   }
 
   return (

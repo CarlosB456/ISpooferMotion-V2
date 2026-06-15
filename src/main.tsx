@@ -15,6 +15,7 @@ import { ThemeProvider } from './contexts/ThemeContext';
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
+      // we really don't want it randomly refetching when users alt-tab back into the app
       refetchOnWindowFocus: false,
       retry: 1,
     },
@@ -22,18 +23,21 @@ const queryClient = new QueryClient({
 });
 
 const savedTheme = localStorage.getItem('theme') || 'dark';
+// force the theme early on so we don't flashbang the user with light mode on load
 if (savedTheme === 'dark' || savedTheme === 'custom') {
   document.documentElement.classList.add('dark');
 } else {
   document.documentElement.classList.remove('dark');
 }
 
+// This prevents native tooltips from showing up and overlapping our custom UI tooltips
 function TitleAttributeGuard({ children }: { children: React.ReactNode }) {
   React.useEffect(() => {
     const clearTitles = (root: ParentNode) => {
       root.querySelectorAll?.('[title]').forEach((el) => el.removeAttribute('title'));
     };
     clearTitles(document);
+    // kinda hacky, but this observer catches any new elements that get added dynamically and strips their titles too
     const observer = new MutationObserver((mutations) => {
       mutations.forEach((mutation) => {
         if (mutation.type === 'attributes' && mutation.target instanceof Element) {

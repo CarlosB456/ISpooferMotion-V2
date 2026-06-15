@@ -1,3 +1,4 @@
+// Stub type definitions for our internal UI library
 declare module '@codycon/ism-library' {
   export const Button: any;
   export const MultiSelectDropdown: any;

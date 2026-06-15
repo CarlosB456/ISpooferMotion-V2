@@ -2,6 +2,7 @@ import { parseRbxl } from './parseRbxl';
 import { parseRbxlx } from './parseRbxlx';
 import type { ParseProgress } from './types';
 
+// generic progress reporter to let the main thread update the UI
 function postProgress(phase: string, current: number, total: number) {
   self.postMessage({
     type: 'progress',
@@ -13,6 +14,7 @@ async function yieldToWorkerEventLoop() {
   await new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+// web worker entry point, keeps the main thread alive while we churn through huge files
 self.onmessage = async (e: MessageEvent) => {
   try {
     const { bytes, fileUrl, fileName, format } = e.data;
@@ -33,6 +35,7 @@ self.onmessage = async (e: MessageEvent) => {
         activeBytes = new Uint8Array(buffer);
         postProgress('Reading file', activeBytes.byteLength, activeBytes.byteLength);
       } else {
+        // stream the file in chunks so we can actually show a progress bar for massive files
         const chunks: Uint8Array[] = [];
         let loaded = 0;
 

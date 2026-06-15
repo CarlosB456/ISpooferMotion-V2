@@ -57,6 +57,7 @@ interface ConfigContextType {
 
 const Context = createContext<ConfigContextType | undefined>(undefined);
 
+// Main provider that houses all our app configuration and spoofing state
 export const ConfigProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const configState = useConfigStore();
   const spooferState = useSpooferStore();
@@ -65,6 +66,8 @@ export const ConfigProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     configState.loadSecrets();
   }, []);
 
+  // This pushes our modified IDs back into Roblox Studio
+  // handles both the traditional plugin bridge and the experimental memory injection
   const applyReplacements = useCallback(async (replacements: Record<string, string>) => {
     if (!isTauriRuntime()) return;
     const { config } = useConfigStore.getState();
@@ -126,6 +129,7 @@ export const ConfigProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     const unlisteners: Array<() => void> = [];
 
+    // Hook up all the Tauri event listeners so we can react to backend spoofing updates in real-time
     const setup = async () => {
       const { listen } = await import('@tauri-apps/api/event');
       const {
@@ -176,6 +180,7 @@ export const ConfigProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     };
   }, [applyReplacements]);
 
+  // Memoize the context value so we don't nuke performance with massive re-renders
   const contextValue = useMemo<ConfigContextType>(
     () => ({
       config: configState.config,

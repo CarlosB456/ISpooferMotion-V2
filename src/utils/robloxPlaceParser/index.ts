@@ -13,6 +13,7 @@ import { parseRbxl } from './parseRbxl';
 import { parseRbxlx } from './parseRbxlx';
 import type { ParseProgressCallback, PlaceParseResult, RobloxFileType } from './types';
 
+// magic byte detection to figure out if it's binary (.rbxl) or xml (.rbxlx)
 function detectFormat(fileName: string, bytes: Uint8Array): RobloxFileType {
   const lower = fileName.toLowerCase();
   if (lower.endsWith('.rbxlx')) return 'rbxlx';
@@ -56,6 +57,7 @@ export async function parsePlaceBytes(
   };
 }
 
+// spins up a web worker to parse the place file so we don't lock up the main thread
 export async function parsePlaceBytesInWorker(
   bytes: Uint8Array,
   fileName: string,
@@ -65,7 +67,9 @@ export async function parsePlaceBytesInWorker(
 
   if (fmt === 'rbxl' || fmt === 'rbxlx') {
     return new Promise((resolve, reject) => {
-      const worker = new Worker(new URL('./worker.ts', import.meta.url), { type: 'module' });
+      const worker = new Worker(new URL('./worker.ts', import.meta.url), {
+        type: 'module',
+      });
 
       worker.onmessage = (e) => {
         const { type, payload } = e.data;
@@ -108,7 +112,9 @@ export async function parsePlaceUrlInWorker(
 
   if (fmt === 'rbxl' || fmt === 'rbxlx') {
     return new Promise((resolve, reject) => {
-      const worker = new Worker(new URL('./worker.ts', import.meta.url), { type: 'module' });
+      const worker = new Worker(new URL('./worker.ts', import.meta.url), {
+        type: 'module',
+      });
 
       worker.onmessage = (e) => {
         const { type, payload } = e.data;
@@ -156,6 +162,7 @@ export async function parsePlaceFile(
   }
 }
 
+// run some quick sanity checks to ensure the parsers aren't completely broken
 export function validateXmlParser(): boolean {
   const SAMPLE_XML = `<?xml version="1.0" encoding="utf-8"?>
 <roblox xmlns:xmime="http://www.w3.org/2001/XMLSchema-instance" version="4">

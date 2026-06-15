@@ -1,5 +1,7 @@
 use serde::{Serialize, Serializer};
 
+// Centralized app error enum so we don't have random unwraps everywhere.
+// Specta is happy with this since we export it as a string to the frontend.
 #[derive(thiserror::Error, Debug, specta::Type)]
 #[specta(type = String)]
 pub enum AppError {
@@ -34,6 +36,8 @@ impl From<String> for AppError {
     }
 }
 
+// We don't want to leak people's actual PC usernames if an error bubbles up.
+// This redacts common path patterns before returning them to the user / logs.
 fn redact_user_paths(message: &str) -> String {
     use std::sync::OnceLock;
 
@@ -51,6 +55,7 @@ fn redact_user_paths(message: &str) -> String {
                 "[REDACTED_PATH]",
             ),
             (
+                // juuuust in case someone is running linux
                 regex::Regex::new(r"(?i)/home/[^/\s]+(?:/[^\s]*)*").expect("invalid regex"),
                 "[REDACTED_PATH]",
             ),

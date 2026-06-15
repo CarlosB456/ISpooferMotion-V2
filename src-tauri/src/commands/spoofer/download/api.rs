@@ -8,6 +8,7 @@ use reqwest::header::{COOKIE, USER_AGENT};
 use std::collections::HashMap;
 use tauri::AppHandle;
 
+// hits the asset delivery api to actually pull the raw bytes, spoofing the user agent if needed
 pub async fn send_asset_download_request_ua(
     client: &reqwest::Client,
     url: &str,
@@ -33,6 +34,7 @@ pub async fn send_asset_download_request_ua(
     req.send().await
 }
 
+// streams the download response directly to disk so we don't hold the entire file in ram, emitting progress events along the way
 pub async fn write_download_response(
     app: &AppHandle,
     download_resp: reqwest::Response,
@@ -168,6 +170,7 @@ pub async fn write_download_response(
     Ok(DownloadResult { success: true, file_path: Some(file_path), error: None })
 }
 
+// automatically buys free assets (like audio or meshes) so we can bypass 'copylocked' errors
 pub async fn auto_claim_free_asset(
     app: &AppHandle,
     client: &reqwest::Client,
@@ -240,6 +243,7 @@ pub async fn batch_get_download_urls(
     batch_get_download_urls_for_assets(app, assets, cookie, place_id).await
 }
 
+// mass resolves a bunch of asset download links using the batch endpoint to save on api calls
 pub async fn batch_get_download_urls_for_assets(
     app: AppHandle,
     assets: Vec<(String, String)>,

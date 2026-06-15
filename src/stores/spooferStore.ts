@@ -49,6 +49,7 @@ interface SpooferState {
   setKeyframeWarningCount: (val: number | ((prev: number) => number)) => void;
 }
 
+// holds all the active ephemeral state for the spoofing jobs, asset explorer, and studio integration
 export const useSpooferStore = create<SpooferState>((set) => ({
   rootInstances: [],
   setRootInstances: (instances) => set({ rootInstances: instances }),
@@ -91,7 +92,9 @@ export const useSpooferStore = create<SpooferState>((set) => ({
 
   spoofCompletionVersion: 0,
   incrementSpoofCompletionVersion: () =>
-    set((state) => ({ spoofCompletionVersion: state.spoofCompletionVersion + 1 })),
+    set((state) => ({
+      spoofCompletionVersion: state.spoofCompletionVersion + 1,
+    })),
 
   activeSpooferJobId: null,
   setActiveSpooferJobId: (id) => set({ activeSpooferJobId: id }),

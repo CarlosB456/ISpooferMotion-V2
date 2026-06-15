@@ -11,6 +11,8 @@ export type AudioQuotaDisplay =
   | { status: 'ready'; remaining: number; capacity: number };
 
 export function parseAudioQuota(payload: unknown): AudioQuotaDisplay | null {
+  // roblox returns a weird nested array for quota limits depending on the endpoint version
+  // parse it safely to display remaining uploads to the user
   if (!payload || typeof payload !== 'object') return null;
 
   const response = payload as Record<string, unknown>;
@@ -34,7 +36,11 @@ export function parseAudioQuota(payload: unknown): AudioQuotaDisplay | null {
   const usage = Number(quota.usage);
   if (!Number.isFinite(capacity) || !Number.isFinite(usage)) return null;
 
-  return { status: 'ready', remaining: Math.max(0, capacity - usage), capacity };
+  return {
+    status: 'ready',
+    remaining: Math.max(0, capacity - usage),
+    capacity,
+  };
 }
 
 function DropdownChevron({ open }: { open: boolean }) {
@@ -61,6 +67,7 @@ function DropdownPortal({
   coords: { top: number; left: number; width: number };
   children: ReactNode;
 }) {
+  // render dropdowns outside the current dom node so they don't get clipped by overflow:hidden
   return createPortal(
     <AnimatePresence>
       {open && (
@@ -73,7 +80,12 @@ function DropdownPortal({
             transition={{ duration: 0.15, ease: 'easeOut' }}
             onPointerDown={(event) => event.stopPropagation()}
             className="fixed z-[500] bg-bg-surface border border-border-subtle rounded-[var(--radius-md)] shadow-floating backdrop-blur-xl p-1"
-            style={{ top: coords.top, left: coords.left, width: coords.width, minWidth: 180 }}
+            style={{
+              top: coords.top,
+              left: coords.left,
+              width: coords.width,
+              minWidth: 180,
+            }}
           >
             <div className="max-h-64 overflow-y-auto flex flex-col gap-0.5">{children}</div>
           </motion.div>
@@ -199,7 +211,10 @@ export function AvatarDropdown({
             type="button"
             initial={{ opacity: 0, x: -4 }}
             animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.14, delay: Math.min(index * 0.025, 0.12) }}
+            transition={{
+              duration: 0.14,
+              delay: Math.min(index * 0.025, 0.12),
+            }}
             onClick={() => {
               onChange(String(user.id));
               setOpen(false);
@@ -317,7 +332,10 @@ export function GroupDropdown({
             type="button"
             initial={{ opacity: 0, x: -4 }}
             animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.14, delay: Math.min(index * 0.025, 0.12) }}
+            transition={{
+              duration: 0.14,
+              delay: Math.min(index * 0.025, 0.12),
+            }}
             onClick={() => {
               onChange(String(group.id));
               setOpen(false);

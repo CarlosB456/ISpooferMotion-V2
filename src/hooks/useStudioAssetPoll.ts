@@ -12,6 +12,7 @@ export type StudioScanBundle = {
 };
 
 export function useStudioAssetPoll(
+  // polls the studio plugin bridge to see if any new assets have been discovered
   studioConnected: boolean,
   pluginPort: string,
   onComplete: (bundle: StudioScanBundle) => void,
@@ -30,6 +31,7 @@ export function useStudioAssetPoll(
     let lastSnapshot = '';
     let intervalId: ReturnType<typeof setInterval> | undefined;
 
+    // lazy snapshot comparison so we avoid triggering massive react renders if nothing actually changed
     const bundleSnapshot = (bundle: StudioScanBundle) =>
       JSON.stringify({
         anims: bundle.anims.assets,
@@ -48,6 +50,7 @@ export function useStudioAssetPoll(
       if (cancelled || inFlight) return;
       inFlight = true;
 
+      // grab the latest asset stores from the rust backend
       try {
         const bundle = await invoke<StudioScanBundle>('get_studio_asset_snapshots');
         if (cancelled) return;

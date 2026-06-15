@@ -36,6 +36,7 @@ let pendingDiscovery: Promise<string | null> | null = null;
 let cachedApiKey: string | null = null;
 let cachedApiKeyAt = 0;
 
+// grabs the api key needed to authenticate requests to the studio plugin
 export async function getPluginBridgeApiKey(): Promise<string | null> {
   if (Date.now() - cachedApiKeyAt < 5000 && cachedApiKey) {
     return cachedApiKey;
@@ -72,6 +73,7 @@ export async function fetchPluginBridge(path: string, port: string, init?: Reque
   return fetch(`${base}${path}`, requestInit);
 }
 
+// figure out which port the studio plugin is currently running on
 export async function findPluginBridgePort(preferredPort?: string) {
   if (Date.now() - cachedAt < 1000) return cachedPort;
   if (pendingDiscovery) return pendingDiscovery;

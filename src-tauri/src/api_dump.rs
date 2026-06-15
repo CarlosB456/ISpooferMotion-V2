@@ -1,9 +1,12 @@
+// This file is responsible for fetching and parsing the Roblox API dump.
+// We mainly use this to figure out which properties are actually assets or strings we need to scan.
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::SystemTime;
 use tokio::sync::RwLock;
 
+// Pulling straight from MaximumADHD's tracker, bless that repo.
 const API_DUMP_URL: &str =
     "https://raw.githubusercontent.com/MaximumADHD/Roblox-Client-Tracker/roblox/API-Dump.json";
 
@@ -43,6 +46,7 @@ pub struct ApiDumpProperties {
     pub string_scan_properties: HashMap<String, Vec<String>>,
 }
 
+// Filters out read-only properties since we obviously can't spoof what we can't write to.
 fn is_writable(member: &Member) -> bool {
     if let Some(tags) = &member.Tags {
         for tag in tags {
@@ -54,6 +58,8 @@ fn is_writable(member: &Member) -> bool {
     true
 }
 
+// Gross heuristic but it works. We check property names to see if they sound like they hold an asset.
+// Kept all lowercase to make the string matching easier.
 fn is_asset_like_property_name(name: &str) -> bool {
     let lower_name = name.to_lowercase();
     lower_name.ends_with("id")
@@ -84,10 +90,12 @@ fn is_asset_like_property_name(name: &str) -> bool {
         || lower_name.contains("accessory")
 }
 
+// HumanoidDescription is a bit of a special snowflake, handle it specifically here.
 fn is_humanoid_description_asset(class_name: &str, name: &str, val_type: &str) -> bool {
     if class_name != "HumanoidDescription" {
         return false;
     }
+    // These body parts / clothing items are stored as raw int64 asset IDs
     if val_type == "int64"
         && (name.contains("Animation")
             || name == "Face"
@@ -103,6 +111,7 @@ fn is_humanoid_description_asset(class_name: &str, name: &str, val_type: &str) -
     {
         return true;
     }
+    // And accessories are just string arrays of IDs separated by commas
     val_type == "string" && name.contains("Accessory")
 }
 
@@ -154,6 +163,7 @@ where
             return props;
         };
 
+        // if the class inherits from something, grab those properties too
         if cls.Superclass != "<<<ROOT>>>" && !cls.Superclass.is_empty() {
             let super_props =
                 get_properties(&cls.Superclass, class_map, resolved_properties, pick_property);
@@ -209,6 +219,7 @@ pub async fn get_api_dump_properties() -> ApiDumpProperties {
     let mut properties = ApiDumpProperties::default();
     let cache_file = std::env::temp_dir().join("ispoofer_api_dump_v2.json");
 
+    // we cache the dump to a temp file for 24 hours so we aren't spamming the api dump url
     let mut should_fetch = true;
     if let Ok(metadata) = tokio::fs::metadata(&cache_file).await {
         if let Ok(modified) = metadata.modified() {

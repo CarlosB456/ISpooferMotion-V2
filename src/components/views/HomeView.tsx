@@ -62,6 +62,7 @@ const renderDiscordContent = (
   text: string,
   attachments: { contentType?: string; url?: string }[] = [],
 ) => {
+  // try to parse standard discord markdown and embed youtube links if we find any
   let youtubeUrl = '';
   const ytRegex =
     /(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/;
@@ -144,6 +145,7 @@ export default function HomeView() {
   const { data: releasesData, isLoading: loading } = useQuery({
     queryKey: ['github-releases'],
     queryFn: async () => {
+      // pull latest changelogs straight from the github repo so we don't have to update them manually
       const res = await fetch(
         'https://api.github.com/repos/ISpooferMotion/ISpooferMotion-V2/releases',
         {
@@ -161,6 +163,7 @@ export default function HomeView() {
   const releases = releasesData || [];
 
   const parseChangelog = (body: string) => {
+    // clean up the raw github markdown to render nicely in our custom accordion UI
     if (!body) return null;
     const lines = body.split('\n');
     return lines
