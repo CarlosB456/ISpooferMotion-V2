@@ -196,7 +196,8 @@ pub async fn start_server(_app_handle: AppHandle) {
             axum::http::header::CONTENT_TYPE,
             axum::http::header::AUTHORIZATION,
             axum::http::HeaderName::from_static("x-api-key"),
-        ]);
+        ])
+        .allow_private_network(true);
 
     let app = Router::new()
         .route(
