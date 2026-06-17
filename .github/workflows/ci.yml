@@ -45,6 +45,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Checkout ISM-Library
+        uses: actions/checkout@v4
+        with:
+          repository: ISpooferMotion/ISM-Library
+          path: ../ISM-Library
+
       - name: Setup Environment
         uses: ./.github/actions/setup
         with:
@@ -68,41 +74,9 @@ jobs:
         if: matrix.os == 'windows'
         run: bun run tauri build -- --no-bundle
 
-      - name: Sign Windows Executable
-        if: matrix.os == 'windows'
-        uses: azure/trusted-signing-action@v0.5.0
-        with:
-          azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          azure-client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
-          endpoint: ${{ secrets.AZURE_ENDPOINT }}
-          code-signing-account-name: ${{ secrets.AZURE_CODE_SIGNING_ACCOUNT_NAME }}
-          certificate-profile-name: ${{ secrets.AZURE_CERTIFICATE_PROFILE_NAME }}
-          files-folder: src-tauri/target/release
-          files-folder-filter: app.exe
-          file-digest: SHA256
-          timestamp-rfc3161: http://timestamp.acs.microsoft.com
-          timestamp-digest: SHA256
-
       - name: Build app (Windows Bundle)
         if: matrix.os == 'windows'
         run: bun run tauri build -- --bundles ${{ matrix.bundles }}
-
-      - name: Sign Windows Installer
-        if: matrix.os == 'windows'
-        uses: azure/trusted-signing-action@v0.5.0
-        with:
-          azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          azure-client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
-          endpoint: ${{ secrets.AZURE_ENDPOINT }}
-          code-signing-account-name: ${{ secrets.AZURE_CODE_SIGNING_ACCOUNT_NAME }}
-          certificate-profile-name: ${{ secrets.AZURE_CERTIFICATE_PROFILE_NAME }}
-          files-folder: src-tauri/target/release/bundle/nsis
-          files-folder-filter: '*setup*.exe'
-          file-digest: SHA256
-          timestamp-rfc3161: http://timestamp.acs.microsoft.com
-          timestamp-digest: SHA256
 
       - name: Upload Windows Bundle to Release
         if: matrix.os == 'windows'
@@ -123,6 +97,12 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Checkout ISM-Library
+        uses: actions/checkout@v4
+        with:
+          repository: ISpooferMotion/ISM-Library
+          path: ../ISM-Library
 
       - name: Setup Environment
         uses: ./.github/actions/setup
