@@ -111,6 +111,8 @@ pub fn configure_adaptive_concurrency(max_concurrency: usize) {
 pub async fn acquire_adaptive_permit() -> AdaptivePermit {
     let limiter = adaptive_limiter();
     loop {
+        let notified = limiter.notify.notified();
+
         let blocked_until = limiter.blocked_until.lock().ok().and_then(|guard| *guard);
         if let Some(until) = blocked_until {
             let now = Instant::now();
@@ -131,7 +133,7 @@ pub async fn acquire_adaptive_permit() -> AdaptivePermit {
             return AdaptivePermit { limiter };
         }
 
-        limiter.notify.notified().await;
+        notified.await;
     }
 }
 

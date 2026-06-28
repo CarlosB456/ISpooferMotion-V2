@@ -128,6 +128,7 @@ export function useCloudThemeSync() {
           window.localStorage.setItem('cloud_theme_version', data.version.toString());
           window.localStorage.setItem('cloud_theme_hash', data.themeHash);
 
+          themeOps.current.setThemeMode('custom');
           themeOps.current.loadThemeFromJson(themeJsonString);
 
           await sendThemeReceipt(auth.loginToken, data.version, data.themeHash, 'applied', null);
