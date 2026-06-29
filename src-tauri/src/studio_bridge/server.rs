@@ -139,7 +139,8 @@ pub async fn handle_scan_complete(State(state): State<AppState>) -> Json<Value> 
         });
         
     let patches = if !mappings.is_empty() {
-        tokio::task::spawn_blocking(move || plan_patches(&records_for_patches, &mappings))
+        let plan_mappings = mappings.clone();
+        tokio::task::spawn_blocking(move || plan_patches(&records_for_patches, &plan_mappings))
             .await
             .unwrap_or_else(|e| {
                 log::error!("Failed to plan patches after scan: {}", e);
@@ -254,7 +255,8 @@ pub async fn handle_replace_ids(
     let mappings = mappings_raw.into_iter().take(5_000).collect::<Vec<_>>();
     let records = std::sync::Arc::clone(&state.data.read().await.studio_records);
     let plan_mappings = mappings.clone();
-    let patches = tokio::task::spawn_blocking(move || plan_patches(&records, &plan_mappings))
+    let plan_records = records.clone();
+    let patches = tokio::task::spawn_blocking(move || plan_patches(&plan_records, &plan_mappings))
         .await
         .unwrap_or_else(|e| {
             log::error!("Failed to plan patches: {}", e);
