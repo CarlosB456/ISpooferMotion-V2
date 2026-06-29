@@ -118,13 +118,14 @@ pub async fn handle_scan_records(
 }
 
 pub async fn handle_scan_complete(State(state): State<AppState>) -> Json<Value> {
-    let records = {
+    let (records, mappings) = {
         let mut guard = state.data.write().await;
         guard.last_plugin_poll_time = Some(Instant::now());
         guard.scan_status = None;
         guard.studio_records = std::sync::Arc::clone(&guard.pending_studio_records);
-        std::sync::Arc::clone(&guard.studio_records)
+        (std::sync::Arc::clone(&guard.studio_records), guard.stored_mappings.clone())
     };
+    let records_for_patches = std::sync::Arc::clone(&records);
     let stores =
         tokio::task::spawn_blocking(move || analyze_records(&records)).await.unwrap_or_else(|e| {
             log::error!("Failed to analyze records: {}", e);
@@ -136,6 +137,18 @@ pub async fn handle_scan_complete(State(state): State<AppState>) -> Json<Value> 
                 AssetStore::completed(),
             )
         });
+        
+    let patches = if !mappings.is_empty() {
+        tokio::task::spawn_blocking(move || plan_patches(&records_for_patches, &mappings))
+            .await
+            .unwrap_or_else(|e| {
+                log::error!("Failed to plan patches after scan: {}", e);
+                Vec::new()
+            })
+    } else {
+        Vec::new()
+    };
+    
     let mut guard = state.data.write().await;
     (
         guard.last_animations,
@@ -144,6 +157,9 @@ pub async fn handle_scan_complete(State(state): State<AppState>) -> Json<Value> 
         guard.last_meshes,
         guard.last_script_refs,
     ) = stores;
+    if !mappings.is_empty() {
+        guard.stored_patches = patches;
+    }
     let kf_warnings = count_keyframe_warnings(&guard.last_script_refs);
     guard.keyframe_warning_count = kf_warnings;
     Json(serde_json::json!({
@@ -209,7 +225,11 @@ pub async fn handle_poll_replacements(State(state): State<AppState>) -> Json<Val
         {
             let mut guard = state.data.write().await;
             guard.last_plugin_poll_time = Some(Instant::now());
-            if !guard.stored_mappings.is_empty() || !guard.stored_patches.is_empty() {
+            let has_mappings = !guard.stored_mappings.is_empty();
+            let has_patches = !guard.stored_patches.is_empty();
+            let has_records = !guard.studio_records.is_empty();
+
+            if has_patches || (has_mappings && has_records) {
                 let mappings = std::mem::take(&mut guard.stored_mappings);
                 let patches = std::mem::take(&mut guard.stored_patches);
                 return Json(serde_json::json!({ "mappings": mappings, "patches": patches }));
@@ -243,6 +263,9 @@ pub async fn handle_replace_ids(
     let mut guard = state.data.write().await;
     guard.stored_mappings = mappings;
     guard.stored_patches = patches;
+    if records.is_empty() {
+        guard.request_sounds = true;
+    }
     Json(serde_json::json!({ "ok": true, "truncated": over_limit }))
 }
 

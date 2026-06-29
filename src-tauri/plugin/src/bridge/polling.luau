@@ -239,9 +239,14 @@ local function startPolling(): ()
 							task.spawn(applyPatches, patches)
 						end
 					elseif type(mappings) == "table" and #mappings > 0 then
-						warn(
-							"[ISpooferMotion] No targeted patches were available. Run Scan before retrying replacement."
-						)
+						-- Patches are empty, which means no scan has been done yet on the Rust side.
+						-- Kick off a scan now so the backend can compute patches, then they'll be
+						-- delivered on the next poll-replacements cycle automatically.
+						if not scanRunning and not patchRunning then
+							print("[ISpooferMotion] No patches available yet — triggering scan to generate them.")
+							setPluginGuiStatus("Scanning to generate replacements...")
+							task.spawn(scan)
+						end
 					end
 				end
 			end

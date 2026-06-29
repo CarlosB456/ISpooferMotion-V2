@@ -840,7 +840,7 @@ Failed: {failed}"
     if !final_replacements.is_empty() {
         emit_job_log(
             &app,
-            "Save your place in Roblox Studio after replacements are applied.",
+            "Auto-replacement queued! Don't forget to save your place in Studio afterwards.",
             "info",
         );
     }

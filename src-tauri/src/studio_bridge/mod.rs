@@ -121,11 +121,17 @@ pub async fn queue_replace_mappings_internal(mappings: Vec<Value>) -> bool {
     let Some(data) = bridge_data() else {
         return false;
     };
-    let records = std::sync::Arc::clone(&data.read().await.studio_records);
-    if records.is_empty() || mappings.is_empty() {
+    if mappings.is_empty() {
         return false;
     }
-    let patches = plan_patches(&records, &mappings);
+    let records = std::sync::Arc::clone(&data.read().await.studio_records);
+    // Generate patches from scan records if available; otherwise Studio will fall back
+    // to raw ID mapping substitution on its own side.
+    let patches = if records.is_empty() {
+        Vec::new()
+    } else {
+        plan_patches(&records, &mappings)
+    };
     let mut guard = data.write().await;
     guard.stored_mappings = mappings;
     guard.stored_patches = patches;
