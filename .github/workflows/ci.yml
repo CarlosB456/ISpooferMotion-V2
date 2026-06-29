@@ -23,7 +23,6 @@ permissions:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-  RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
   DISCORD_REPORT_API_URL: ${{ vars.DISCORD_REPORT_API_URL }}
 
 jobs:
@@ -65,10 +64,66 @@ jobs:
       - name: Run CI Checks
         run: bun run check
 
+  prepare-release:
+    name: Prepare Release
+    needs: check
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')) || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    outputs:
+      RELEASE_TAG: ${{ steps.set_tag.outputs.RELEASE_TAG }}
+      SHOULD_RELEASE: ${{ steps.check_tag.outputs.SHOULD_RELEASE }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Get tag from package.json or inputs
+        id: set_tag
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "RELEASE_TAG=${{ inputs.tag }}" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            echo "RELEASE_TAG=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+          else
+            VERSION=$(jq -r .version package.json)
+            echo "RELEASE_TAG=v$VERSION" >> $GITHUB_OUTPUT
+          fi
+      - name: Check if tag exists
+        id: check_tag
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ steps.set_tag.outputs.RELEASE_TAG }}"
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            # Release already exists. If this was a manual dispatch or a tag push, we still want to upload assets to it.
+            # If it was just a push to main and the version hasn't changed, skip release building.
+            if [ "${{ github.event_name }}" == "push" ] && [ "${{ github.ref }}" == "refs/heads/main" ]; then
+              echo "Release $TAG already exists and this is a push to main. Skipping release build."
+              echo "SHOULD_RELEASE=false" >> $GITHUB_OUTPUT
+            else
+              echo "SHOULD_RELEASE=true" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "SHOULD_RELEASE=true" >> $GITHUB_OUTPUT
+          fi
+
+  create-release:
+    name: Create GitHub Release
+    needs: prepare-release
+    if: needs.prepare-release.outputs.SHOULD_RELEASE == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.prepare-release.outputs.RELEASE_TAG }}
+          name: ISpooferMotion ${{ needs.prepare-release.outputs.RELEASE_TAG }}
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+
   build-and-release:
     name: Build & Release (${{ matrix.os }}, ${{ matrix.bundles }})
-    needs: check
-    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    needs: [prepare-release, create-release]
+    if: needs.prepare-release.outputs.SHOULD_RELEASE == 'true'
     runs-on: ${{ matrix.platform }}
     strategy:
       fail-fast: false
@@ -111,12 +166,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           args: --bundles ${{ matrix.bundles }} ${{ matrix.args }}
-          tagName: ${{ env.RELEASE_TAG }}
-          releaseName: ISpooferMotion ${{ env.RELEASE_TAG }}
-          releaseBody: 'See the assets below to download and install this version.'
-          releaseDraft: false
-          prerelease: false
-          retryAttempts: 2
+          tagName: ${{ needs.prepare-release.outputs.RELEASE_TAG }}
 
       - name: Build app (Windows Unsigned Inner)
         if: matrix.os == 'windows'
@@ -130,18 +180,14 @@ jobs:
         if: matrix.os == 'windows'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ env.RELEASE_TAG }}
-          name: ISpooferMotion ${{ env.RELEASE_TAG }}
-          body: 'See the assets below to download and install this version.'
+          tag_name: ${{ needs.prepare-release.outputs.RELEASE_TAG }}
           files: src-tauri/target/release/bundle/nsis/*setup*.exe
           fail_on_unmatched_files: true
-          draft: false
-          prerelease: false
 
   plugin-release:
     name: Build & Release Plugin
-    needs: build-and-release
-    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    needs: [prepare-release, build-and-release]
+    if: needs.prepare-release.outputs.SHOULD_RELEASE == 'true'
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout repository
@@ -161,10 +207,6 @@ jobs:
       - name: Upload plugin to release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ env.RELEASE_TAG }}
-          name: ISpooferMotion ${{ env.RELEASE_TAG }}
-          body: 'See the assets below to download and install this version.'
+          tag_name: ${{ needs.prepare-release.outputs.RELEASE_TAG }}
           files: dist-plugin/ISpooferMotion.rbxmx
           fail_on_unmatched_files: true
-          draft: false
-          prerelease: false
