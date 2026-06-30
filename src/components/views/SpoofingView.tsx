@@ -536,10 +536,6 @@ export default function SpoofingView() {
               `[WARN] Open Cloud API key appears to belong to user ${result.ownerUserId}, while the selected profile is ${selectedUser}. Group uploads can still work if the key has creator access.\n`,
             ),
           );
-        } else {
-          setLogs((prev) =>
-            appendSpoofingLog(prev, '[INFO] Open Cloud API key preflight passed.\n'),
-          );
         }
       } else {
         setLogs((prev) =>

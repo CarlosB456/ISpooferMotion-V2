@@ -2,7 +2,7 @@ import { invoke } from '@tauri-apps/api/core';
 
 import { fetchPluginBridge } from './pluginBridge';
 
-const SCAN_WAIT_MS = 120_000;
+const SCAN_WAIT_MS = 300_000;
 const SCAN_POLL_MS = 1500;
 
 // polls the backend repeatedly until the studio plugin finishes its active scan
@@ -19,7 +19,9 @@ async function waitForStudioScanComplete(): Promise<void> {
     } catch {}
     await new Promise((resolve) => setTimeout(resolve, SCAN_POLL_MS));
   }
-  throw new Error('Timed out waiting for Roblox Studio to finish scanning.');
+  throw new Error(
+    'Studio scan is taking longer than 5 minutes. Open Roblox Studio and check that the ISpooferMotion plugin is connected, then try again. Very large places may need to be scanned manually from the plugin panel.',
+  );
 }
 
 export async function triggerStudioScan(port: string): Promise<void> {

@@ -744,11 +744,32 @@ pub async fn process_spoofer_action(
                     Ok(res) => {
                         fail_count.fetch_add(1, Ordering::Relaxed);
                         let err_msg = res.error.unwrap_or_default();
-                        let msg = format!("Download failed for {asset_id}: {err_msg}");
-                        let _ = append_log_entry(&app, "error", "spoofer", &msg);
+                        // Roblox-side "asset is private/blocked" responses aren't bugs in this app
+                        // and shouldn't read like crashes. Log them as warnings with friendlier copy.
+                        let is_upstream_inaccessible = err_msg.contains("Permission Denied")
+                            || err_msg.contains("Asset is private")
+                            || err_msg.contains("copylocked")
+                            || err_msg.contains("Conflict: Asset delivery blocked")
+                            || err_msg.contains("Not Found: Asset");
+                        let (level, msg) = if is_upstream_inaccessible {
+                            let reason = if err_msg.contains("Not Found") {
+                                "missing or invalid"
+                            } else if err_msg.contains("Conflict") {
+                                "blocked by Roblox"
+                            } else {
+                                "private or copylocked"
+                            };
+                            (
+                                "warn",
+                                format!("Skipped {asset_id} ({reason}) — Roblox refused the download."),
+                            )
+                        } else {
+                            ("error", format!("Download failed for {asset_id}: {err_msg}"))
+                        };
+                        let _ = append_log_entry(&app, level, "spoofer", &msg);
                         let _ = app.emit(
                             "spoofer-log",
-                            serde_json::json!({ "message": msg, "level": "error" }),
+                            serde_json::json!({ "message": msg, "level": level }),
                         );
                         if let Ok(mut results) = asset_results.lock() {
                             results.push(serde_json::json!({

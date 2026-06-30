@@ -12,9 +12,28 @@ export async function queueStudioReplacements(
   }
   const pluginPort =
     (await findPluginBridgePort(preferredPort)) || preferredPort || DEFAULT_PLUGIN_PORT;
-  const queued = await invoke<boolean>('push_to_studio', {
+  const result = await invoke<string | boolean>('push_to_studio', {
     replacementsMap: replacements,
     pluginPort,
   });
-  if (!queued) throw new Error('Studio replacement queue did not accept any mappings (ensure the Studio plugin is installed and running).');
+  // legacy bool support: true == ok, false == generic failure
+  const reason = typeof result === 'boolean' ? (result ? 'ok' : 'bridge_unavailable') : result;
+  if (reason === 'ok') return;
+
+  switch (reason) {
+    case 'empty_mappings':
+      throw new Error(
+        'No usable replacements were generated. Every successful asset was either already cached, downloaded-only, or had no new ID assigned.',
+      );
+    case 'plugin_not_connected':
+      throw new Error(
+        "Couldn't reach the Roblox Studio plugin. Open Studio, make sure the ISpooferMotion plugin is installed and enabled, then click Scan Studio before retrying.",
+      );
+    case 'bridge_unavailable':
+      throw new Error(
+        'The internal studio bridge is not running. Restart ISpooferMotion (ports 14285-14289 may have been in use at startup).',
+      );
+    default:
+      throw new Error(`Studio replacement queue rejected the mappings (${reason}).`);
+  }
 }
