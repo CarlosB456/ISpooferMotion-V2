@@ -26,48 +26,73 @@ env:
   DISCORD_REPORT_API_URL: ${{ vars.DISCORD_REPORT_API_URL }}
 
 jobs:
-  check:
-    name: Code Quality & Tests
-    runs-on: windows-latest
+  # ─── Code Quality Checks ──────────────────────────────────────────────────
+  typecheck:
+    name: TypeScript Check
+    runs-on: ubuntu-latest
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           submodules: recursive
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: oven-sh/setup-bun@v2
+      - name: Cache bun modules
+        uses: actions/cache@v4
         with:
-          node-version: 20
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('**/bun.lockb') }}
+          restore-keys: bun-${{ runner.os }}-
+      - run: bun install --frozen-lockfile
+      - run: cd ISM-Library/packages/ui && bun install --frozen-lockfile && bun run build
+      - run: bun run typecheck
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v1
+  lint-js:
+    name: JS/TS Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
         with:
-          bun-version: latest
+          submodules: recursive
+      - uses: oven-sh/setup-bun@v2
+      - name: Cache bun modules
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('**/bun.lockb') }}
+          restore-keys: bun-${{ runner.os }}-
+      - run: bun install --frozen-lockfile
+      - run: cd ISM-Library/packages/ui && bun install --frozen-lockfile && bun run build
+      - run: bun run lint
 
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+  rust-check:
+    name: Rust Check & Lint
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
         with:
+          submodules: recursive
+      - uses: oven-sh/setup-bun@v2
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
           components: rustfmt, clippy
-
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
+          cache-on-failure: true
+      - run: bun install --frozen-lockfile
+      - run: cd ISM-Library/packages/ui && bun install --frozen-lockfile && bun run build
+      - run: bun run rust:check
+      - run: bun run rust:lint
+      - run: bun run rust:test
 
-      - name: Install Dependencies
-        run: bun install
-
-      - name: Build ISM-Library
-        run: cd ISM-Library/packages/ui && bun install && bun run build
-
-      - name: Run CI Checks
-        run: bun run check
-
+  # ─── Prepare Release (runs after checks pass) ─────────────────────────────
   prepare-release:
     name: Prepare Release
-    needs: check
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')) || github.event_name == 'workflow_dispatch'
+    needs: [typecheck, lint-js, rust-check]
+    if: >
+      (github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')))
+      || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     outputs:
       RELEASE_TAG: ${{ steps.set_tag.outputs.RELEASE_TAG }}
@@ -85,15 +110,13 @@ jobs:
             VERSION=$(jq -r .version package.json)
             echo "RELEASE_TAG=v$VERSION" >> $GITHUB_OUTPUT
           fi
-      - name: Check if tag exists
+      - name: Check if release already exists
         id: check_tag
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="${{ steps.set_tag.outputs.RELEASE_TAG }}"
           if gh release view "$TAG" > /dev/null 2>&1; then
-            # Release already exists. If this was a manual dispatch or a tag push, we still want to upload assets to it.
-            # If it was just a push to main and the version hasn't changed, skip release building.
             if [ "${{ github.event_name }}" == "push" ] && [ "${{ github.ref }}" == "refs/heads/main" ]; then
               echo "Release $TAG already exists and this is a push to main. Skipping release build."
               echo "SHOULD_RELEASE=false" >> $GITHUB_OUTPUT
@@ -120,8 +143,9 @@ jobs:
           draft: false
           prerelease: false
 
+  # ─── Platform Builds (all run in parallel once release is created) ─────────
   build-and-release:
-    name: Build & Release (${{ matrix.os }}, ${{ matrix.bundles }})
+    name: Build & Release (${{ matrix.os }})
     needs: [prepare-release, create-release]
     if: needs.prepare-release.outputs.SHOULD_RELEASE == 'true'
     runs-on: ${{ matrix.platform }}
@@ -132,17 +156,14 @@ jobs:
           - platform: windows-2025
             os: windows
             bundles: nsis
-            rust_targets: ""
             args: ""
           - platform: macos-latest
             os: macos
             bundles: dmg
-            rust_targets: "aarch64-apple-darwin, x86_64-apple-darwin"
             args: "--target universal-apple-darwin"
           - platform: ubuntu-22.04
             os: linux
             bundles: appimage
-            rust_targets: ""
             args: ""
 
     steps:
@@ -156,8 +177,15 @@ jobs:
         with:
           os: ${{ matrix.os }}
 
+      - name: Cache bun modules
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('**/bun.lockb') }}
+          restore-keys: bun-${{ runner.os }}-
+
       - name: Build ISM-Library
-        run: cd ISM-Library/packages/ui && bun install && bun run build
+        run: cd ISM-Library/packages/ui && bun install --frozen-lockfile && bun run build
 
       - name: Build app (macOS / Linux)
         if: matrix.os != 'windows'
@@ -168,15 +196,11 @@ jobs:
           args: --bundles ${{ matrix.bundles }} ${{ matrix.args }}
           tagName: ${{ needs.prepare-release.outputs.RELEASE_TAG }}
 
-      - name: Build app (Windows Unsigned Inner)
-        if: matrix.os == 'windows'
-        run: bun run tauri build --no-bundle
-
-      - name: Build app (Windows Bundle)
+      - name: Build app (Windows)
         if: matrix.os == 'windows'
         run: bun run tauri build --bundles ${{ matrix.bundles }}
 
-      - name: Upload Windows Bundle to Release
+      - name: Upload Windows bundle to release
         if: matrix.os == 'windows'
         uses: softprops/action-gh-release@v2
         with:
@@ -184,9 +208,10 @@ jobs:
           files: src-tauri/target/release/bundle/nsis/*setup*.exe
           fail_on_unmatched_files: true
 
+  # ─── Plugin Build (runs in parallel with platform builds) ─────────────────
   plugin-release:
     name: Build & Release Plugin
-    needs: [prepare-release, build-and-release]
+    needs: [prepare-release, create-release]
     if: needs.prepare-release.outputs.SHOULD_RELEASE == 'true'
     runs-on: ubuntu-22.04
     steps:
@@ -198,8 +223,15 @@ jobs:
       - name: Setup Environment
         uses: ./.github/actions/setup
 
+      - name: Cache bun modules
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('**/bun.lockb') }}
+          restore-keys: bun-${{ runner.os }}-
+
       - name: Build ISM-Library
-        run: cd ISM-Library/packages/ui && bun install && bun run build
+        run: cd ISM-Library/packages/ui && bun install --frozen-lockfile && bun run build
 
       - name: Build plugin
         run: bun run build:plugin
