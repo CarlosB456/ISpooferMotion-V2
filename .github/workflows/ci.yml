@@ -36,7 +36,7 @@ jobs:
           submodules: recursive
       - uses: oven-sh/setup-bun@v2
       - name: Cache bun modules
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.bun/install/cache
           key: bun-${{ runner.os }}-${{ hashFiles('**/bun.lockb') }}
@@ -54,7 +54,7 @@ jobs:
           submodules: recursive
       - uses: oven-sh/setup-bun@v2
       - name: Cache bun modules
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.bun/install/cache
           key: bun-${{ runner.os }}-${{ hashFiles('**/bun.lockb') }}
@@ -178,7 +178,7 @@ jobs:
           os: ${{ matrix.os }}
 
       - name: Cache bun modules
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.bun/install/cache
           key: bun-${{ runner.os }}-${{ hashFiles('**/bun.lockb') }}
@@ -224,7 +224,7 @@ jobs:
         uses: ./.github/actions/setup
 
       - name: Cache bun modules
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.bun/install/cache
           key: bun-${{ runner.os }}-${{ hashFiles('**/bun.lockb') }}
