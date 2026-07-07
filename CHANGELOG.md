@@ -7,9 +7,9 @@ Versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
-## [2.0.0-rc.1] - 2026-06-24
+## [2.0.0] - 2026-07-06
 
-First public release candidate of V2. Complete rewrite of the original ISpooferMotion built on Tauri instead of Electron.
+First stable release of V2. Complete rewrite of the original ISpooferMotion built on Tauri instead of Electron.
 
 ---
 

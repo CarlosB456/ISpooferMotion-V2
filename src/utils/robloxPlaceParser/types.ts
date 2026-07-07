@@ -5,6 +5,7 @@ export type RobloxAssetType =
   | 'mesh'
   | 'plugin'
   | 'script_ref'
+  | 'raw_keyframe_sequence'
   | 'unknown';
 
 // represents a single external asset reference found in a place file
@@ -51,4 +52,7 @@ export interface RbxInstance {
 
   assets: ParsedAssetRef[];
   children: RbxInstance[];
+
+  rawXml?: string;
+  _xmlStartPos?: number;
 }

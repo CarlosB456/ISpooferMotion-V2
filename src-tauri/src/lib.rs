@@ -27,19 +27,6 @@ macro_rules! specta_commands {
             crate::commands::auth::detect_opencloud_api_key_owner,
             crate::commands::auth::validate_opencloud_api_key,
             crate::commands::auth::get_auth_metadata,
-            crate::commands::discord::clear_discord_report_auth,
-            crate::commands::discord::load_discord_report_auth,
-            crate::commands::discord::save_discord_report_auth,
-            crate::commands::discord::discord_reporting_configured,
-            crate::commands::discord::start_discord_login,
-            crate::commands::discord::open_discord_deep_link,
-            crate::commands::discord::verify_discord_auth,
-            crate::commands::discord::poll_discord_login,
-            crate::commands::discord::fetch_discord_announcements,
-            crate::commands::discord::fetch_discord_poll,
-            crate::commands::discord::submit_discord_poll_vote,
-            crate::commands::discord::open_discord_poll,
-            crate::commands::discord::close_discord_poll,
             crate::commands::fs::open_data_folder,
             crate::commands::fs::open_themes_folder,
             crate::commands::fs::clear_app_cache,
@@ -97,11 +84,7 @@ macro_rules! specta_commands {
             crate::commands::spoofer::place::clear_downloads_directory_command,
             crate::commands::spoofer::place::find_asset_by_name,
             crate::commands::studio::push_to_studio,
-            crate::studio_bridge::get_plugin_api_key,
-            crate::studio_bridge::trigger_key_pairing,
-            crate::studio_bridge::confirm_key_pairing,
             crate::studio_bridge::set_bridge_skip_owned_check,
-            crate::studio_bridge::get_pairing_status,
             crate::studio_bridge::get_plugin_bridge_port,
             crate::studio_bridge::get_studio_health_status,
             crate::studio_bridge::get_studio_asset_snapshots
@@ -136,7 +119,7 @@ pub fn run() {
 
     tauri::Builder::default()
         .invoke_handler(builder.invoke_handler())
-        .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_http::init())
@@ -152,38 +135,19 @@ pub fn run() {
                 let _ = app.deep_link().register_all();
             }
 
-            // Deep link handling (mainly used for Discord OAuth returning back to the app)
+            // Deep link handling
             app.listen("deep-link://new-url", {
                 let app_handle = app.handle().clone();
                 move |event| {
                     if let Ok(urls) = serde_json::from_str::<Vec<String>>(event.payload()) {
                         for url in urls {
-                            if let Some(token) = url.strip_prefix("ispoofermotion://auth?token=") {
-                                let auth_payload = serde_json::json!({ "loginToken": token });
-                                if let Err(e) = crate::commands::discord::save_discord_report_auth(
-                                    crate::commands::discord::AnyValue(auth_payload.clone()),
-                                ) {
-                                    log::error!("Failed to save discord auth payload from deep link: {:?}", e);
-                                }
-                                // let the UI know we got it
-                                let _ = app_handle.emit("discord-login-success", ());
-                            } else if url.starts_with("ispoofermotion://theme/apply") {
+                            if url.starts_with("ispoofermotion://theme/apply") {
                                 let _ = app_handle.emit("cloud-theme-sync-now", ());
                             }
                         }
                     } else if let Some(payload_clean) = event.payload().trim_matches('"').into() {
                         let payload_clean: &str = payload_clean;
-                        if let Some(token) =
-                            payload_clean.strip_prefix("ispoofermotion://auth?token=")
-                        {
-                            let auth_payload = serde_json::json!({ "loginToken": token });
-                            if let Err(e) = crate::commands::discord::save_discord_report_auth(
-                                crate::commands::discord::AnyValue(auth_payload.clone()),
-                            ) {
-                                log::error!("Failed to save discord auth payload from deep link (fallback): {:?}", e);
-                            }
-                            let _ = app_handle.emit("discord-login-success", ());
-                        } else if payload_clean.starts_with("ispoofermotion://theme/apply") {
+                        if payload_clean.starts_with("ispoofermotion://theme/apply") {
                             let _ = app_handle.emit("cloud-theme-sync-now", ());
                         }
                     }

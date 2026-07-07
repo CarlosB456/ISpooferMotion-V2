@@ -1,17 +1,13 @@
-import { Accordion, AccordionItem, itemVariants, pageVariants, Window } from '@codycon/ism-library';
+import { Group, itemVariants, pageVariants, Window } from '@codycon/ism-library';
 import { motion } from 'framer-motion';
-import { Globe, Settings2, SlidersHorizontal, User2 } from 'lucide-react';
+import { Globe, Settings2 } from 'lucide-react';
 
-import { useConfig } from '../../contexts/ConfigContext';
 import { useLanguage } from '../../contexts/LanguageContext';
-import AccountSection from './settings/AccountSection';
 import DebugSection from './settings/DebugSection';
 import GeneralSection from './settings/GeneralSection';
-import QuickSettingsSection from './settings/QuickSettingsSection';
 
 export default function SettingsView() {
   const { t } = useLanguage();
-  const { config, updateConfig } = useConfig();
 
   return (
     <motion.div
@@ -22,61 +18,29 @@ export default function SettingsView() {
       className="w-full h-full"
     >
       <Window>
-        <motion.div variants={itemVariants} className="w-full flex flex-col gap-8">
-          <Accordion
-            selectionMode="multiple"
-            expandedKeys={config.ui.settingsSections}
-            onExpandedChange={(keys: string[]) => updateConfig('ui', 'settingsSections', keys)}
-            className="flex flex-col gap-6"
-          >
-            <AccordionItem
-              value="account"
-              aria-label={t('nav.account')}
-              title={
-                <span className="flex items-center gap-3 font-semibold">
-                  <User2 size={18} className="text-primary" /> Account
-                </span>
-              }
-            >
-              <AccountSection />
-            </AccordionItem>
-
-            <AccordionItem
-              value="general"
-              aria-label={t('settings.general')}
-              title={
-                <span className="flex items-center gap-3 font-semibold">
-                  <Globe size={18} className="text-primary" /> {t('settings.general')}
-                </span>
-              }
+        <motion.div
+          variants={itemVariants}
+          className="w-full flex flex-col xl:flex-row gap-6 h-full"
+        >
+          {/* Left Column: Core App Settings */}
+          <div className="flex flex-col gap-6 w-full xl:w-1/2">
+            <Group
+              title={t('settings.general')}
+              icon={<Globe size={18} className="text-primary" />}
             >
               <GeneralSection />
-            </AccordionItem>
+            </Group>
+          </div>
 
-            <AccordionItem
-              value="quickSettings"
-              aria-label={t('nav.quickSettings')}
-              title={
-                <span className="flex items-center gap-3 font-semibold">
-                  <SlidersHorizontal size={18} className="text-primary" /> Quick Settings
-                </span>
-              }
-            >
-              <QuickSettingsSection />
-            </AccordionItem>
-
-            <AccordionItem
-              value="debug"
-              aria-label={t('settings.debugDisplay')}
-              title={
-                <span className="flex items-center gap-3 font-semibold">
-                  <Settings2 size={18} className="text-primary" /> Debug & Display
-                </span>
-              }
+          {/* Right Column: Debug & Advanced */}
+          <div className="flex flex-col gap-6 w-full xl:w-1/2">
+            <Group
+              title={t('settings.debugDisplay')}
+              icon={<Settings2 size={18} className="text-primary" />}
             >
               <DebugSection />
-            </AccordionItem>
-          </Accordion>
+            </Group>
+          </div>
         </motion.div>
       </Window>
     </motion.div>

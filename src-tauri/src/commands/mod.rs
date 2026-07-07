@@ -1,7 +1,6 @@
 // main commands module root. registers all the submodules for tauri ipc endpoints
 pub mod assets;
 pub mod auth;
-pub mod discord;
 pub mod fs;
 pub mod ipc;
 pub mod jobs;
@@ -10,3 +9,13 @@ pub mod roblox_status;
 pub mod session;
 pub mod spoofer;
 pub mod studio;
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[serde(transparent)]
+pub struct AnyValue(pub serde_json::Value);
+
+impl specta::Type for AnyValue {
+    fn definition(_types: &mut specta::Types) -> specta::datatype::DataType {
+        specta::datatype::DataType::Primitive(specta::datatype::Primitive::str)
+    }
+}

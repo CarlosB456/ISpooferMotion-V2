@@ -460,6 +460,22 @@ export function parseRbxl(buffer: ArrayBuffer, fileName: string): PlaceParseResu
     }
   }
 
+  for (const instance of instances.values()) {
+    if (instance.className === 'KeyframeSequence') {
+      instance.assets.push(
+        buildAssetRef(
+          instance.className,
+          instance.name,
+          'KeyframeSequence',
+          '',
+          `RAW_KFS_${instance.referent}`,
+          '',
+          'raw_keyframe_sequence',
+        ),
+      );
+    }
+  }
+
   const rootInstances: RbxInstance[] = [];
   for (const edge of prntEdges) {
     const child = instances.get(edge.childId);

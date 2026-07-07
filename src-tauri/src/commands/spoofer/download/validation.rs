@@ -22,8 +22,8 @@ pub async fn validate_downloaded_payload(
         || head_text.starts_with("<html")
         || head_text.starts_with("{\"errors\"")
         || head_text.starts_with("{\"error\"")
-        || head_text.starts_with("<?xml")
-        || head_text.starts_with("<error")
+        || (head_text.starts_with("<?xml") && !head_text.contains("<roblox"))
+        || (head_text.starts_with("<error") && !head_text.contains("<roblox"))
     {
         return Err("Downloaded asset response was an error page, not usable asset content.".into());
     }
@@ -68,8 +68,7 @@ pub async fn validate_downloaded_payload(
             }
         }
         "mesh" | "animation" | "plugin" | "model" => {
-            if head.starts_with(b"<roblox!")
-                || head.starts_with(b"<roblox xmlns")
+            if head_text.contains("<roblox")
                 || head.starts_with(b"version ")
                 || head.starts_with(b"v ")
             {

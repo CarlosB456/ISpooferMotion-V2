@@ -20,7 +20,7 @@ const readCachedStudioPlaceId = () => {
   }
 };
 
-export function useStudioConnection(port: string, onPortDiscovered?: (port: string) => void) {
+export function useStudioConnection() {
   // keeps an eye on the plugin bridge port and pulls health info to ensure studio is actually there
   const [studioConnected, setStudioConnected] = useState(false);
   const [scanStatus, setScanStatus] = useState<ScanStatus | null>(null);
@@ -38,10 +38,8 @@ export function useStudioConnection(port: string, onPortDiscovered?: (port: stri
 
       let success = false;
       try {
-        const activePort = await findPluginBridgePort(port);
+        const activePort = await findPluginBridgePort();
         if (activePort) {
-          if (activePort !== port) onPortDiscovered?.(activePort);
-
           const result = await invoke<{
             synced: boolean;
             scanStatus: any;
@@ -101,7 +99,7 @@ export function useStudioConnection(port: string, onPortDiscovered?: (port: stri
       if (timerId) clearTimeout(timerId);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [port, onPortDiscovered]);
+  }, []);
 
   return useMemo(
     () => ({ studioConnected, scanStatus, studioPlaceId }),

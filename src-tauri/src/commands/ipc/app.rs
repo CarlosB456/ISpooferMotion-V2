@@ -1,6 +1,6 @@
 #![allow(clippy::needless_pass_by_value)]
 use super::{clear_profile_secrets, AppHandle, DialogExt, Manager};
-use crate::commands::discord::AnyValue;
+use crate::commands::AnyValue;
 
 pub const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -102,7 +102,6 @@ pub async fn select_folder(app: AppHandle) -> crate::error::Result<Option<String
 pub async fn uninstall_app(app: AppHandle) -> crate::error::Result<bool> {
     // nuke all user data and credentials before exiting
     let _ = clear_profile_secrets(app.clone(), None).await;
-    let _ = crate::commands::discord::clear_discord_report_auth();
     if let Ok(data_dir) = app.path().app_data_dir() {
         let _ = std::fs::remove_dir_all(&data_dir);
     }

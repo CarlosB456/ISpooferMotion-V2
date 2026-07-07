@@ -1,60 +1,46 @@
-import { Button, FormInput, FormToggle, Group, Row } from '@codycon/ism-library';
+import { FormInput, FormToggle, Group, Row } from '@codycon/ism-library';
 import { motion } from 'framer-motion';
+import { useState } from 'react';
 
 import { useConfig } from '../../../contexts/ConfigContext';
 import { useLanguage } from '../../../contexts/LanguageContext';
-import { reopenPluginPairing } from '../../../utils/pluginBridge';
-import { logIsm } from '../../../utils/robloxProfiles';
-import PlaceIdSelector from '../../PlaceIdSelector';
 
 export default function RoutingSection() {
   const { t } = useLanguage();
   const { config, updateConfig } = useConfig();
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   return (
     <Group>
-      <div className="flex items-start gap-6 w-full">
-        <div className="w-1/3 shrink-0">
-          <FormInput
-            label={t('settings.pluginPort')}
-            type="number"
-            value={config.advanced.pluginPort}
-            onChange={(value: string) => updateConfig('advanced', 'pluginPort', value)}
-          />
-        </div>
+      <FormToggle
+        label={t('settings.advanced')}
+        description=""
+        checked={showAdvanced}
+        onChange={setShowAdvanced}
+      />
 
-        <div className="flex-1 min-w-0">
-          <PlaceIdSelector
-            label={t('settings.forcePlaceIds')}
-            placeholder={t('settings.forcePlaceIdsPlaceholder')}
-            value={config.advanced.forcePlaceIds}
-            onChange={(value: string) => updateConfig('advanced', 'forcePlaceIds', value)}
-          />
+      <motion.div
+        initial={false}
+        animate={{
+          height: showAdvanced ? 'auto' : 0,
+          opacity: showAdvanced ? 1 : 0,
+        }}
+        transition={{ duration: 0.2, ease: 'easeOut' }}
+        className="overflow-hidden flex flex-col"
+        aria-hidden={!showAdvanced}
+      >
+        <div className="pt-4">
+          <Row>
+            <FormInput
+              label={t('settings.proxyUrl')}
+              placeholder={t('settings.proxyUrlPlaceholder')}
+              value={config.advanced.proxyUrl}
+              onChange={(value: string) => updateConfig('advanced', 'proxyUrl', value)}
+            />
+          </Row>
         </div>
-      </div>
-      <Row>
-        <FormInput
-          label={t('settings.searchLimit')}
-          type="number"
-          value={config.advanced.placeIdSearchLimit}
-          onChange={(value: string) => updateConfig('advanced', 'placeIdSearchLimit', value)}
-        />
+      </motion.div>
 
-        <FormInput
-          label={t('settings.assetScanTimeout')}
-          type="number"
-          value={config.advanced.assetScanTimeout}
-          onChange={(value: string) => updateConfig('advanced', 'assetScanTimeout', value)}
-        />
-      </Row>
-      <Row>
-        <FormInput
-          label={t('settings.proxyUrl')}
-          placeholder={t('settings.proxyUrlPlaceholder')}
-          value={config.advanced.proxyUrl}
-          onChange={(value: string) => updateConfig('advanced', 'proxyUrl', value)}
-        />
-      </Row>
       <div className="flex flex-col">
         <Row>
           <FormToggle
@@ -89,21 +75,6 @@ export default function RoutingSection() {
             </div>
           </div>
         </motion.div>
-      </div>
-      <div className="pt-2">
-        <Button
-          type="button"
-          color="primary"
-          className="w-full font-bold h-12 tracking-wide overflow-hidden relative"
-          aria-label={t('settings.rePairPlugin')}
-          onClick={() => {
-            void reopenPluginPairing().then(() =>
-              logIsm('info', 'Studio plugin pairing reopened. Reconnect in Studio.'),
-            );
-          }}
-        >
-          {t('settings.rePairPlugin')}
-        </Button>
       </div>
     </Group>
   );

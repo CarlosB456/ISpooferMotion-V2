@@ -54,6 +54,8 @@
     "scan",
     "applyPatches",
     "startPolling",
-    "discoverServer"
+    "discoverServer",
+    "hidePluginGui",
+    "setPluginGuiStatus"
   ]
 }

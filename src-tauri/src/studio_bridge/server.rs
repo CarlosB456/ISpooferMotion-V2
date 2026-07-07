@@ -1,33 +1,13 @@
 // This file contains all the Axum route handlers for the bridge server.
 // We keep the state locked down so we don't accidentally race between the UI and Studio requests.
-use axum::{
-    extract::{Json, State},
-    http::StatusCode,
-    response::{IntoResponse, Response},
-};
-use serde_json::{json, Value};
+use axum::extract::{Json, State};
+use serde_json::Value;
 use std::time::{Duration, Instant};
 
 use super::messages::{
     analyze_records, count_keyframe_warnings, plan_patches, AssetStore, StudioRecord,
 };
-use super::{
-    allow_key_discovery, get_persistent_api_key, pairing_confirmed, AppState, PLUGIN_API_KEY,
-    STUDIO_PROTOCOL_VERSION,
-};
-
-pub async fn handle_discover_key() -> Response {
-    if !*allow_key_discovery().read().await {
-        return (StatusCode::FORBIDDEN, Json(json!({ "error": "pairing_closed" }))).into_response();
-    }
-    Json(json!({ "key": PLUGIN_API_KEY.get_or_init(get_persistent_api_key) })).into_response()
-}
-
-pub async fn handle_confirm_pairing() -> Json<Value> {
-    *pairing_confirmed().write().await = true;
-    *allow_key_discovery().write().await = false;
-    Json(json!({ "ok": true }))
-}
+use super::{AppState, STUDIO_PROTOCOL_VERSION};
 
 pub async fn handle_studio_health(State(state): State<AppState>) -> Json<Value> {
     let guard = state.data.read().await;
@@ -137,7 +117,7 @@ pub async fn handle_scan_complete(State(state): State<AppState>) -> Json<Value> 
                 AssetStore::completed(),
             )
         });
-        
+
     let patches = if mappings.is_empty() {
         Vec::new()
     } else {
@@ -149,7 +129,7 @@ pub async fn handle_scan_complete(State(state): State<AppState>) -> Json<Value> 
                 Vec::new()
             })
     };
-    
+
     let mut guard = state.data.write().await;
     (
         guard.last_animations,
@@ -228,12 +208,14 @@ pub async fn handle_poll_replacements(State(state): State<AppState>) -> Json<Val
             guard.last_plugin_poll_time = Some(Instant::now());
             let has_mappings = !guard.stored_mappings.is_empty();
             let has_patches = !guard.stored_patches.is_empty();
-            let has_records = !guard.studio_records.is_empty();
 
-            if has_patches || (has_mappings && has_records) {
+            if has_patches {
                 let mappings = std::mem::take(&mut guard.stored_mappings);
                 let patches = std::mem::take(&mut guard.stored_patches);
                 return Json(serde_json::json!({ "mappings": mappings, "patches": patches }));
+            } else if has_mappings {
+                let mappings = guard.stored_mappings.clone();
+                return Json(serde_json::json!({ "mappings": mappings, "patches": [] }));
             }
         }
         if start.elapsed() > timeout {
@@ -310,6 +292,14 @@ macro_rules! request_handler {
             guard.$flag = true;
             if !guard.$store.scanning {
                 guard.$store = AssetStore::default();
+            }
+            if guard.scan_status.is_none() {
+                guard.scan_status = Some(serde_json::json!({
+                    "scanning": true,
+                    "current_service": "Pending...",
+                    "scanned": 0,
+                    "total": 0
+                }));
             }
             "ok"
         }

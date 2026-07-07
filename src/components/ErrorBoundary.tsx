@@ -1,8 +1,10 @@
 import { getVersion } from '@tauri-apps/api/app';
 import { type as getOsType, version as getOsVersion } from '@tauri-apps/plugin-os';
-import { Component, ErrorInfo, ReactNode } from 'react';
+import { Component, type ErrorInfo, type ReactNode } from 'react';
 
+import { useLanguage } from '../contexts/LanguageContext';
 import { useConfigStore } from '../stores/configStore';
+import { getTranslation } from '../utils/i18n';
 import { isTauriRuntime } from '../utils/tauriRuntime';
 
 interface Props {
@@ -32,9 +34,19 @@ export class ErrorBoundary extends Component<Props, State> {
           return;
         }
 
-        const appVersion = await getVersion();
-        const osName = await getOsType();
-        const osVersion = await getOsVersion();
+        let appVersion = 'Unknown';
+        let osInfo = 'Web Browser';
+
+        if (isTauriRuntime()) {
+          try {
+            appVersion = await getVersion();
+            const osName = await getOsType();
+            const osVersion = await getOsVersion();
+            osInfo = `${osName} ${osVersion}`;
+          } catch (e) {
+            console.error('Failed to get Tauri system info:', e);
+          }
+        }
 
         const baseUrl =
           import.meta.env.VITE_API_BASE_URL === undefined
@@ -47,7 +59,7 @@ export class ErrorBoundary extends Component<Props, State> {
           stackTrace: errorInfo.componentStack + '\n\n' + (error.stack || ''),
           appVersion,
           appType: 'V2',
-          osInfo: `${osName} ${osVersion}`,
+          osInfo,
         };
 
         if (isTauriRuntime()) {
@@ -91,12 +103,14 @@ export class ErrorBoundary extends Component<Props, State> {
               <path d="M12 17h.01" />
             </svg>
           </div>
-          <h1 className="text-3xl font-bold tracking-tight">Oops, something broke.</h1>
+          <h1 className="text-3xl font-bold tracking-tight">
+            {getTranslation(useLanguage.getState().lang, 'misc.errorBoundaryTitle')}
+          </h1>
           <p className="text-text-muted max-w-md">
-            ISpooferMotion encountered a fatal error and could not continue.{' '}
+            {getTranslation(useLanguage.getState().lang, 'misc.errorBoundaryDesc')}{' '}
             {useConfigStore.getState().config.general.telemetryEnabled
-              ? 'A crash report has been silently sent to the developers.'
-              : 'Crash reporting is disabled.'}
+              ? getTranslation(useLanguage.getState().lang, 'misc.crashReportSent')
+              : getTranslation(useLanguage.getState().lang, 'misc.crashReportDisabled')}
           </p>
           <div className="bg-bg-card border border-border p-4 rounded-xl mt-4 max-w-2xl text-left overflow-auto max-h-48 text-sm w-full font-mono shadow-inner">
             <div className="text-red-400 font-semibold mb-2">
@@ -107,7 +121,7 @@ export class ErrorBoundary extends Component<Props, State> {
             onClick={() => window.location.reload()}
             className="mt-6 px-6 py-3 bg-primary text-primary-content font-semibold rounded-xl hover:bg-primary-hover transition-colors shadow-lg active:scale-95"
           >
-            Reload Application
+            {getTranslation(useLanguage.getState().lang, 'misc.reloadApplication')}
           </button>
         </div>
       );

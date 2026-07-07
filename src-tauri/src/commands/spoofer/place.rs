@@ -68,11 +68,38 @@ pub async fn get_place_ids_for_asset_creator(
     max_place_ids: Option<u32>,
     place_name: Option<String>,
 ) -> crate::error::Result<Vec<String>> {
-    let (creator_type, creator_id) =
-        get_asset_creator_for_asset(app.clone(), asset_id, cookie.clone()).await?;
+    let mut place_ids =
+        match get_asset_creator_for_asset(app.clone(), asset_id, cookie.clone()).await {
+            Ok((creator_type, creator_id)) => get_place_id_from_creator(
+                app.clone(),
+                creator_type,
+                creator_id,
+                cookie,
+                max_place_ids,
+                place_name,
+            )
+            .await
+            .unwrap_or_default(),
+            Err(_) => Vec::new(),
+        };
 
-    get_place_id_from_creator(app, creator_type, creator_id, cookie, max_place_ids, place_name)
-        .await
+    if let Some(studio_place_id) = crate::studio_bridge::bridge_data()
+        .and_then(|d| d.try_read().ok().and_then(|g| g.studio_place_id.clone()))
+    {
+        if !studio_place_id.is_empty()
+            && studio_place_id != "0"
+            && studio_place_id.chars().all(|c| c.is_ascii_digit())
+            && !place_ids.contains(&studio_place_id)
+        {
+            place_ids.insert(0, studio_place_id);
+        }
+    }
+
+    if place_ids.is_empty() {
+        return Err(crate::error::AppError::Custom("No candidate place IDs found".into()));
+    }
+
+    Ok(place_ids)
 }
 
 // hits the open cloud api to find out who actually made the asset so we know if we need to spoof it
@@ -85,7 +112,8 @@ pub async fn get_asset_creator_for_asset(
         return Err("Invalid Roblox asset id.".into());
     }
 
-    static CREATOR_CACHE: std::sync::OnceLock<dashmap::DashMap<String, (String, String)>> = std::sync::OnceLock::new();
+    static CREATOR_CACHE: std::sync::OnceLock<dashmap::DashMap<String, (String, String)>> =
+        std::sync::OnceLock::new();
     let cache = CREATOR_CACHE.get_or_init(dashmap::DashMap::new);
     if let Some(cached) = cache.get(&asset_id) {
         return Ok(cached.value().clone());
@@ -216,15 +244,21 @@ pub async fn get_place_id_from_creator(
     let mut cursor = String::new();
     let client = crate::utils::get_http_client();
 
-    for filter in [2, 1] {
+    for filter_opt in [Some("2"), Some("1"), Some("4"), None] {
         cursor.clear();
         while root_places.len() < max_results as usize {
             let mut url = if is_group {
-                format!("https://games.roblox.com/v2/groups/{creator_id}/games?accessFilter={filter}&limit={limit}")
+                if let Some(filter) = filter_opt {
+                    format!("https://games.roblox.com/v2/groups/{creator_id}/games?accessFilter={filter}&limit={limit}")
+                } else {
+                    format!("https://games.roblox.com/v2/groups/{creator_id}/games?limit={limit}")
+                }
             } else {
-                format!(
-                    "https://games.roblox.com/v2/users/{creator_id}/games?accessFilter={filter}&limit={limit}&sortOrder=Asc"
-                )
+                if let Some(filter) = filter_opt {
+                    format!("https://games.roblox.com/v2/users/{creator_id}/games?accessFilter={filter}&limit={limit}&sortOrder=Asc")
+                } else {
+                    format!("https://games.roblox.com/v2/users/{creator_id}/games?limit={limit}&sortOrder=Asc")
+                }
             };
 
             if !cursor.is_empty() {
@@ -232,12 +266,15 @@ pub async fn get_place_id_from_creator(
             }
 
             wait_rate_limit(RateLimitBucket::PlaceLookup).await;
-            let resp = client
+            let Ok(resp) = client
                 .get(&url)
                 .header(reqwest::header::COOKIE, &cookie_header)
                 .header(reqwest::header::USER_AGENT, "RobloxStudio/WinInet")
                 .send()
-                .await?;
+                .await
+            else {
+                break;
+            };
 
             crate::utils::check_for_roblosecurity_update(&app, &resp, &cookie_header);
 
@@ -249,18 +286,17 @@ pub async fn get_place_id_from_creator(
             }
 
             if !resp.status().is_success() {
-                return Err(crate::error::AppError::Custom(format!(
-                    "Failed to get games: {}",
-                    resp.status()
-                )));
+                break;
             }
 
-            let data: serde_json::Value = resp.json().await?;
+            let Ok(data): Result<serde_json::Value, _> = resp.json().await else {
+                break;
+            };
 
-            let games = data.get("data").and_then(|d| d.as_array()).ok_or_else(|| {
-                crate::error::AppError::Custom("Invalid games response format".into())
-            })?;
-            
+            let Some(games) = data.get("data").and_then(|d| d.as_array()) else {
+                break;
+            };
+
             if games.is_empty() {
                 break;
             }
@@ -296,14 +332,10 @@ pub async fn get_place_id_from_creator(
                 break;
             }
         }
-        
+
         if root_places.len() >= max_results as usize {
             break;
         }
-    }
-
-    if root_places.is_empty() {
-        return Err(crate::error::AppError::Custom("No root places found in games".into()));
     }
 
     if let Some(ref target_name) = place_name {
@@ -333,7 +365,25 @@ pub async fn get_place_id_from_creator(
         });
     }
 
-    Ok(root_places.into_iter().map(|(id, _)| id).collect())
+    let mut place_ids: Vec<String> = root_places.into_iter().map(|(id, _)| id).collect();
+
+    if let Some(studio_place_id) = crate::studio_bridge::bridge_data()
+        .and_then(|d| d.try_read().ok().and_then(|g| g.studio_place_id.clone()))
+    {
+        if !studio_place_id.is_empty()
+            && studio_place_id != "0"
+            && studio_place_id.chars().all(|c| c.is_ascii_digit())
+            && !place_ids.contains(&studio_place_id)
+        {
+            place_ids.insert(0, studio_place_id);
+        }
+    }
+
+    if place_ids.is_empty() {
+        return Err(crate::error::AppError::Custom("No root places found in games".into()));
+    }
+
+    Ok(place_ids)
 }
 
 #[tauri::command]
@@ -403,12 +453,14 @@ pub async fn get_place_id_from_universe_id(
     }
 
     let data: serde_json::Value = resp.json().await?;
-    let place_id =
-        data.get("data").and_then(|d| d.as_array()).and_then(|arr| arr.first()).and_then(|obj| obj.get("rootPlaceId")).and_then(
-            |id| {
-                id.as_u64().map(|n| n.to_string()).or_else(|| id.as_str().map(ToString::to_string))
-            },
-        );
+    let place_id = data
+        .get("data")
+        .and_then(|d| d.as_array())
+        .and_then(|arr| arr.first())
+        .and_then(|obj| obj.get("rootPlaceId"))
+        .and_then(|id| {
+            id.as_u64().map(|n| n.to_string()).or_else(|| id.as_str().map(ToString::to_string))
+        });
 
     if let Some(pid) = &place_id {
         cache.insert(universe_id, pid.clone());

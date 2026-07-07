@@ -81,7 +81,8 @@ export const ExplorerTreeNode = memo(function ExplorerTreeNode({
   };
 
   const getTypeIconSrc = (asset: ParsedAssetRef) => {
-    if (asset.type === 'animation') return '/icons/Animation.png';
+    if (asset.type === 'animation' || asset.type === 'raw_keyframe_sequence')
+      return '/icons/Animation.png';
     if (asset.type === 'audio') return '/icons/Sound.png';
     if (asset.type === 'mesh') return '/icons/MeshPart.png';
     if (asset.type === 'image') return '/icons/Decal.png';
@@ -160,7 +161,9 @@ export const ExplorerTreeNode = memo(function ExplorerTreeNode({
                 variant="ghost"
                 size="sm"
                 className="h-6 w-6 min-w-6"
-                title={playingAudioId === assetId ? 'Stop audio' : 'Play audio'}
+                title={
+                  playingAudioId === assetId ? t('explorer.stopAudio') : t('explorer.playAudio')
+                }
                 onClick={(event: any) => {
                   event.stopPropagation();
                   void playAsset(asset);
@@ -197,7 +200,7 @@ export const ExplorerTreeNode = memo(function ExplorerTreeNode({
                 variant="ghost"
                 size="sm"
                 className="h-6 w-6 min-w-6"
-                title={isMesh ? 'Preview mesh thumbnail' : 'Preview image'}
+                title={isMesh ? t('explorer.previewMeshThumbnail') : t('explorer.previewImage')}
                 onClick={(event: any) => {
                   event.stopPropagation();
                   setEnlargedImage({ id: assetId, name: asset.instanceName });
@@ -227,8 +230,14 @@ export const ExplorerTreeNode = memo(function ExplorerTreeNode({
             <div className="mx-2 mb-2 rounded border border-border-subtle bg-bg-base/80 px-2.5 py-2 text-[9px] text-text-muted">
               <DetailLine label={t('explorer.path')} value={asset.path} />
               <DetailLine label={t('explorer.id')} value={assetId} />
-              <DetailLine label={t('explorer.property')} value={asset.propertyName || 'Unknown'} />
-              <DetailLine label={t('explorer.class')} value={asset.className || 'Unknown'} />
+              <DetailLine
+                label={t('explorer.property')}
+                value={asset.propertyName || t('common.unknown')}
+              />
+              <DetailLine
+                label={t('explorer.class')}
+                value={asset.className || t('common.unknown')}
+              />
             </div>
           </div>
         )}

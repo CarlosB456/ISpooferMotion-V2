@@ -1,4 +1,4 @@
-use crate::commands::discord::AnyValue;
+use crate::commands::AnyValue;
 use std::path::PathBuf;
 use tauri::AppHandle;
 use tauri::Manager;

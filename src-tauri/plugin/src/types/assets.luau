@@ -1,3 +1,7 @@
+--!nocheck
+--!nolint
+-- luacheck: ignore
+---@diagnostic disable: undefined-global, unused-local, unused-function, lowercase-global
 type Record = {
 	token: string,
 	className: string,

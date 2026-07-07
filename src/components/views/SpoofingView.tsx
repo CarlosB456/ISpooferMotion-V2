@@ -1,9 +1,6 @@
 import {
-  Accordion,
-  AccordionItem,
   Button,
   FormTextarea,
-  Group,
   itemVariants,
   Modal,
   ModalBody,
@@ -12,13 +9,21 @@ import {
   ModalHeader,
   MultiSelectDropdown,
   pageVariants,
-  Row,
-  Window,
 } from '@codycon/ism-library';
 import { invoke } from '@tauri-apps/api/core';
 import { readText as readClipboardText } from '@tauri-apps/plugin-clipboard-manager';
 import { motion } from 'framer-motion';
-import { Ban, Play, RotateCcw, ScanSearch, UserSquare2, Wand2 } from 'lucide-react';
+import {
+  ArrowDownUp,
+  Ban,
+  Play,
+  RotateCcw,
+  ScanSearch,
+  Settings2,
+  ShieldAlert,
+  SlidersHorizontal,
+  Wand2,
+} from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
@@ -41,8 +46,8 @@ import {
   loadCachedUsers,
   logIsm,
   normalizeId,
-  RobloxGroup,
-  RobloxUserInfo,
+  type RobloxGroup,
+  type RobloxUserInfo,
   saveCachedGroups,
   validateCookieProfile,
 } from '../../utils/robloxProfiles';
@@ -51,6 +56,11 @@ import { queueStudioReplacements } from '../../utils/studioBridge';
 import { triggerStudioScan } from '../../utils/studioScan';
 import { isTauriRuntime } from '../../utils/tauriRuntime';
 import ResultsModal from '../modals/ResultsModal';
+import PlaceIdSelector from '../PlaceIdSelector';
+import CredentialsSection from './config/CredentialsSection';
+import ExclusionsSection from './config/ExclusionsSection';
+import RoutingSection from './config/RoutingSection';
+import UploadSection from './config/UploadSection';
 import ExecutionLogs from './spoofing/ExecutionLogs';
 import {
   type AudioQuotaDisplay,
@@ -78,7 +88,7 @@ type ApiKeyOwnerDetectResult = {
   message?: string;
 };
 
-async function getStudioPlaceIdFallback(pluginPort: string): Promise<string> {
+async function getStudioPlaceIdFallback(): Promise<string> {
   try {
     const cached = window.localStorage.getItem('ISpooferMotion_LastStudioPlaceId') || '';
     if (/^\d+$/.test(cached) && cached !== '0') return cached;
@@ -86,7 +96,7 @@ async function getStudioPlaceIdFallback(pluginPort: string): Promise<string> {
 
   // try to ping the studio plugin directly for the place id if the tauri state hasn't synced yet
   try {
-    const activePort = await findPluginBridgePort(pluginPort);
+    const activePort = await findPluginBridgePort();
     if (!activePort) return '';
     const response = await fetch(`http://localhost:${activePort}/studio-health?t=${Date.now()}`, {
       signal: AbortSignal.timeout(800),
@@ -125,9 +135,10 @@ export default function SpoofingView() {
     activeSpooferJobId,
     setActiveSpooferJobId,
     lastAssetResults,
-    keyframeWarningCount,
     isJobPaused,
     setIsJobPaused,
+    showAdvanced,
+    setShowAdvanced,
   } = useSpooferStore(
     useShallow((s) => ({
       rootInstances: s.rootInstances,
@@ -152,7 +163,8 @@ export default function SpoofingView() {
       setIsJobPaused: s.setIsJobPaused,
       lastAssetResults: s.lastAssetResults,
       setLastAssetResults: s.setLastAssetResults,
-      keyframeWarningCount: s.keyframeWarningCount,
+      showAdvanced: s.showAdvanced,
+      setShowAdvanced: s.setShowAdvanced,
     })),
   );
   const [isScanningStudio, setIsScanningStudio] = useState(false);
@@ -162,6 +174,7 @@ export default function SpoofingView() {
   );
   const [loadingGroups, setLoadingGroups] = useState(false);
   const [resultsModalOpen, setResultsModalOpen] = useState(false);
+  const [advancedTab, setAdvancedTab] = useState('upload');
   const initialMount = useRef(true);
   const [audioQuota, setAudioQuota] = useState<AudioQuotaDisplay>({
     status: 'idle',
@@ -377,10 +390,30 @@ export default function SpoofingView() {
       label: t('explorer.animations'),
       icon: AnimationIcon,
     },
-    { value: 'audio', assetType: 'audio', label: t('explorer.audio'), icon: SoundIcon },
-    { value: 'images', assetType: 'image', label: t('explorer.images'), icon: DecalIcon },
-    { value: 'meshes', assetType: 'mesh', label: t('explorer.meshes'), icon: MeshIcon },
-    { value: 'videos', assetType: 'video', label: t('explorer.videos'), icon: VideoIcon },
+    {
+      value: 'audio',
+      assetType: 'audio',
+      label: t('explorer.audio'),
+      icon: SoundIcon,
+    },
+    {
+      value: 'images',
+      assetType: 'image',
+      label: t('explorer.images'),
+      icon: DecalIcon,
+    },
+    {
+      value: 'meshes',
+      assetType: 'mesh',
+      label: t('explorer.meshes'),
+      icon: MeshIcon,
+    },
+    {
+      value: 'videos',
+      assetType: 'video',
+      label: t('explorer.videos'),
+      icon: VideoIcon,
+    },
   ];
 
   const selectedSpoofTypes = spoofOptions
@@ -464,15 +497,43 @@ export default function SpoofingView() {
   const handleScanStudio = async () => {
     setIsScanningStudio(true);
     try {
-      const port =
-        (await findPluginBridgePort(config.advanced.pluginPort)) ||
-        config.advanced.pluginPort ||
-        '14285';
       setLogs((prev) => appendSpoofingLog(prev, '[INFO] Scanning Roblox Studio for assets...\n'));
-      await triggerStudioScan(port);
-      setLogs((prev) => appendSpoofingLog(prev, '[SUCCESS] Studio scan complete.\n'));
+      await triggerStudioScan();
+      const { invoke } = await import('@tauri-apps/api/core');
+      const snapshots = await invoke<{
+        anims: { assets: any[] };
+        sounds: { assets: any[] };
+        images: { assets: any[] };
+        meshes: { assets: any[] };
+        scriptRefs: { assets: any[] };
+      }>('get_studio_asset_snapshots');
+
+      let totalAssets = 0;
+      if (snapshots) {
+        totalAssets += snapshots.anims?.assets?.length || 0;
+        totalAssets += snapshots.sounds?.assets?.length || 0;
+        totalAssets += snapshots.images?.assets?.length || 0;
+        totalAssets += snapshots.meshes?.assets?.length || 0;
+        totalAssets += snapshots.scriptRefs?.assets?.length || 0;
+      }
+
+      if (totalAssets === 0) {
+        setLogs((prev) =>
+          appendSpoofingLog(
+            prev,
+            '[WARN] Studio scan finished, but no assets were found. Are you sure you have the plugin installed and enabled in your place?\n',
+          ),
+        );
+        logIsm('warn', 'Scan finished but no assets found', true);
+      } else {
+        setLogs((prev) =>
+          appendSpoofingLog(prev, `[SUCCESS] Studio Scan Complete! Found ${totalAssets} assets.\n`),
+        );
+        logIsm('info', `Studio scan completed. Found ${totalAssets} assets.`, true);
+      }
     } catch (error) {
       logIsm('error', `Studio scan failed: ${String(error)}`, true);
+      setLogs((prev) => appendSpoofingLog(prev, `[ERROR] Studio scan failed: ${String(error)}\n`));
     } finally {
       setIsScanningStudio(false);
     }
@@ -484,7 +545,7 @@ export default function SpoofingView() {
     setIsReplacing(true);
     setReplaceError(false);
     try {
-      await queueStudioReplacements(lastReplacements, config.advanced.pluginPort);
+      await queueStudioReplacements(lastReplacements);
       setLogs((prev) => appendSpoofingLog(prev, '[SUCCESS] Queued replacements for Studio.\n'));
     } catch (error) {
       setLogs((prev) =>
@@ -592,7 +653,7 @@ export default function SpoofingView() {
       .filter((id) => id.length > 0);
 
     const extraIdsSet = new Set(extraIdsParsed);
-    const assetInfoMap = new Map<string, { type: string; name: string }>();
+    const assetInfoMap = new Map<string, { type: string; name: string; rawValue?: string }>();
 
     // recursively grab asset details from the parsed rbxl tree
     const gatherAllInfo = (nodes: RbxInstance[]) => {
@@ -600,7 +661,11 @@ export default function SpoofingView() {
         for (const asset of node.assets) {
           const id = getAssetId(asset);
           if (id && asset.type) {
-            assetInfoMap.set(id, { type: asset.type, name: node.name });
+            assetInfoMap.set(id, {
+              type: asset.type,
+              name: asset.instanceName || asset.path || node.name || `Asset ${id}`,
+              rawValue: asset.rawValue,
+            });
           }
         }
         if (node.children) gatherAllInfo(node.children);
@@ -616,10 +681,13 @@ export default function SpoofingView() {
     selectedTypes.add('script_ref');
 
     const shouldIncludeSelectedId = (id: string, enforceType: boolean) => {
-      const numId = parseInt(id, 10);
-      if (isNaN(numId) || numId < 10000) return false;
+      const isMockKFS = id.startsWith('RAW_KFS_');
+      if (!isMockKFS) {
+        const numId = parseInt(id, 10);
+        if (isNaN(numId) || numId < 10000) return false;
+      }
       const type = assetInfoMap.get(id)?.type;
-      if (type === 'plugin' && !config.advanced.enablePluginSpoofing) return false;
+      if (type === 'plugin') return false;
       if (enforceType && type && !selectedTypes.has(type)) return false;
       return true;
     };
@@ -633,14 +701,13 @@ export default function SpoofingView() {
       extraIdsSet.forEach((id) => {
         if (shouldIncludeSelectedId(id, false)) finalAssetIds.add(id);
       });
-
       selectedAssetIds.forEach((id) => {
         if (shouldIncludeSelectedId(id, true)) finalAssetIds.add(id);
       });
     }
 
     if (finalAssetIds.size === 0) {
-      logIsm('warn', 'Select at least one asset or asset type before spoofing.', true);
+      logIsm('warn', 'No valid assets selected or found for spoofing.', true);
       return;
     }
 
@@ -680,22 +747,21 @@ export default function SpoofingView() {
 
     const finalAssetsPayload = Array.from(finalAssetIds).map((id) => {
       const info = assetInfoMap.get(id);
-      const isManualPluginId = config.advanced.enablePluginSpoofing && extraIdsSet.has(id);
       const overrideType = runContext?.assetTypes?.[id];
       const normalizedOverrideType =
         overrideType &&
-        ['animation', 'audio', 'mesh', 'image', 'script_ref', 'plugin'].includes(overrideType)
+        ['animation', 'audio', 'mesh', 'image', 'script_ref', 'raw_keyframe_sequence'].includes(
+          overrideType,
+        )
           ? overrideType
           : undefined;
       const type = normalizedOverrideType
         ? normalizedOverrideType
-        : isManualPluginId
-          ? 'plugin'
-          : info?.type === 'plugin'
-            ? 'animation'
-            : info?.type || 'animation';
+        : info?.type === 'plugin'
+          ? 'animation'
+          : info?.type || 'animation';
       const name = info?.name || `Asset ${id}`;
-      return { id, type, name };
+      return { id, type, name, rawValue: info?.rawValue };
     });
 
     setIsSpoofing(true);
@@ -727,7 +793,7 @@ export default function SpoofingView() {
       const configuredPlaceIds = config.advanced.forcePlaceIds.trim();
       const studioPlaceIdFallback = configuredPlaceIds
         ? ''
-        : studioPlaceId || (await getStudioPlaceIdFallback(config.advanced.pluginPort));
+        : studioPlaceId || (await getStudioPlaceIdFallback());
 
       await invoke('run_spoofer_action', {
         data: {
@@ -739,7 +805,7 @@ export default function SpoofingView() {
           uploadTypes,
           downloadPath: config.spoofing.downloadPath,
           forcePlaceIds: configuredPlaceIds || studioPlaceIdFallback,
-          placeIdSearchLimit: config.advanced.placeIdSearchLimit,
+
           placeName: runContext?.placeName || loadedFileName,
           concurrent: config.advanced.concurrentSpoofing,
           maxConcurrency: config.advanced.maxConcurrency,
@@ -836,188 +902,306 @@ export default function SpoofingView() {
       exit="exit"
       className="w-full h-full"
     >
-      <Window>
-        <motion.div variants={itemVariants} className="w-full flex flex-col gap-8">
-          <Accordion
-            selectionMode="multiple"
-            expandedKeys={config.ui.spoofingSections}
-            onExpandedChange={(keys: string[]) => updateConfig('ui', 'spoofingSections', keys)}
-            className="flex flex-col gap-6"
+      <div className="w-full h-full p-4 flex flex-col overflow-hidden">
+        <div className="w-full flex-1 min-h-0 flex flex-col gap-4 relative px-2 pt-2">
+          <Modal isOpen={showAdvanced} onOpenChange={setShowAdvanced} size="5xl">
+            <ModalContent className="w-[95vw]! max-w-[95vw]! sm:max-w-[1200px]! max-h-[90vh]! p-0! overflow-hidden">
+              <div className="flex h-full min-h-[75vh]">
+                {/* Sidebar Nav */}
+                <div className="w-56 shrink-0 flex flex-col gap-1 p-4 border-r border-border-subtle bg-bg-base">
+                  <div className="flex items-center gap-2 px-2 pb-3 mb-2 border-b border-border-subtle">
+                    <Settings2 size={16} className="text-primary" />
+                    <span className="text-sm font-bold text-text-primary">
+                      {t('settings.advanced')}
+                    </span>
+                  </div>
+                  {[
+                    {
+                      id: 'upload',
+                      label: t('config.assetProcessing'),
+                      icon: <ArrowDownUp size={15} />,
+                    },
+                    {
+                      id: 'routing',
+                      label: t('config.routingLimits'),
+                      icon: <SlidersHorizontal size={15} />,
+                    },
+                    {
+                      id: 'exclusions',
+                      label: t('config.exclusions'),
+                      icon: <ShieldAlert size={15} />,
+                    },
+                  ].map((tab) => (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      onClick={() => setAdvancedTab(tab.id)}
+                      className={cn(
+                        'flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 text-left',
+                        advancedTab === tab.id
+                          ? 'bg-primary/10 text-primary'
+                          : 'text-text-secondary hover:bg-bg-surface hover:text-text-primary',
+                      )}
+                    >
+                      <span
+                        className={cn(advancedTab === tab.id ? 'text-primary' : 'text-text-muted')}
+                      >
+                        {tab.icon}
+                      </span>
+                      {tab.label}
+                    </button>
+                  ))}
+                  <div className="mt-auto pt-4 border-t border-border-subtle">
+                    <Button
+                      color="primary"
+                      className="w-full"
+                      onClick={() => setShowAdvanced(false)}
+                    >
+                      {t('common.done')}
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Content Pane */}
+                <div className="flex-1 overflow-y-auto p-6">
+                  {advancedTab === 'upload' && (
+                    <div className="flex flex-col gap-2">
+                      <div className="flex items-center gap-2 mb-4">
+                        <ArrowDownUp size={18} className="text-primary" />
+                        <h3 className="text-base font-semibold text-text-primary">
+                          {t('config.assetProcessing')}
+                        </h3>
+                      </div>
+                      <UploadSection />
+                    </div>
+                  )}
+                  {advancedTab === 'routing' && (
+                    <div className="flex flex-col gap-2">
+                      <div className="flex items-center gap-2 mb-4">
+                        <SlidersHorizontal size={18} className="text-primary" />
+                        <h3 className="text-base font-semibold text-text-primary">
+                          {t('config.routingLimits')}
+                        </h3>
+                      </div>
+                      <RoutingSection />
+                    </div>
+                  )}
+                  {advancedTab === 'exclusions' && (
+                    <div className="flex flex-col gap-2">
+                      <div className="flex items-center gap-2 mb-4">
+                        <ShieldAlert size={18} className="text-primary" />
+                        <h3 className="text-base font-semibold text-text-primary">
+                          {t('config.exclusions')}
+                        </h3>
+                      </div>
+                      <ExclusionsSection />
+                    </div>
+                  )}
+                </div>
+              </div>
+            </ModalContent>
+          </Modal>
+
+          {/* Top Configuration Bento */}
+          <motion.div
+            variants={itemVariants}
+            className="w-full grid grid-cols-1 lg:grid-cols-12 gap-3 shrink-0"
           >
-            <AccordionItem
-              value="targets"
-              title={
-                <span className="flex items-center gap-3 font-semibold">
-                  <UserSquare2 size={18} className="text-primary" /> Targets
+            {/* Left Column: Identity & Credentials */}
+            <div className="col-span-1 lg:col-span-7 flex flex-col gap-3 p-4 bg-bg-surface border border-border-subtle rounded-xl shadow-sm">
+              <div className="flex items-center gap-2 mb-0 border-b border-border-subtle pb-2">
+                <ArrowDownUp size={16} className="text-primary" />
+                <span className="text-sm font-bold uppercase tracking-widest text-text-muted">
+                  {t('spoof.targetContext')} & {t('config.credentials')}
                 </span>
-              }
-            >
-              <Group>
-                <AvatarDropdown
-                  users={users}
-                  value={config.spoofing.selectedUser}
-                  onChange={handleSelectedUserChange}
-                  loading={false}
-                  audioQuota={audioQuota}
-                  showAudioQuota={true}
-                />
+              </div>
 
-                <GroupDropdown
-                  groups={groups}
-                  value={config.spoofing.selectedGroup}
-                  onChange={(value) => updateConfig('spoofing', 'selectedGroup', value)}
-                  loading={loadingGroups}
-                />
-
-                <div className="flex flex-col gap-1.5">
-                  <span className="text-[13px] font-semibold text-text-primary px-1">
-                    Select Assets to Spoof
-                  </span>
-                  <MultiSelectDropdown
-                    options={spoofOptions}
-                    values={selectedSpoofTypes}
-                    onChange={handleSpoofTypesChange}
-                    placeholder="Select asset types..."
+              {/* Target Context */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="flex flex-col gap-2">
+                  <AvatarDropdown
+                    users={users}
+                    value={config.spoofing.selectedUser}
+                    onChange={handleSelectedUserChange}
+                    loading={false}
+                    audioQuota={audioQuota}
+                    showAudioQuota={true}
                   />
                 </div>
-              </Group>
-            </AccordionItem>
+                <div className="flex flex-col gap-2">
+                  <GroupDropdown
+                    groups={groups}
+                    value={config.spoofing.selectedGroup}
+                    onChange={(value) => updateConfig('spoofing', 'selectedGroup', value)}
+                    loading={loadingGroups}
+                  />
+                </div>
+              </div>
 
-            <AccordionItem
-              value="execution"
-              title={
-                <span className="flex items-center gap-3 font-semibold">
-                  <Wand2 size={18} className="text-primary" /> Execution
-                </span>
-              }
-            >
-              <Group>
+              <div className="w-full h-px bg-border-subtle my-0" />
+
+              {/* Credentials */}
+              <div className="flex flex-col gap-2">
+                <CredentialsSection />
+              </div>
+            </div>
+
+            {/* Right Column: Options & Custom Assets */}
+            <div className="col-span-1 lg:col-span-5 flex flex-col gap-3">
+              {/* Job Options */}
+              <div className="flex flex-col gap-3 p-4 bg-bg-surface border border-border-subtle rounded-xl shadow-sm">
+                <div className="flex items-center gap-2 mb-0">
+                  <Wand2 size={16} className="text-primary" />
+                  <span className="text-xs font-bold uppercase tracking-widest text-text-muted">
+                    {t('spoof.options')}
+                  </span>
+                </div>
+                <MultiSelectDropdown
+                  options={spoofOptions}
+                  values={selectedSpoofTypes}
+                  onChange={handleSpoofTypesChange}
+                  placeholder={t('spoof.selectPlaceholder')}
+                />
+                <PlaceIdSelector
+                  label={t('settings.forcePlaceIds')}
+                  placeholder={t('settings.forcePlaceIdsPlaceholder')}
+                  value={config.advanced.forcePlaceIds}
+                  onChange={(value: string) => updateConfig('advanced', 'forcePlaceIds', value)}
+                />
+              </div>
+
+              {/* Custom Assets Input */}
+              <div className="flex flex-col gap-2 p-4 bg-bg-surface border border-border-subtle rounded-xl shadow-sm flex-1">
+                <div className="flex items-center gap-2 mb-2 shrink-0">
+                  <ScanSearch size={16} className="text-primary" />
+                  <span className="text-xs font-bold uppercase tracking-widest text-text-muted">
+                    {t('spoof.additionalIdsToSpoof')}
+                  </span>
+                </div>
                 <FormTextarea
-                  label={t('spoof.additionalIdsToSpoof')}
                   value={config.spoofing.extraAssetIds}
                   onChange={(val: string) => updateConfig('spoofing', 'extraAssetIds', val)}
                   placeholder={t('spoof.additionalIdsPlaceholder')}
+                  className="flex-1 w-full min-h-16 text-sm"
+                  style={{ resize: 'none' }}
+                />
+              </div>
+            </div>
+          </motion.div>
+
+          {/* Middle Console - Logs */}
+          <motion.div variants={itemVariants} className="flex-1 min-h-0 flex flex-col gap-3 mt-2">
+            <div className="flex-1 min-h-0 flex flex-col">
+              <ExecutionLogs
+                logs={logs}
+                setLogs={setLogs}
+                lastReplacements={lastReplacements}
+                setResultsModalOpen={setResultsModalOpen}
+              />
+            </div>
+          </motion.div>
+
+          {/* Bottom Action Bar */}
+          <motion.div
+            variants={itemVariants}
+            className="shrink-0 flex flex-wrap items-center justify-end gap-3 pt-4 mt-auto border-t border-border-subtle"
+          >
+            {failedAssetIds.length > 0 && !activeSpooferJobId && (
+              <Button
+                variant="flat"
+                color="warning"
+                className="h-12 px-6 font-semibold grow md:grow-0"
+                startContent={<RotateCcw size={18} />}
+                onClick={() => void handleRetryFailedAssets()}
+                disabled={isSpoofing || isReplacing || isScanningStudio}
+              >
+                {t('spoof.retryFailed').replace('{count}', failedAssetIds.length.toString())} (
+                {failedAssetIds.length})
+              </Button>
+            )}
+
+            <Button
+              variant="flat"
+              color={activeSpooferJobId ? 'danger' : undefined}
+              className={cn('h-12 px-8 font-semibold transition-all duration-300 grow md:grow-0')}
+              startContent={activeSpooferJobId ? <Ban size={18} /> : <ScanSearch size={18} />}
+              onClick={() => {
+                if (activeSpooferJobId) {
+                  void handleCancelSpoofer();
+                } else {
+                  void handleScanStudio();
+                }
+              }}
+              disabled={(!activeSpooferJobId && (isSpoofing || isReplacing)) || isScanningStudio}
+            >
+              {activeSpooferJobId
+                ? t('common.cancel')
+                : isScanningStudio
+                  ? t('spoof.scanning')
+                  : t('spoof.scanStudio')}
+            </Button>
+
+            {activeSpooferJobId && (
+              <Button
+                variant="flat"
+                color="secondary"
+                className="h-12 px-8 font-semibold grow md:grow-0"
+                startContent={
+                  isJobPaused ? <Play size={18} /> : <Ban size={18} className="rotate-90" />
+                }
+                onClick={async () => {
+                  if (isJobPaused) {
+                    await commands.spooferResume(activeSpooferJobId);
+                    setIsJobPaused(false);
+                  } else {
+                    await commands.spooferPause(activeSpooferJobId);
+                    setIsJobPaused(true);
+                  }
+                }}
+              >
+                {isJobPaused ? t('spoof.resume') : t('spoof.pause')}
+              </Button>
+            )}
+
+            <Button
+              color={replaceError ? 'warning' : 'primary'}
+              className="h-12 px-10 font-bold tracking-wide overflow-hidden relative min-w-50 grow md:grow-0"
+              onClick={() => {
+                if (replaceError) {
+                  void handleRetryReplacement();
+                } else {
+                  void handleRunSpoofer();
+                }
+              }}
+              disabled={isSpoofing || isReplacing || isScanningStudio}
+            >
+              <div className="relative z-10 flex items-center justify-center gap-2 w-full h-full">
+                {!isSpoofing && !isReplacing && !replaceError && (
+                  <Play size={18} fill="currentColor" />
+                )}
+                <span>
+                  {isReplacing
+                    ? t('spoof.replacingInStudio')
+                    : replaceError
+                      ? t('spoof.retryReplacing')
+                      : isSpoofing
+                        ? `${t('spoof.spoofingProgress')} ${Math.round(spoofProgress)}%`
+                        : t('spoof.runSpoofer')}
+                </span>
+              </div>
+              {(isSpoofing || isReplacing) && (
+                <div
+                  className="absolute left-0 top-0 bottom-0 bg-black/25 pointer-events-none"
                   style={{
-                    height: '7.5rem',
-                    maxHeight: '7.5rem',
-                    minHeight: '7.5rem',
-                    overflowY: 'auto',
-                    resize: 'none',
-                    overscrollBehavior: 'contain',
+                    width: `${spoofProgress}%`,
+                    transition: 'width 50ms linear',
                   }}
                 />
-
-                {keyframeWarningCount > 0 && (
-                  <div className="rounded-[var(--radius-md)] border border-warning/40 bg-warning/10 px-3 py-2 text-sm text-text-secondary">
-                    {keyframeWarningCount} KeyframeSequence object
-                    {keyframeWarningCount === 1 ? '' : 's'} in Studio must be published as
-                    animations before they can be spoofed.
-                  </div>
-                )}
-
-                <ExecutionLogs
-                  logs={logs}
-                  setLogs={setLogs}
-                  lastReplacements={lastReplacements}
-                  setResultsModalOpen={setResultsModalOpen}
-                />
-
-                <Row className="gap-2">
-                  <Button
-                    color={replaceError ? 'warning' : 'primary'}
-                    className="flex-1 font-bold h-12 tracking-wide overflow-hidden relative"
-                    onClick={() => {
-                      if (replaceError) {
-                        void handleRetryReplacement();
-                      } else {
-                        void handleRunSpoofer();
-                      }
-                    }}
-                    disabled={isSpoofing || isReplacing || isScanningStudio}
-                  >
-                    <div className="relative z-10 flex items-center justify-center gap-2 w-full h-full">
-                      {!isSpoofing && !isReplacing && !replaceError && (
-                        <Play size={18} fill="currentColor" />
-                      )}
-                      <span>
-                        {isReplacing
-                          ? 'Replacing in Studio...'
-                          : replaceError
-                            ? 'Retry Replacement'
-                            : isSpoofing
-                              ? `Spoofing... ${Math.round(spoofProgress)}%`
-                              : t('spoof.runSpoofer')}
-                      </span>
-                    </div>
-                    {(isSpoofing || isReplacing) && (
-                      <div
-                        className="absolute left-0 top-0 bottom-0 bg-black/25 pointer-events-none"
-                        style={{
-                          width: `${spoofProgress}%`,
-                          transition: 'width 50ms linear',
-                        }}
-                      />
-                    )}
-                  </Button>
-                  {activeSpooferJobId && (
-                    <Button
-                      variant="flat"
-                      color="secondary"
-                      className="h-12 px-6 font-semibold"
-                      startContent={isJobPaused ? <Play size={18} /> : <Ban size={18} className="rotate-90" />}
-                      onClick={async () => {
-                        if (isJobPaused) {
-                          await commands.spooferResume(activeSpooferJobId);
-                          setIsJobPaused(false);
-                        } else {
-                          await commands.spooferPause(activeSpooferJobId);
-                          setIsJobPaused(true);
-                        }
-                      }}
-                    >
-                      {isJobPaused ? 'Resume' : 'Pause'}
-                    </Button>
-                  )}
-                  <Button
-                    variant="flat"
-                    color={activeSpooferJobId ? 'danger' : undefined}
-                    className={cn('h-12 px-6 font-semibold transition-all duration-300')}
-                    startContent={activeSpooferJobId ? <Ban size={18} /> : <ScanSearch size={18} />}
-                    onClick={() => {
-                      if (activeSpooferJobId) {
-                        void handleCancelSpoofer();
-                      } else {
-                        void handleScanStudio();
-                      }
-                    }}
-                    disabled={
-                      (!activeSpooferJobId && (isSpoofing || isReplacing)) || isScanningStudio
-                    }
-                  >
-                    {activeSpooferJobId
-                      ? 'Cancel'
-                      : isScanningStudio
-                        ? 'Scanning...'
-                        : 'Scan Studio'}
-                  </Button>
-                  {failedAssetIds.length > 0 && !activeSpooferJobId && (
-                    <Button
-                      variant="flat"
-                      color="warning"
-                      className="h-12 px-4 font-semibold min-w-[10rem]"
-                      startContent={<RotateCcw size={18} />}
-                      onClick={() => void handleRetryFailedAssets()}
-                      disabled={isSpoofing || isReplacing || isScanningStudio}
-                    >
-                      Retry Failed ({failedAssetIds.length})
-                    </Button>
-                  )}
-                </Row>
-              </Group>
-            </AccordionItem>
-          </Accordion>
-        </motion.div>
-      </Window>
+              )}
+            </Button>
+          </motion.div>
+        </div>
+      </div>
       <ResultsModal isOpen={resultsModalOpen} onClose={() => setResultsModalOpen(false)} />
 
       <Modal
@@ -1029,16 +1213,14 @@ export default function SpoofingView() {
           <ModalHeader>{t('misc.audioQuotaExceeded')}</ModalHeader>
           <ModalBody>
             <p className="text-sm leading-6 text-text-secondary">
-              This run includes{' '}
-              <strong className="text-text-primary">{pendingQuotaRun?.audioCount ?? 0}</strong>{' '}
-              audio uploads, but the selected profile has{' '}
-              <strong className="text-text-primary">{pendingQuotaRun?.remaining ?? 0}</strong>{' '}
-              remaining. Some audio assets may fail to upload. Continue anyway?
+              {t('spoof.audioQuotaWarning')
+                .replace('{audioCount}', (pendingQuotaRun?.audioCount ?? 0).toString())
+                .replace('{remaining}', (pendingQuotaRun?.remaining ?? 0).toString())}
             </p>
           </ModalBody>
           <ModalFooter className="flex justify-end gap-2">
             <Button variant="ghost" onClick={() => setPendingQuotaRun(null)}>
-              Cancel
+              {t('common.cancel')}
             </Button>
             <Button
               color="warning"
@@ -1049,7 +1231,7 @@ export default function SpoofingView() {
                 if (assetIds) void handleRunSpoofer(assetIds, true, runContext);
               }}
             >
-              Continue Anyway
+              {t('spoof.continueAnyway')}
             </Button>
           </ModalFooter>
         </ModalContent>

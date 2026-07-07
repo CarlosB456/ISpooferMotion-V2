@@ -123,9 +123,7 @@ pub async fn download_animation_asset_with_progress(
     }
 
     if matches!(asset_type.as_deref(), Some("Audio") | Some("Sound")) {
-        if let Some(cdn_url) =
-            api::get_scraped_asset_cdn_url(&client, &asset_id).await
-        {
+        if let Some(cdn_url) = api::get_scraped_asset_cdn_url(&client, &asset_id).await {
             emit_spoofer_log(
                 &app,
                 "info",

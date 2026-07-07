@@ -8,7 +8,7 @@ import { cn } from '../../utils/cn';
 import {
   clearDebugLogs,
   getDebugLogs,
-  LogEntry,
+  type LogEntry,
   subscribeDebugLogs,
 } from '../../utils/debugLogger';
 import { JsonViewer } from '../ui/JsonViewer';
@@ -136,7 +136,7 @@ export default function DebugConsole({ isOpen, onClose }: DebugConsoleProps) {
           <div className="flex items-center justify-between px-4 py-2 border-b border-border-subtle bg-bg-elevated/80 shrink-0">
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-2 text-text-secondary text-[13px] font-bold uppercase tracking-wider">
-                <Terminal size={15} className="text-primary" /> Debug Console
+                <Terminal size={15} className="text-primary" /> {t('debug.title')}
               </div>
               <div className="w-45 z-50">
                 <Dropdown options={filterOptions} value={filterSource} onChange={setFilterSource} />
@@ -183,7 +183,7 @@ export default function DebugConsole({ isOpen, onClose }: DebugConsoleProps) {
                 onClick={scrollToBottom}
                 className="absolute bottom-4 right-6 bg-bg-elevated text-text-primary border border-border-strong px-3 py-1.5 rounded-full text-[11px] font-semibold flex items-center gap-1.5 shadow-lg hover:bg-bg-surface hover:text-primary transition-colors z-50"
               >
-                <ArrowDown size={14} /> Go to Bottom
+                <ArrowDown size={14} /> {t('debug.goToBottom')}
               </motion.button>
             )}
           </AnimatePresence>
@@ -195,7 +195,7 @@ export default function DebugConsole({ isOpen, onClose }: DebugConsoleProps) {
           >
             {groupedLogs.length === 0 ? (
               <div className="text-text-muted italic flex items-center justify-center h-full">
-                No logs available.
+                {t('debug.noLogs')}
               </div>
             ) : (
               groupedLogs.map((log, index) => (

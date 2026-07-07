@@ -1,3 +1,7 @@
+--!nocheck
+--!nolint
+-- luacheck: ignore
+---@diagnostic disable: undefined-global, unused-local, unused-function, lowercase-global
 local EMBEDDED_ASSET_PROPS: { [string]: boolean } = {
 	Text = true,
 	PlaceholderText = true,
@@ -15,8 +19,6 @@ local CollectionService = game:GetService("CollectionService")
 local HttpService = game:GetService("HttpService")
 local ScriptEditorService = game:GetService("ScriptEditorService")
 
-local API_KEY_SETTING: string = "ISpooferMotion_API_Key"
-
 local PORT_START: number = 14285
 local PORT_END: number = 14289
 local SEND_CHUNK_SIZE: number = 5000
@@ -27,8 +29,6 @@ local MAX_PATCHES_PER_BATCH: number = 10000
 local MAX_HTTP_BODY_BYTES: number = 10000000
 local MAX_HTTP_RESPONSE_BYTES: number = 1000000
 local BASE_URL: string? = nil
-local API_KEY: string? = plugin:GetSetting(API_KEY_SETTING)
-
 local polling: boolean = false
 local scanRunning: boolean = false
 local patchRunning: boolean = false

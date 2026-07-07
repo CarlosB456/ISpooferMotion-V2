@@ -4,6 +4,8 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { Loader2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
+import { useLanguage } from '../contexts/LanguageContext';
+
 export interface PlaceIdSelectorProps {
   label: string;
   placeholder?: string;
@@ -28,6 +30,7 @@ export default function PlaceIdSelector({
   className = '',
   suggestions = [],
 }: PlaceIdSelectorProps) {
+  const { t } = useLanguage();
   const [isSearching, setIsSearching] = useState(false);
   const [results, setResults] = useState<SearchResult[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
@@ -80,7 +83,9 @@ export default function PlaceIdSelector({
       const search = async () => {
         setIsSearching(true);
         try {
-          const res = await invoke<string>('search_roblox_games', { query: localValue });
+          const res = await invoke<string>('search_roblox_games', {
+            query: localValue,
+          });
           const parsed = JSON.parse(res);
           setResults(parsed.data || []);
           setShowDropdown(true);
@@ -118,12 +123,12 @@ export default function PlaceIdSelector({
       >
         <FormInput
           label={label}
-          placeholder={placeholder || 'Paste URL, Place ID, or Search...'}
+          placeholder={placeholder || t('misc.placeIdPlaceholder')}
           value={localValue}
           onChange={handleInputChange}
         />
         {isSearching && (
-          <div className="absolute right-3 top-[34px] text-text-muted pointer-events-none">
+          <div className="absolute right-3 top-8.5 text-text-muted pointer-events-none">
             <Loader2 size={16} className="animate-spin opacity-70" />
           </div>
         )}
@@ -137,22 +142,22 @@ export default function PlaceIdSelector({
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
             transition={{ duration: 0.15 }}
-            className="absolute top-[68px] left-0 w-full z-50 bg-bg-elevated border border-border-strong rounded-[var(--radius-md)] shadow-floating overflow-hidden flex flex-col max-h-[300px]"
+            className="absolute top-17 left-0 w-full z-50 bg-bg-elevated border border-border-strong rounded-md shadow-floating overflow-hidden flex flex-col max-h-75"
           >
             {isSearching && results.length === 0 ? (
               <div className="p-4 flex items-center justify-center text-[13px] text-text-secondary">
-                Searching Roblox...
+                {t('misc.searchingRoblox')}
               </div>
             ) : results.length === 0 ? (
               <div className="p-4 flex items-center justify-center text-[13px] text-text-secondary">
-                No games found for "{localValue}"
+                {t('misc.noGamesFound').replace('{query}', localValue)}
               </div>
             ) : (
               <div className="overflow-y-auto custom-scrollbar p-1">
                 {results.map((game) => (
                   <button
                     key={game.id}
-                    className="w-full flex flex-col items-start p-2.5 rounded-[var(--radius-sm)] hover:bg-bg-base/60 transition-colors text-left focus:outline-none"
+                    className="w-full flex flex-col items-start p-2.5 rounded-sm hover:bg-bg-base/60 transition-colors text-left focus:outline-none"
                     onClick={() => selectPlace(game.id)}
                   >
                     <div className="flex items-center justify-between w-full">
@@ -163,11 +168,17 @@ export default function PlaceIdSelector({
                     </div>
                     <div className="flex items-center justify-between w-full mt-1">
                       <span className="text-[11px] text-text-secondary truncate">
-                        By {game.creator?.name || 'Unknown'}
+                        {t('misc.byCreator').replace(
+                          '{creator}',
+                          game.creator?.name || t('misc.unknownUser'),
+                        )}
                       </span>
                       {game.playerCount > 0 && (
                         <span className="text-[11px] text-green-500/80">
-                          {game.playerCount.toLocaleString()} Playing
+                          {t('misc.playersOnline').replace(
+                            '{count}',
+                            game.playerCount.toLocaleString(),
+                          )}
                         </span>
                       )}
                     </div>

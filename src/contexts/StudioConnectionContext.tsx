@@ -1,7 +1,7 @@
-import React, { createContext, useCallback, useContext } from 'react';
+import type React from 'react';
+import { createContext, useContext } from 'react';
 
 import { type ScanStatus, useStudioConnection } from '../hooks/useStudioConnection';
-import { useConfig } from './ConfigContext';
 
 type StudioConnectionContextValue = {
   studioConnected: boolean;
@@ -15,19 +15,7 @@ const StudioConnectionContext = createContext<StudioConnectionContextValue | und
 export const StudioConnectionProvider: React.FC<{
   children: React.ReactNode;
 }> = ({ children }) => {
-  const { config, updateConfig } = useConfig();
-
-  // automatically updates the port if the plugin decides to broadcast on a different one
-  const onPortDiscovered = useCallback(
-    (port: string) => {
-      if (port !== config.advanced.pluginPort) {
-        updateConfig('advanced', 'pluginPort', port);
-      }
-    },
-    [config.advanced.pluginPort, updateConfig],
-  );
-
-  const connection = useStudioConnection(config.advanced.pluginPort, onPortDiscovered);
+  const connection = useStudioConnection();
 
   return (
     <StudioConnectionContext.Provider value={connection}>

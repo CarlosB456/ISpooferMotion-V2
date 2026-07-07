@@ -11,15 +11,12 @@ export const AppConfigSchema = z.object({
   }),
   advanced: z.object({
     autoCookieStudio: z.boolean().default(true),
-    autoCookieBrowser: z.boolean().default(false),
+    autoCookieBrowser: z.boolean().default(true),
     skipOwned: z.boolean().default(false),
     enablePluginSpoofing: z.boolean().default(false),
     memoryInjectionEnabled: z.boolean().default(false),
     clipboardMonitoring: z.boolean().default(false),
-    pluginPort: z.string().default('14285'),
     forcePlaceIds: z.string().default(''),
-    placeIdSearchLimit: z.string().default('20'),
-    assetScanTimeout: z.string().default('20'),
     excludedUserIds: z.string().default(''),
     excludedGroupIds: z.string().default(''),
     concurrentSpoofing: z.boolean().default(true),
@@ -58,10 +55,6 @@ export const AppConfigSchema = z.object({
       .array(z.string())
       .default(['credentials', 'assetProcessing', 'routing', 'exclusions']),
     spoofingSections: z.array(z.string()).default(['targets', 'execution']),
-    autoScrollSections: z.boolean().default(false),
-    quickSettings: z
-      .array(z.string())
-      .default(['general.desktopNotifications', 'advanced.skipOwned']),
   }),
 });
 
@@ -80,10 +73,7 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
     enablePluginSpoofing: false,
     memoryInjectionEnabled: false,
     clipboardMonitoring: false,
-    pluginPort: '14285',
     forcePlaceIds: '',
-    placeIdSearchLimit: '20',
-    assetScanTimeout: '20',
     excludedUserIds: '',
     excludedGroupIds: '',
     concurrentSpoofing: true,
@@ -120,8 +110,6 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
     settingsSections: ['account', 'general', 'quickSettings', 'debug'],
     configSections: ['credentials', 'assetProcessing', 'routing', 'exclusions'],
     spoofingSections: ['targets', 'execution'],
-    autoScrollSections: false,
-    quickSettings: ['general.desktopNotifications', 'advanced.skipOwned'],
   },
 };
 
@@ -133,7 +121,7 @@ const mergeKnownKeys = <T extends Record<string, unknown>>(
 ): T => {
   const next = { ...defaults };
   Object.keys(defaults).forEach((key) => {
-    if (saved && Object.prototype.hasOwnProperty.call(saved, key)) {
+    if (saved && Object.hasOwn(saved, key)) {
       next[key as keyof T] = saved[key as keyof T] as T[keyof T];
     }
   });

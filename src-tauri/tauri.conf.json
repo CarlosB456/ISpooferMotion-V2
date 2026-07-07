@@ -1,8 +1,8 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "ISpooferMotion",
-  "version": "2.0.0-rc.5",
-  "identifier": "com.github.IncrediDev.ISpooferMotion",
+  "version": "2.0.0",
+  "identifier": "ISpooferMotion-V2",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:5173",
@@ -14,11 +14,9 @@
       {
         "title": "ISpooferMotion",
         "label": "main",
-        "width": 1280,
-        "height": 800,
-        "minWidth": 960,
-        "minHeight": 600,
-        "resizable": true,
+        "width": 1100,
+        "height": 620,
+        "resizable": false,
         "fullscreen": false,
         "decorations": false,
         "transparent": false,

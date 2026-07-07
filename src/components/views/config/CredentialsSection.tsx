@@ -1,7 +1,7 @@
-import { FormDropdown, FormInput, Group } from '@codycon/ism-library';
+import { FormDropdown, FormInput } from '@codycon/ism-library';
 import { invoke } from '@tauri-apps/api/core';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ExternalLink, Loader2, Save, ShieldCheck } from 'lucide-react';
+import { ExternalLink, Loader2, ShieldCheck } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 import { useConfig } from '../../../contexts/ConfigContext';
@@ -27,7 +27,6 @@ export default function CredentialsSection() {
   const [manualCookieEdit, setManualCookieEdit] = useState(false);
   const [authStatus, setAuthStatus] = useState<AuthStatus>('idle');
   const [apiKeyStatus, setApiKeyStatus] = useState<AuthStatus>('idle');
-  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'success'>('idle');
   const { saveSecrets } = useConfigStore();
 
   const autoDetectEnabled = config.advanced.autoCookieStudio || config.advanced.autoCookieBrowser;
@@ -65,7 +64,16 @@ export default function CredentialsSection() {
       );
       if (!detected) {
         setAuthStatus('idle');
-        logIsm('info', 'No Roblox cookie was found.');
+        const extraMsg =
+          mode === 'browser'
+            ? ' (Chromium v127+ cookies are encrypted and cannot be auto-detected, please add manually)'
+            : ' (Please add it manually)';
+        logIsm('info', `No Roblox cookie was found.${extraMsg}`);
+        updateCategory('advanced', {
+          autoCookieStudio: false,
+          autoCookieBrowser: false,
+        });
+        setManualCookieEdit(true);
         return;
       }
       const result = await validateCookieProfile(detected);
@@ -86,6 +94,14 @@ export default function CredentialsSection() {
       void runAutoDetect(val);
     }
   };
+
+  // Fire auto-detect on mount if already configured (e.g. after app restart)
+  useEffect(() => {
+    const mode = getCookieDetectionMode();
+    if (mode !== 'none') {
+      void runAutoDetect(mode);
+    }
+  }, []);
 
   useEffect(() => {
     const cookie = config.spoofing.cookie.trim();
@@ -140,58 +156,48 @@ export default function CredentialsSection() {
     }).catch(() => null);
   };
 
-  const handleSaveProfile = async () => {
-    setSaveStatus('saving');
-    await saveSecrets();
-    setSaveStatus('success');
-    logIsm('success', 'Profile credentials saved successfully.', true);
-    setTimeout(() => setSaveStatus('idle'), 2000);
-  };
-
   return (
-    <Group>
-      <motion.div initial={false} transition={{ duration: 0.3 }}>
-        <FormDropdown
-          label={
-            <span className="flex items-center gap-2">
-              Auto Detect Cookie
-              <AnimatePresence>
-                {authStatus === 'loading' && (
-                  <motion.div
-                    initial={{ opacity: 0, scale: 0.8 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.8 }}
-                  >
-                    <Loader2 size={14} className="animate-spin text-primary" />
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </span>
-          }
-          options={[
-            { value: 'none', label: t('explorer.disabled') },
-            { value: 'studio', label: t('explorer.robloxStudio') },
-            { value: 'browser', label: t('explorer.webBrowser') },
-          ]}
-          value={getCookieDetectionMode()}
-          onChange={handleCookieDetectionChange}
-          width="w-[200px]"
-        />
-      </motion.div>
+    <div className="flex flex-col gap-4 w-full h-full">
+      <div className="flex items-center justify-between">
+        <motion.div initial={false} transition={{ duration: 0.3 }} className="flex-1">
+          <FormDropdown
+            label={
+              <span className="flex items-center gap-2">
+                {t('config.autoDetectCookie')}
+                <AnimatePresence>
+                  {authStatus === 'loading' && (
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.8 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.8 }}
+                    >
+                      <Loader2 size={14} className="animate-spin text-primary" />
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </span>
+            }
+            options={[
+              { value: 'none', label: t('explorer.disabled') },
+              { value: 'studio', label: t('explorer.robloxStudio') },
+              { value: 'browser', label: t('explorer.webBrowser') },
+            ]}
+            value={getCookieDetectionMode()}
+            onChange={handleCookieDetectionChange}
+            width="w-[200px]"
+          />
+        </motion.div>
+      </div>
+
       <motion.div
         initial={false}
-        transition={{ duration: 0.3 }}
-        className="w-full"
-        onDoubleClick={() => {
-          if (autoDetectEnabled) {
-            updateCategory('advanced', {
-              autoCookieStudio: false,
-              autoCookieBrowser: false,
-            });
-            setManualCookieEdit(true);
-            logIsm('info', 'Auto Detect Cookie disabled for manual cookie editing.');
-          }
+        animate={{
+          height: cookieReadOnly ? 0 : 'auto',
+          opacity: cookieReadOnly ? 0 : 1,
+          marginTop: cookieReadOnly ? 0 : 8,
         }}
+        transition={{ duration: 0.2 }}
+        className="w-full overflow-hidden"
       >
         <FormInput
           label={t('spoof.cookie')}
@@ -206,8 +212,8 @@ export default function CredentialsSection() {
                 className="block"
               >
                 {cookieReadOnly
-                  ? 'Auto Detect Cookie enabled. Double-click to edit manually.'
-                  : 'Paste .ROBLOSECURITY manually'}
+                  ? t('config.autoDetectCookieReadonly')
+                  : t('config.pasteCookieManually')}
               </motion.span>
             </AnimatePresence>
           }
@@ -228,7 +234,7 @@ export default function CredentialsSection() {
           updateConfig('spoofing', 'apiKey', value);
         }}
         endContent={
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1 h-10 px-3 -mr-3 bg-bg-base rounded-r-md border border-border-strong">
             <button
               type="button"
               onClick={handleValidateApiKey}
@@ -264,22 +270,6 @@ export default function CredentialsSection() {
           </div>
         }
       />
-
-      <div className="flex w-full mt-2">
-        <button
-          type="button"
-          onClick={() => void handleSaveProfile()}
-          disabled={saveStatus === 'saving'}
-          className="flex flex-1 items-center justify-center gap-2 px-4 py-2 text-sm font-medium rounded-md bg-white text-black hover:bg-white/90 transition-colors disabled:opacity-50"
-        >
-          {saveStatus === 'saving' ? (
-            <Loader2 size={16} className="animate-spin" />
-          ) : (
-            <Save size={16} />
-          )}
-          {saveStatus === 'success' ? 'Saved!' : 'Save Credentials'}
-        </button>
-      </div>
-    </Group>
+    </div>
   );
 }

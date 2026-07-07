@@ -3,7 +3,7 @@ pub mod processor;
 pub mod state;
 pub mod types;
 
-use crate::commands::discord::AnyValue;
+use crate::commands::AnyValue;
 use tauri::AppHandle;
 
 use processor::process_spoofer_action;

@@ -1,8 +1,8 @@
 import { execFileSync } from 'node:child_process';
-import process from 'node:process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import process from 'node:process';
 
 const appId = 'com.github.IncrediDev.ISpooferMotion';
 
@@ -52,7 +52,7 @@ if (process.platform === 'win32') {
   const appSupport = path.join(homeDir, 'Library', 'Application Support', appId);
   const caches = path.join(homeDir, 'Library', 'Caches', appId);
   const webkit = path.join(homeDir, 'Library', 'Caches', 'WebKit', appId);
-  
+
   const targets = [appSupport, caches, webkit];
   for (const target of targets) {
     if (fs.existsSync(target)) {
@@ -66,7 +66,7 @@ if (process.platform === 'win32') {
   const configDir = path.join(homeDir, '.config', appId);
   const dataDir = path.join(homeDir, '.local', 'share', appId);
   const cacheDir = path.join(homeDir, '.cache', appId);
-  
+
   const targets = [configDir, dataDir, cacheDir];
   for (const target of targets) {
     if (fs.existsSync(target)) {

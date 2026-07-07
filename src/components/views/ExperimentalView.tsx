@@ -8,36 +8,23 @@ import {
   Row,
   Window,
 } from '@codycon/ism-library';
-import { invoke } from '@tauri-apps/api/core';
 import { motion } from 'framer-motion';
-import { Cpu, LayoutTemplate } from 'lucide-react';
+import { Cpu } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 import { useConfig } from '../../contexts/ConfigContext';
 import { useLanguage } from '../../contexts/LanguageContext';
-import { type StoredDiscordAuth } from '../../types/discordAuth';
 import { isMemoryInjectionSupported } from '../../utils/tauriRuntime';
 
 export default function ExperimentalView() {
   const { t } = useLanguage();
 
   const { config, updateConfig } = useConfig();
-  const [hasDevAccess, setHasDevAccess] = useState(false);
   const [memoryInjectionSupported, setMemoryInjectionSupported] = useState(false);
 
   useEffect(() => {
     // check if the current OS actually supports memory injection (windows only)
     isMemoryInjectionSupported().then(setMemoryInjectionSupported);
-  }, []);
-
-  useEffect(() => {
-    const fetchDiscordState = async () => {
-      try {
-        const auth = await invoke<StoredDiscordAuth | null>('load_discord_report_auth');
-        setHasDevAccess(Boolean(auth?.user?.hasDevAccess));
-      } catch (e) {}
-    };
-    void fetchDiscordState();
   }, []);
 
   return (
@@ -49,82 +36,51 @@ export default function ExperimentalView() {
       className="w-full h-full"
     >
       <Window>
-        <div className="flex flex-col w-full h-full p-8 pb-32 overflow-y-auto custom-scrollbar">
-          <motion.div variants={itemVariants} className="w-full flex flex-col gap-8">
-            <div className="flex flex-col gap-2">
-              <h1 className="text-2xl font-bold text-primary tracking-tight">
-                Experimental Features
+        <motion.div variants={itemVariants} className="flex flex-col gap-6">
+          <div className="flex flex-col gap-6">
+            <div>
+              <h1 className="text-xl font-bold tracking-tight text-foreground">
+                {t('experimental.title')}
               </h1>
-              <p className="text-sm text-text-muted font-medium leading-relaxed">
-                The features listed here are in active development, unstable, and may be removed in
-                the future.
-              </p>
+              <p className="text-sm text-text-secondary mt-1">{t('experimental.description')}</p>
             </div>
 
             <Accordion
               selectionMode="multiple"
-              defaultExpandedKeys={['appFeatures', 'spooferFeatures']}
+              defaultExpandedKeys={['spooferFeatures']}
               className="flex flex-col gap-6"
             >
-              <AccordionItem
-                value="appFeatures"
-                aria-label={t('settings.appFeatures')}
-                title={
-                  <span className="flex items-center gap-3 font-semibold">
-                    <LayoutTemplate size={18} className="text-primary" /> App Features
-                  </span>
-                }
-              >
-                <Group>
-                  <Row>
-                    <FormToggle
-                      label={t('settings.autoScrollSections')}
-                      checked={config.ui.autoScrollSections}
-                      onChange={(v: boolean) => updateConfig('ui', 'autoScrollSections', v)}
-                    />
-                  </Row>
-                </Group>
-              </AccordionItem>
-
               <AccordionItem
                 value="spooferFeatures"
                 aria-label={t('settings.spooferFeatures')}
                 title={
                   <span className="flex items-center gap-3 font-semibold">
-                    <Cpu size={18} className="text-primary" /> Spoofer Features
+                    <Cpu size={18} className="text-primary" /> {t('settings.spooferFeatures')}
                   </span>
                 }
               >
                 <Group>
                   <Row>
                     <FormToggle
-                      label={t('settings.clipboardMonitoring')}
-                      description="Silently monitor your clipboard for Roblox asset URLs and auto-queue them for spoofing."
+                      label={t('experimental.clipboardMonitoring')}
+                      description={t('experimental.clipboardMonitoringDesc')}
                       checked={config.advanced.clipboardMonitoring}
                       onChange={(v: boolean) => updateConfig('advanced', 'clipboardMonitoring', v)}
                     />
                   </Row>
                   <Row>
                     <FormToggle
-                      label={t('settings.spoofPlugins')}
-                      description="[WIP] Attempt to spoof plugin assets."
-                      checked={config.advanced.enablePluginSpoofing}
-                      onChange={(v: boolean) => updateConfig('advanced', 'enablePluginSpoofing', v)}
-                    />
-                  </Row>
-                  <Row>
-                    <FormToggle
-                      label={t('settings.memoryInjection')}
+                      label={t('experimental.memoryInjection')}
                       description={
                         memoryInjectionSupported
-                          ? '[DANGEROUS] Windows only. Overwrites exact numeric asset IDs in Studio memory (same digit length). Run with the same elevation as Studio. Plugin bridge is used for other cases.'
-                          : 'Memory injection is only available on Windows. Use the plugin bridge on this platform.'
+                          ? t('experimental.memoryInjectionDescSupported')
+                          : t('experimental.memoryInjectionDescUnsupported')
                       }
                       checked={
                         memoryInjectionSupported ? config.advanced.memoryInjectionEnabled : false
                       }
                       onChange={(v: boolean) => {
-                        if (!hasDevAccess || !memoryInjectionSupported) return;
+                        if (!memoryInjectionSupported) return;
                         updateConfig('advanced', 'memoryInjectionEnabled', v);
                       }}
                     />
@@ -132,8 +88,8 @@ export default function ExperimentalView() {
                 </Group>
               </AccordionItem>
             </Accordion>
-          </motion.div>
-        </div>
+          </div>
+        </motion.div>
       </Window>
     </motion.div>
   );

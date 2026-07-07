@@ -14,7 +14,6 @@ export type StudioScanBundle = {
 export function useStudioAssetPoll(
   // polls the studio plugin bridge to see if any new assets have been discovered
   studioConnected: boolean,
-  pluginPort: string,
   onComplete: (bundle: StudioScanBundle) => void,
 ) {
   const onCompleteRef = useRef(onComplete);
@@ -101,5 +100,5 @@ export function useStudioAssetPoll(
       idle = true;
       if (intervalId) clearInterval(intervalId);
     };
-  }, [studioConnected, pluginPort]);
+  }, [studioConnected]);
 }

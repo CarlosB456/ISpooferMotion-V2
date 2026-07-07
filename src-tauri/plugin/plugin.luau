@@ -1,6 +1,16 @@
---!nonstrict
-local ASSET_PROPERTIES: { [string]: { string } } = {} --!nolint LocalUnused
-local STRING_SCAN_PROPERTIES: { [string]: { string } } = {} --!nolint LocalUnused
+--!nocheck
+--!nolint
+--# selene: allow(unused_variable, global_usage)
+local ASSET_PROPERTIES: { [string]: { string } } = {}
+local STRING_SCAN_PROPERTIES: { [string]: { string } } = {}
+
+-- Dummy declarations to satisfy IDE Luau Language Server (shadowed by includes)
+local startPolling: any
+local hidePluginGui: any
+local togglePluginGui: any
+local logToPlugin: any
+local polling: any
+local BASE_URL: any
 
 --#include "src/version/version.luau"
 --#include "src/config/runtime.luau"
@@ -18,6 +28,14 @@ local STRING_SCAN_PROPERTIES: { [string]: { string } } = {} --!nolint LocalUnuse
 
 print("[ISpooferMotion] Plugin loaded. Starting background connection to Desktop App...")
 startPolling()
+
+local toolbar = plugin:CreateToolbar("ISpooferMotion")
+local toggleButton =
+	toolbar:CreateButton("ToggleUI", "Show/Hide ISpooferMotion UI", "rbxassetid://137844667859456")
+
+toggleButton.Click:Connect(function()
+	togglePluginGui()
+end)
 
 plugin.Unloading:Connect(function()
 	polling = false

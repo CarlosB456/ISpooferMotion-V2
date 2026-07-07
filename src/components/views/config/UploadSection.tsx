@@ -11,6 +11,7 @@ import {
   MultiSelectDropdown,
 } from '@codycon/ism-library';
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
+import { motion } from 'framer-motion';
 import { FolderSearch, ShieldAlert } from 'lucide-react';
 import { useState } from 'react';
 
@@ -26,13 +27,39 @@ export default function UploadSection() {
   const { t } = useLanguage();
   const { config, updateConfig } = useConfig();
   const [isVideoModalOpen, setIsVideoModalOpen] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   const uploadOptions = [
-    { value: 'animation', assetType: 'animation', label: t('explorer.animations'), icon: AnimationIcon },
-    { value: 'audio', assetType: 'audio', label: t('explorer.audio'), icon: SoundIcon },
-    { value: 'image', assetType: 'image', label: t('explorer.images'), icon: DecalIcon },
-    { value: 'mesh', assetType: 'mesh', label: t('explorer.meshes'), icon: MeshIcon },
-    { value: 'script_ref', assetType: 'script_ref', label: t('explorer.scriptRefs'), icon: ScriptIcon },
+    {
+      value: 'animation',
+      assetType: 'animation',
+      label: t('explorer.animations'),
+      icon: AnimationIcon,
+    },
+    {
+      value: 'audio',
+      assetType: 'audio',
+      label: t('explorer.audio'),
+      icon: SoundIcon,
+    },
+    {
+      value: 'image',
+      assetType: 'image',
+      label: t('explorer.images'),
+      icon: DecalIcon,
+    },
+    {
+      value: 'mesh',
+      assetType: 'mesh',
+      label: t('explorer.meshes'),
+      icon: MeshIcon,
+    },
+    {
+      value: 'script_ref',
+      assetType: 'script_ref',
+      label: t('explorer.scriptRefs'),
+      icon: ScriptIcon,
+    },
   ];
 
   const handleBrowseFolder = async () => {
@@ -46,33 +73,54 @@ export default function UploadSection() {
     <>
       <Group>
         <FormToggle
-          label={t('settings.skipOwned')}
-          description={t('settings.skipOwnedDescription')}
-          checked={config.advanced.skipOwned}
-          onChange={(value: boolean) => updateConfig('advanced', 'skipOwned', value)}
+          label={t('settings.advanced')}
+          description=""
+          checked={showAdvanced}
+          onChange={setShowAdvanced}
         />
 
-        <FormToggle
-          label={t('settings.preserveMetadata')}
-          description="When uploading, duplicate the Name and Description of the original asset so it looks 1:1 on the Roblox catalog."
-          checked={config.spoofing.preserveMetadata}
-          onChange={(value: boolean) => updateConfig('spoofing', 'preserveMetadata', value)}
-        />
+        <motion.div
+          initial={false}
+          animate={{
+            height: showAdvanced ? 'auto' : 0,
+            opacity: showAdvanced ? 1 : 0,
+          }}
+          transition={{ duration: 0.2, ease: 'easeOut' }}
+          className="overflow-hidden flex flex-col"
+          aria-hidden={!showAdvanced}
+        >
+          <div className="pt-4 flex flex-col gap-2">
+            <FormToggle
+              label={t('settings.skipOwned')}
+              description={t('settings.skipOwnedDescription')}
+              checked={config.advanced.skipOwned}
+              onChange={(value: boolean) => updateConfig('advanced', 'skipOwned', value)}
+            />
 
-        <FormToggle
-          label={t('settings.archiveRecovery')}
-          description="Automatically scrape the Wayback Machine to find Place IDs for deleted/private animations. Can add 10-30 seconds per failed asset."
-          checked={config.advanced.enableArchiveRecovery}
-          onChange={(value: boolean) => updateConfig('advanced', 'enableArchiveRecovery', value)}
-        />
+            <FormToggle
+              label={t('settings.preserveMetadata')}
+              description={t('config.preserveMetadataDesc')}
+              checked={config.spoofing.preserveMetadata}
+              onChange={(value: boolean) => updateConfig('spoofing', 'preserveMetadata', value)}
+            />
+
+            <FormToggle
+              label={t('settings.archiveRecovery')}
+              description={t('config.archiveRecoveryDesc')}
+              checked={config.advanced.enableArchiveRecovery}
+              onChange={(value: boolean) =>
+                updateConfig('advanced', 'enableArchiveRecovery', value)
+              }
+            />
+          </div>
+        </motion.div>
 
         <div className="flex flex-col gap-1.5 pt-2">
           <span className="text-[13px] font-semibold text-text-primary px-1">
-            Upload Configuration
+            {t('config.uploadConfiguration')}
           </span>
           <span className="text-xs text-text-muted px-1 mb-2">
-            Selected asset types will be downloaded AND uploaded. Unselected types will only be
-            downloaded.
+            {t('config.uploadConfigurationDesc')}
           </span>
           <MultiSelectDropdown
             options={uploadOptions}
@@ -89,10 +137,10 @@ export default function UploadSection() {
             <FormToggle
               label={
                 <span className="text-danger font-semibold flex items-center gap-2">
-                  Enable Video Uploads (Read Warning!)
+                  {t('config.enableVideoUploads')}
                 </span>
               }
-              description="WARNING: Uploading videos to Roblox costs 2,000 Robux PER VIDEO. Only enable this if you are prepared to pay."
+              description={t('config.enableVideoUploadsDesc')}
               checked={config.spoofing.uploadTypes.includes('video')}
               onChange={(checked: boolean) => {
                 if (checked) {
@@ -133,21 +181,16 @@ export default function UploadSection() {
         <ModalContent>
           <ModalHeader className="text-danger flex items-center gap-2">
             <ShieldAlert size={20} />
-            High Cost Warning
+            {t('config.highCostWarning')}
           </ModalHeader>
           <ModalBody className="text-text-primary">
             <p className="mb-2">{t('misc.confirmVideoUploads')}</p>
-            <p className="font-semibold text-danger">
-              Roblox charges exactly 2,000 Robux for EVERY single video asset you upload.
-            </p>
-            <p className="mt-2 text-sm text-text-muted">
-              If you run a spoofing job with 10 videos, it will cost you 20,000 Robux. There are no
-              refunds from Roblox if you accidentally upload videos you didn't mean to.
-            </p>
+            <p className="font-semibold text-danger">{t('config.videoCostWarning1')}</p>
+            <p className="mt-2 text-sm text-text-muted">{t('config.videoCostWarning2')}</p>
           </ModalBody>
           <ModalFooter>
             <Button color="default" variant="flat" onClick={() => setIsVideoModalOpen(false)}>
-              Cancel
+              {t('common.cancel')}
             </Button>
             <Button
               color="danger"
@@ -158,7 +201,7 @@ export default function UploadSection() {
                 setIsVideoModalOpen(false);
               }}
             >
-              I Understand, Enable It
+              {t('config.iUnderstandEnableIt')}
             </Button>
           </ModalFooter>
         </ModalContent>

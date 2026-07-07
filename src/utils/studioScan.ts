@@ -12,11 +12,19 @@ async function waitForStudioScanComplete(): Promise<void> {
     try {
       const health = await invoke<{
         scanStatus?: { scanning?: boolean } | null;
+        synced?: boolean;
       }>('get_studio_health_status');
       if (!health.scanStatus || !health.scanStatus.scanning) {
         return;
       }
-    } catch {}
+      if (!health.synced && Date.now() - startedAt > 5000) {
+        throw new Error(
+          'Roblox Studio is not connected or the ISpooferMotion plugin is disabled. Please open Studio and try again.',
+        );
+      }
+    } catch (e) {
+      if (e instanceof Error) throw e;
+    }
     await new Promise((resolve) => setTimeout(resolve, SCAN_POLL_MS));
   }
   throw new Error(
@@ -24,14 +32,17 @@ async function waitForStudioScanComplete(): Promise<void> {
   );
 }
 
-export async function triggerStudioScan(port: string): Promise<void> {
+export async function triggerStudioScan(): Promise<void> {
   const endpoints = [
     '/request-sounds',
     '/request-animations',
     '/request-images',
     '/request-meshes',
-    '/request-script-refs'
+    '/request-script-refs',
   ];
+
+  const { findPluginBridgePort, DEFAULT_PLUGIN_PORT } = await import('./pluginBridge');
+  const port = (await findPluginBridgePort()) || DEFAULT_PLUGIN_PORT;
 
   for (const endpoint of endpoints) {
     const startResponse = await fetchPluginBridge(endpoint, port, {

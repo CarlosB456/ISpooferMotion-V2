@@ -53,6 +53,9 @@ interface SpooferState {
   lastAssetResults: SpooferAssetResult[];
   setLastAssetResults: (results: SpooferAssetResult[]) => void;
 
+  showAdvanced: boolean;
+  setShowAdvanced: (val: boolean | ((prev: boolean) => boolean)) => void;
+
   keyframeWarningCount: number;
   setKeyframeWarningCount: (val: number | ((prev: number) => number)) => void;
 }
@@ -123,6 +126,12 @@ export const useSpooferStore = create<SpooferState>((set) => ({
   lastAssetResults: [],
   setLastAssetResults: (results) => set({ lastAssetResults: results }),
 
+  showAdvanced: false,
+  setShowAdvanced: (val) =>
+    set((state) => ({
+      showAdvanced: typeof val === 'function' ? val(state.showAdvanced) : val,
+    })),
+
   keyframeWarningCount: 0,
   setKeyframeWarningCount: (val) =>
     set((state) => ({
@@ -142,9 +151,18 @@ export const applyReplacements = async (replacements: Record<string, string>) =>
     setReplaceError(false);
 
     if (Object.keys(replacements).length === 0) {
-      setSpoofingLogs((prev) => appendSpoofingLog(prev, '\nNo replacements were generated (all assets may have been skipped or failed).'));
+      setSpoofingLogs((prev) =>
+        appendSpoofingLog(
+          prev,
+          '\n[INFO] No replacements were generated (all assets may have been skipped or failed).',
+        ),
+      );
       if (typeof window.ismLog === 'function') {
-        window.ismLog('info', 'No replacements generated. All selected assets may have already been spoofed or failed.', true);
+        window.ismLog(
+          'info',
+          'No replacements generated. All selected assets may have already been spoofed or failed.',
+          true,
+        );
       }
       return;
     }
@@ -178,19 +196,32 @@ export const applyReplacements = async (replacements: Record<string, string>) =>
         ),
       );
     } else {
-      await queueStudioReplacements(replacements, config.advanced.pluginPort);
+      await queueStudioReplacements(replacements);
       setSpoofingLogs((prev) =>
-        appendSpoofingLog(prev, 'Queued replacements to plugin bridge. The Studio plugin will auto-replace them automatically! (Note: ensure you have run a Scan in Studio first)'),
+        appendSpoofingLog(
+          prev,
+          'Queued replacements to plugin bridge. The Studio plugin will auto-replace them automatically! (Note: ensure you have run a Scan in Studio first)',
+        ),
       );
     }
     setLastReplacements(replacements);
-
   } catch (e: unknown) {
-    setReplaceError(true);
-    notifyError('Replacement Error', String(e));
-    setSpoofingLogs((prev) =>
-      appendSpoofingLog(prev, `[ERROR] Failed to apply replacements: ${e}`),
-    );
+    const errorStr = String(e);
+    if (
+      errorStr.includes('No usable replacements') ||
+      errorStr.includes('did not accept any mappings') ||
+      errorStr.includes('rejected the mappings')
+    ) {
+      setSpoofingLogs((prev) =>
+        appendSpoofingLog(prev, `\n[INFO] ${errorStr.replace('Error: ', '')}`),
+      );
+    } else {
+      setReplaceError(true);
+      notifyError('Replacement Error', errorStr);
+      setSpoofingLogs((prev) =>
+        appendSpoofingLog(prev, `[ERROR] Failed to apply replacements: ${errorStr}`),
+      );
+    }
   } finally {
     setIsReplacing(false);
   }

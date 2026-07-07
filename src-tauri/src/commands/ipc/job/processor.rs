@@ -77,21 +77,26 @@ async fn batch_fetch_asset_details(
 ) -> HashMap<String, AssetDetails> {
     let mut details = HashMap::new();
     let chunks = asset_ids.chunks(120);
-    
+
     for chunk in chunks {
-        let items: Vec<serde_json::Value> = chunk.iter().filter_map(|id| {
-            if let Ok(id_num) = id.parse::<u64>() {
-                Some(serde_json::json!({
-                    "itemType": "Asset",
-                    "id": id_num
-                }))
-            } else {
-                None
-            }
-        }).collect();
-        
-        if items.is_empty() { continue; }
-        
+        let items: Vec<serde_json::Value> = chunk
+            .iter()
+            .filter_map(|id| {
+                if let Ok(id_num) = id.parse::<u64>() {
+                    Some(serde_json::json!({
+                        "itemType": "Asset",
+                        "id": id_num
+                    }))
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        if items.is_empty() {
+            continue;
+        }
+
         let payload = serde_json::json!({ "items": items });
         let req = client
             .post("https://catalog.roblox.com/v1/catalog/items/details")
@@ -100,14 +105,22 @@ async fn batch_fetch_asset_details(
             .header("Content-Type", "application/json")
             .header("Accept", "application/json")
             .json(&payload);
-            
+
         if let Ok(res) = req.send().await {
             if let Ok(json) = res.json::<serde_json::Value>().await {
                 if let Some(data) = json.get("data").and_then(|v| v.as_array()) {
                     for item in data {
                         if let Some(id) = item.get("id").and_then(serde_json::Value::as_u64) {
-                            let name = item.get("name").and_then(|v| v.as_str()).unwrap_or("Spoofed Asset").to_string();
-                            let description = item.get("description").and_then(|v| v.as_str()).unwrap_or("Uploaded by ISpooferMotion.").to_string();
+                            let name = item
+                                .get("name")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("Spoofed Asset")
+                                .to_string();
+                            let description = item
+                                .get("description")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("Uploaded by ISpooferMotion.")
+                                .to_string();
                             details.insert(id.to_string(), AssetDetails { name, description });
                         }
                     }
@@ -197,8 +210,9 @@ pub async fn process_spoofer_action(
     crate::commands::spoofer::configure_adaptive_concurrency(max_concurrency);
     let skip_owned = data.skip_owned.unwrap_or(false);
     let preserve_metadata = data.preserve_metadata.unwrap_or(true);
-    let excluded_users =
+    let mut excluded_users =
         crate::commands::spoofer::parse_excluded_id_list(data.excluded_user_ids.as_deref());
+    excluded_users.insert("1".to_string());
     let excluded_groups =
         crate::commands::spoofer::parse_excluded_id_list(data.excluded_group_ids.as_deref());
     let skip_existing_replacements = data.skip_existing_replacements.unwrap_or(true);
@@ -215,7 +229,7 @@ pub async fn process_spoofer_action(
         })
         .unwrap_or_default();
     let account = data.account.unwrap_or_else(|| {
-        crate::commands::discord::AnyValue(serde_json::json!({
+        crate::commands::AnyValue(serde_json::json!({
             "id": "unknown",
             "name": "Unknown",
             "avatarUrl": ""
@@ -249,13 +263,19 @@ pub async fn process_spoofer_action(
         return Ok(());
     }
 
-    let mut parsed_assets: Vec<(String, String)> = Vec::new();
+    let mut parsed_assets: Vec<(String, String, Option<String>, Option<String>)> = Vec::new();
     if let Ok(arr) = serde_json::from_str::<Vec<serde_json::Value>>(&assets_str) {
         for val in arr {
             if let (Some(id), Some(t)) =
                 (val.get("id").and_then(|v| v.as_str()), val.get("type").and_then(|v| v.as_str()))
             {
-                parsed_assets.push((id.to_string(), t.to_string()));
+                let raw_value = val
+                    .get("rawValue")
+                    .and_then(|v| v.as_str())
+                    .map(std::string::ToString::to_string);
+                let name =
+                    val.get("name").and_then(|v| v.as_str()).map(std::string::ToString::to_string);
+                parsed_assets.push((id.to_string(), t.to_string(), raw_value, name));
             }
         }
     } else {
@@ -272,6 +292,8 @@ pub async fn process_spoofer_action(
                     } else {
                         "animation".to_string()
                     },
+                    None,
+                    Some(format!("Asset {id}")),
                 ));
             }
         }
@@ -288,16 +310,16 @@ pub async fn process_spoofer_action(
     }
 
     // dedupe the asset list so we don't try to spoof the same thing twice in one run
-    let mut deduped_assets: Vec<(String, String)> = Vec::new();
+    let mut deduped_assets: Vec<(String, String, Option<String>, Option<String>)> = Vec::new();
     let mut seen_asset_ids = HashSet::new();
-    for (asset_id, asset_type) in parsed_assets {
+    for (asset_id, asset_type, raw_value, name) in parsed_assets {
         if !seen_asset_ids.insert(asset_id.clone()) {
             continue;
         }
         if skip_existing_replacements && existing_replacements.contains_key(&asset_id) {
             continue;
         }
-        deduped_assets.push((asset_id, asset_type));
+        deduped_assets.push((asset_id, asset_type, raw_value, name));
     }
     parsed_assets = deduped_assets;
 
@@ -322,17 +344,11 @@ pub async fn process_spoofer_action(
         return Ok(());
     }
 
-    let asset_ids: Vec<String> = parsed_assets.iter().map(|(id, _)| id.clone()).collect();
+    let asset_ids: Vec<String> = parsed_assets.iter().map(|(id, _, _, _)| id.clone()).collect();
     emit_job_log(&app, &format!("Found {} asset(s) to process.", parsed_assets.len()), "info");
     let total = parsed_assets.len();
     let forced_place_ids = valid_place_ids(data.force_place_ids.as_deref());
     let forced_place_id = first_valid_place_id(data.force_place_ids.as_deref());
-    let place_id_search_limit = data
-        .place_id_search_limit
-        .as_deref()
-        .and_then(|value| value.trim().parse::<u32>().ok())
-        .unwrap_or(10)
-        .clamp(1, 50);
     if let Some(place_id) = forced_place_id.as_deref() {
         emit_job_log(
             &app,
@@ -342,8 +358,8 @@ pub async fn process_spoofer_action(
     } else {
         emit_job_log(
             &app,
-            "No Place ID is available for asset delivery. Private or place-scoped assets may fail; save/publish the place in Studio or set Force Place ID(s).",
-            "warn",
+            "No forced Place ID specified; candidate Place IDs will be automatically resolved from asset creators.",
+            "info",
         );
     }
 
@@ -378,9 +394,11 @@ pub async fn process_spoofer_action(
 
     let mut batch_urls = std::collections::HashMap::new();
     // try to resolve all the download urls in one giant batch request to save a ton of time
+    let batch_assets =
+        parsed_assets.iter().map(|(id, t, _, _)| (id.clone(), t.clone())).collect::<Vec<_>>();
     if let Ok(urls) = crate::commands::spoofer::batch_get_download_urls_for_assets(
         app.clone(),
-        parsed_assets.clone(),
+        batch_assets,
         cookie.clone(),
         forced_place_id.clone(),
     )
@@ -402,10 +420,14 @@ pub async fn process_spoofer_action(
     let mut batch_metadata = std::collections::HashMap::new();
     if preserve_metadata {
         emit_job_log(&app, "Fetching asset metadata in batch...", "info");
-        batch_metadata = batch_fetch_asset_details(&asset_ids, &cookie, &initial_csrf, &client).await;
+        batch_metadata =
+            batch_fetch_asset_details(&asset_ids, &cookie, &initial_csrf, &client).await;
         emit_job_log(
             &app,
-            &format!("Successfully resolved metadata for {} assets via batch endpoint.", batch_metadata.len()),
+            &format!(
+                "Successfully resolved metadata for {} assets via batch endpoint.",
+                batch_metadata.len()
+            ),
             "info",
         );
     }
@@ -414,7 +436,7 @@ pub async fn process_spoofer_action(
     let stream = stream::iter(parsed_assets.into_iter().enumerate());
     // start processing the assets concurrently using the specified concurrency limit
     stream
-        .for_each_concurrent(max_concurrency, |(i, (asset_id, asset_type))| {
+        .for_each_concurrent(max_concurrency, |(i, (asset_id, asset_type, raw_value, asset_name))| {
             let app = app.clone();
             let job_id = job_id.clone();
             let cookie = cookie.clone();
@@ -445,6 +467,21 @@ pub async fn process_spoofer_action(
             let client = Arc::clone(&client);
 
             async move {
+                let exact_name = batch_metadata
+                    .get(&asset_id)
+                    .map(|d| d.name.clone())
+                    .or_else(|| {
+                        asset_name.clone().and_then(|n| {
+                            if n != "Unknown" && n != "Animations" && !n.starts_with("Asset ") {
+                                Some(n)
+                            } else {
+                                None
+                            }
+                        })
+                    })
+                    .or_else(|| asset_name.clone())
+                    .unwrap_or_else(|| format!("Asset {asset_id}"));
+
                 let _adaptive_permit = crate::commands::spoofer::acquire_adaptive_permit().await;
                 if interrupted.load(Ordering::Relaxed) {
                     return;
@@ -476,6 +513,7 @@ pub async fn process_spoofer_action(
                     if let Ok(mut results) = asset_results.lock() {
                         results.push(serde_json::json!({
                             "id": asset_id.clone(),
+                            "name": exact_name.clone(),
                             "type": asset_type.clone(),
                             "success": true,
                             "skipped": true,
@@ -518,6 +556,8 @@ pub async fn process_spoofer_action(
                     "ogg"
                 } else if mapped_type_name == "Image" {
                     "png"
+                } else if asset_type == "raw_keyframe_sequence" {
+                    "rbxmx"
                 } else {
                     "rbxm"
                 };
@@ -543,34 +583,57 @@ pub async fn process_spoofer_action(
                             if let Some(ids) = cached {
                                 ids
                             } else {
-                                match crate::commands::spoofer::get_place_id_from_creator(
+                                if let Ok(ids) = crate::commands::spoofer::get_place_id_from_creator(
                                     app.clone(),
                                     creator_type.clone(),
                                     creator_id.clone(),
                                     cookie.clone(),
-                                    Some(place_id_search_limit),
+                                    Some(100),
                                     Some(place_name_raw.clone()),
                                 )
                                 .await
                                 {
-                                    Ok(ids) => {
-                                        if !ids.is_empty() {
-                                            let msg = format!(
-                                                "Found {} candidate Place ID(s) for {} {}.",
-                                                ids.len(),
-                                                creator_type,
-                                                creator_id
-                                            );
-                                            let _ = append_log_entry(&app, "info", "spoofer", &msg);
-                                            let _ = app.emit(
+                                    if !ids.is_empty() {
+                                        let msg = format!(
+                                            "Found {} candidate Place ID(s) for {} {}.",
+                                            ids.len(),
+                                            creator_type,
+                                            creator_id
+                                        );
+                                        let _ = append_log_entry(&app, "info", "spoofer", &msg);
+                                        let _ = app.emit(
                                             "spoofer-log",
                                             serde_json::json!({ "message": msg, "level": "info" }),
                                         );
-                                        }
-                                        creator_place_ids_cache.insert(cache_key, ids.clone());
-                                        ids
                                     }
-                                    Err(_) => Vec::new(),
+                                    creator_place_ids_cache.insert(cache_key, ids.clone());
+                                    ids
+                                } else {
+                                    let mut fallback_ids = Vec::new();
+                                    if let Some(uid) = account_id.clone() {
+                                        if uid != creator_id {
+                                            if let Ok(ids) = crate::commands::spoofer::get_place_id_from_creator(
+                                                app.clone(),
+                                                "user".to_string(),
+                                                uid.clone(),
+                                                cookie.clone(),
+                                                Some(100),
+                                                Some(place_name_raw.clone()),
+                                            ).await {
+                                                fallback_ids = ids;
+                                            }
+                                        }
+                                    }
+                                    if !fallback_ids.is_empty() {
+                                        let msg = format!(
+                                            "Asset creator has no valid places. Fell back to {} candidate Place ID(s) from your account.",
+                                            fallback_ids.len()
+                                        );
+                                        let _ = append_log_entry(&app, "info", "spoofer", &msg);
+                                        let _ = app.emit("spoofer-log", serde_json::json!({ "message": msg, "level": "info" }));
+                                    }
+                                    creator_place_ids_cache.insert(cache_key, fallback_ids.clone());
+                                    fallback_ids
                                 }
                             }
                         }
@@ -585,22 +648,39 @@ pub async fn process_spoofer_action(
                     Some(place_ids_for_download.join(","))
                 };
 
-                let dl_res = crate::commands::spoofer::download_animation_asset_with_progress(
-                    app.clone(),
-                    direct_url,
-                    cookie.clone(),
-                    file_path.clone(),
-                    format!("dl_{asset_id}"),
-                    format!("Asset {asset_id}"),
-                    asset_id.clone(),
-                    Some(asset_type.clone()),
-                    place_id_arg,
-                    enable_archive_recovery,
-                    proxy_url.clone(),
-                )
-                .await;
-
                 let mut remove_download_file = false;
+                let dl_res = if asset_type == "raw_keyframe_sequence" {
+                    if let Some(raw_xml) = &raw_value {
+                        let full_xml = format!("<roblox xmlns:xmime=\"http://www.w3.org/2005/05/xmlmime\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:noNamespaceSchemaLocation=\"http://www.roblox.com/roblox.xsd\" version=\"4\">\n{}\n</roblox>", raw_xml);
+                        if let Err(e) = tokio::fs::write(&file_path, full_xml).await {
+                            Err(crate::error::AppError::Io(e))
+                        } else {
+                            Ok(crate::commands::spoofer::DownloadResult {
+                                success: true,
+                                file_path: Some(file_path.clone()),
+                                error: None,
+                            })
+                        }
+                    } else {
+                        Err(crate::error::AppError::Custom("Cannot spoof KeyframeSequences from binary .rbxl files. Please save the place as .rbxlx or use the Studio Plugin instead.".into()))
+                    }
+                } else {
+                    crate::commands::spoofer::download_animation_asset_with_progress(
+                        app.clone(),
+                        direct_url,
+                        cookie.clone(),
+                        file_path.clone(),
+                        format!("dl_{asset_id}"),
+                        exact_name.clone(),
+                        asset_id.clone(),
+                        Some(asset_type.clone()),
+                        place_id_arg,
+                        enable_archive_recovery,
+                        proxy_url.clone(),
+                    )
+                    .await
+                };
+
                 match dl_res {
                     Ok(res) if res.success => {
                         let download_only = asset_type == "script_ref"
@@ -612,6 +692,7 @@ pub async fn process_spoofer_action(
                             if let Ok(mut results) = asset_results.lock() {
                                 results.push(serde_json::json!({
                                     "id": asset_id.clone(),
+                                    "name": exact_name.clone(),
                                     "type": asset_type.clone(),
                                     "success": true
                                 }));
@@ -630,6 +711,7 @@ pub async fn process_spoofer_action(
                             if let Ok(mut results) = asset_results.lock() {
                                 results.push(serde_json::json!({
                                     "id": asset_id.clone(),
+                                    "name": exact_name.clone(),
                                     "type": asset_type.clone(),
                                     "success": false,
                                     "stage": "upload",
@@ -644,7 +726,7 @@ pub async fn process_spoofer_action(
                             details = fetch_asset_details(&asset_id, &cookie, &client).await;
                         }
                         let details = details.unwrap_or_else(|| AssetDetails {
-                            name: format!("Spoofed {asset_id}"),
+                            name: exact_name.clone(),
                             description: "Uploaded by ISpooferMotion.".to_string(),
                         });
 
@@ -694,6 +776,7 @@ pub async fn process_spoofer_action(
                                 if let Ok(mut results) = asset_results.lock() {
                                     results.push(serde_json::json!({
                                         "id": asset_id.clone(),
+                                        "name": exact_name.clone(),
                                         "type": asset_type.clone(),
                                         "success": true,
                                         "newId": new_id
@@ -714,6 +797,7 @@ pub async fn process_spoofer_action(
                                 if let Ok(mut results) = asset_results.lock() {
                                     results.push(serde_json::json!({
                                         "id": asset_id.clone(),
+                                        "name": exact_name.clone(),
                                         "type": asset_type.clone(),
                                         "success": false,
                                         "stage": "upload",
@@ -732,11 +816,16 @@ pub async fn process_spoofer_action(
                                 if let Ok(mut results) = asset_results.lock() {
                                     results.push(serde_json::json!({
                                         "id": asset_id.clone(),
+                                        "name": exact_name.clone(),
                                         "type": asset_type.clone(),
                                         "success": false,
                                         "stage": "upload",
                                         "errorReason": e.to_string()
                                     }));
+                                }
+                                let e_str = e.to_string();
+                                if e_str.contains("403 Forbidden") || e_str.contains("401 Unauthorized") {
+                                    interrupted.store(true, Ordering::Relaxed);
                                 }
                             }
                         }
@@ -761,7 +850,7 @@ pub async fn process_spoofer_action(
                             };
                             (
                                 "warn",
-                                format!("Skipped {asset_id} ({reason}) — Roblox refused the download."),
+                                format!("Skipped {asset_id} ({reason}) - Roblox refused the download."),
                             )
                         } else {
                             ("error", format!("Download failed for {asset_id}: {err_msg}"))
@@ -774,6 +863,7 @@ pub async fn process_spoofer_action(
                         if let Ok(mut results) = asset_results.lock() {
                             results.push(serde_json::json!({
                                 "id": asset_id.clone(),
+                                "name": exact_name.clone(),
                                 "type": asset_type.clone(),
                                 "success": false,
                                 "stage": "download",
@@ -792,6 +882,7 @@ pub async fn process_spoofer_action(
                         if let Ok(mut results) = asset_results.lock() {
                             results.push(serde_json::json!({
                                 "id": asset_id.clone(),
+                                "name": exact_name.clone(),
                                 "type": asset_type.clone(),
                                 "success": false,
                                 "stage": "download",
@@ -884,8 +975,9 @@ Failed: {failed}"
         types.contains(&"download".to_string()) && !types.contains(&"upload".to_string())
     });
 
-    if success > 0 && is_download_only {
+    if is_download_only {
         use tauri_plugin_opener::OpenerExt;
+        let _ = tokio::fs::create_dir_all(&base_downloads_dir).await;
         let _ = app
             .opener()
             .open_path(base_downloads_dir.to_string_lossy().to_string(), None::<String>);

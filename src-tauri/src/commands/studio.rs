@@ -1,14 +1,14 @@
-
 #[tauri::command]
 #[specta::specta]
 // sends the final asset mappings over to the roblox studio plugin so it can actually swap the ids in their game
 // returns "ok" on success, or a machine-readable reason string the frontend can translate into a useful message
 pub async fn push_to_studio(
-    replacements_map: crate::commands::discord::AnyValue,
+    replacements_map: crate::commands::AnyValue,
     plugin_port: Option<String>,
 ) -> crate::error::Result<String> {
     log::info!("push_to_studio called with replacements_map: {:?}", replacements_map);
-    let mappings = replacements_map.0
+    let mappings = replacements_map
+        .0
         .as_object()
         .cloned()
         .map(|replacements| {
@@ -51,7 +51,6 @@ pub async fn push_to_studio(
     let url = format!("http://127.0.0.1:{port}/replace-ids");
     let send_result = reqwest::Client::new()
         .post(&url)
-        .header("X-API-Key", crate::studio_bridge::bridge_api_key())
         .json(&serde_json::json!({ "mappings": mappings }))
         .send()
         .await;

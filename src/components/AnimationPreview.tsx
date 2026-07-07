@@ -78,7 +78,6 @@ function flattenPoses(poses: RobloxPose[]): Map<string, RobloxPose> {
   // much faster than traversing the tree every single frame
   const map = new Map<string, RobloxPose>();
   const walk = (list: RobloxPose[]) => {
-
     for (const p of list) {
       map.set(p.name, p);
       walk(p.children);
@@ -192,11 +191,7 @@ export default function AnimationPreview({ assetId, assetName, onClose }: Animat
         if (cancelled) return;
 
         if (!xml) {
-          setErrorMsg(
-            activeCookie
-              ? 'Could not load this animation. It might be deleted or unsupported.'
-              : 'Private animation. Please add your cookie in the Spoofing config to view this.',
-          );
+          setErrorMsg(activeCookie ? t('misc.animationLoadFailed') : t('misc.animationPrivate'));
           setStatus('error');
           return;
         }
@@ -205,7 +200,7 @@ export default function AnimationPreview({ assetId, assetName, onClose }: Animat
         if (cancelled) return;
 
         if (!parsed || parsed.keyframes.length === 0) {
-          setErrorMsg('Could not parse animation keyframes. The format may be unsupported.');
+          setErrorMsg(t('misc.animationParseFailed'));
           setStatus('error');
           return;
         }
@@ -576,7 +571,7 @@ export default function AnimationPreview({ assetId, assetName, onClose }: Animat
       exit={{ opacity: 0 }}
       transition={{ duration: 0.15 }}
       onClick={onClose}
-      className="fixed inset-0 z-[9999] bg-black/80 backdrop-blur-md flex items-center justify-center p-6 pointer-events-auto"
+      className="fixed inset-0 z-9999 bg-black/80 backdrop-blur-md flex items-center justify-center p-6 pointer-events-auto"
     >
       <motion.div
         initial={{ scale: 0.95, y: 12, opacity: 0 }}
@@ -584,7 +579,7 @@ export default function AnimationPreview({ assetId, assetName, onClose }: Animat
         exit={{ scale: 0.95, y: 12, opacity: 0 }}
         transition={{ type: 'spring', damping: 30, stiffness: 350 }}
         onClick={(e) => e.stopPropagation()}
-        className="relative flex flex-col bg-bg-surface border border-border-subtle rounded-[var(--radius-lg)] shadow-floating overflow-hidden"
+        className="relative flex flex-col bg-bg-surface border border-border-subtle rounded-lg shadow-floating overflow-hidden"
         style={{
           width: 600,
           maxWidth: 'calc(100vw - 48px)',
@@ -597,7 +592,7 @@ export default function AnimationPreview({ assetId, assetName, onClose }: Animat
           <Clapperboard size={15} className="text-primary shrink-0" />
           <div className="flex-1 min-w-0">
             <p className="text-[13px] font-semibold text-text-primary truncate">
-              {assetName || 'Animation'}
+              {assetName || t('misc.animation')}
               <span className="ml-2 text-[11px] font-mono text-text-muted">#{assetId}</span>
             </p>
             {status === 'ready' && (
@@ -614,13 +609,15 @@ export default function AnimationPreview({ assetId, assetName, onClose }: Animat
                 >
                   {rigType}
                 </button>
-                <p className="text-[10px] text-text-muted">{kfCount} keyframes</p>
+                <p className="text-[10px] text-text-muted">
+                  {t('misc.keyframesCount').replace('{count}', kfCount.toString())}
+                </p>
               </div>
             )}
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 text-text-muted hover:text-text-primary hover:bg-bg-base rounded-[var(--radius-md)] transition-colors shrink-0"
+            className="p-1.5 text-text-muted hover:text-text-primary hover:bg-bg-base rounded-md transition-colors shrink-0"
           >
             <X size={15} />
           </button>
@@ -640,7 +637,9 @@ export default function AnimationPreview({ assetId, assetName, onClose }: Animat
                 className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-bg-base"
               >
                 <Spinner size="lg" />
-                <p className="text-[13px] text-text-muted font-medium">{t('misc.fetchingAnimation')}</p>
+                <p className="text-[13px] text-text-muted font-medium">
+                  {t('misc.fetchingAnimation')}
+                </p>
               </motion.div>
             )}
 
@@ -662,7 +661,7 @@ export default function AnimationPreview({ assetId, assetName, onClose }: Animat
           {status === 'ready' && (
             <>
               <p className="absolute bottom-3 right-3 text-[10px] text-text-muted opacity-40 select-none pointer-events-none">
-                Drag to orbit · Scroll to zoom
+                {t('misc.dragToOrbit')}
               </p>
             </>
           )}
@@ -699,7 +698,7 @@ export default function AnimationPreview({ assetId, assetName, onClose }: Animat
                 keyframeTimes.map((t, i) => (
                   <div
                     key={i}
-                    className="absolute top-0 bottom-0 w-[1px] bg-border-subtle/40 z-0 pointer-events-none"
+                    className="absolute top-0 bottom-0 w-px bg-border-subtle/40 z-0 pointer-events-none"
                     style={{ left: `${(t / duration) * 100}%` }}
                   />
                 ))}
@@ -742,7 +741,7 @@ export default function AnimationPreview({ assetId, assetName, onClose }: Animat
 
               <div className="ml-auto flex items-center gap-1">
                 <span className="text-[10px] text-text-muted mr-1 uppercase tracking-wide">
-                  Speed
+                  {t('misc.speed')}
                 </span>
                 {speedOptions.map((s) => (
                   <button

@@ -2,7 +2,7 @@ import { IconButton, Toolbar } from '@codycon/ism-library';
 import { convertFileSrc, invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { motion } from 'framer-motion';
-import { Minus, Terminal, X } from 'lucide-react';
+import { Minus, Settings2, Terminal, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 import AppIconDark from '../../assets/app_icon.png';
@@ -10,15 +10,16 @@ import AppIconLight from '../../assets/app_icon_light.png';
 import { useConfig } from '../../contexts/ConfigContext';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useThemeAccent } from '../../contexts/ThemeContext';
+import { useSpooferStore } from '../../stores/spooferStore';
 import { cn } from '../../utils/cn';
 import { isTauriRuntime } from '../../utils/tauriRuntime';
-import QuickSettingsMenu from './QuickSettingsMenu';
 
 export default function Titlebar() {
   const { t } = useLanguage();
 
   const { customLogo } = useThemeAccent();
   const { config, updateConfig } = useConfig();
+  const { showAdvanced, setShowAdvanced } = useSpooferStore();
   const [appVersion, setAppVersion] = useState<string>('');
 
   useEffect(() => {
@@ -101,14 +102,22 @@ export default function Titlebar() {
         </div>
       </div>
 
-      {}
       <Toolbar>
-        <div className="flex items-center mx-1">
-          <QuickSettingsMenu />
-        </div>
+        <IconButton
+          label={t('settings.advanced')}
+          tone={showAdvanced ? 'primary' : undefined}
+          onClick={() => {
+            if (!showAdvanced) {
+              updateConfig('ui', 'activeTab', 'spoofing');
+            }
+            setShowAdvanced(!showAdvanced);
+          }}
+        >
+          <Settings2 size={16} />
+        </IconButton>
         <IconButton
           label={t('debug.toggleDebugConsole')}
-          tone="primary"
+          tone={config.debug?.debugMode ? 'primary' : undefined}
           onClick={() => updateConfig('debug', 'debugMode', !config.debug?.debugMode)}
         >
           <Terminal size={16} />
@@ -117,7 +126,7 @@ export default function Titlebar() {
         <IconButton label={t('debug.minimize')} onClick={handleMinimize}>
           <Minus size={16} />
         </IconButton>
-        <IconButton label={t('debug.close')} tone="danger" onClick={handleClose}>
+        <IconButton label={t('common.close')} tone="danger" onClick={handleClose}>
           <X size={16} />
         </IconButton>
       </Toolbar>

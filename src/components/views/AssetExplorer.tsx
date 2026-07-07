@@ -26,6 +26,7 @@ import { ExplorerTreeNode, getAssetId } from './asset-explorer/ExplorerTree';
 interface AssetExplorerProps {
   isOpen: boolean;
   setIsOpen: (val: boolean) => void;
+  onScanReceived?: () => void;
 }
 
 const ASSET_TYPE_OPTIONS = [
@@ -35,7 +36,7 @@ const ASSET_TYPE_OPTIONS = [
   { value: 'mesh', label: 'Meshes' },
 ];
 
-const ASSET_EXPLORER_WIDTH = 340;
+const ASSET_EXPLORER_WIDTH = 280;
 const AnimationPreview = lazy(() => import('../AnimationPreview'));
 
 function dedupePluginAssets(assets: PluginAsset[]): PluginAsset[] {
@@ -137,7 +138,7 @@ const VALID_ROOT_SERVICES = new Set([
   'StudioSession',
 ]);
 
-export default function AssetExplorer({ isOpen, setIsOpen }: AssetExplorerProps) {
+export default function AssetExplorer({ isOpen, setIsOpen, onScanReceived }: AssetExplorerProps) {
   const { t } = useLanguage();
   const [parseState, setParseState] = useState<ParseProgress | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
@@ -169,8 +170,6 @@ export default function AssetExplorer({ isOpen, setIsOpen }: AssetExplorerProps)
     setParsingFileName,
     selectedAssetIds,
     setSelectedAssetIds,
-    keyframeWarningCount,
-    setKeyframeWarningCount,
   } = useSpooferStore();
 
   const { studioConnected, scanStatus } = useStudioConnectionState();
@@ -261,9 +260,10 @@ export default function AssetExplorer({ isOpen, setIsOpen }: AssetExplorerProps)
         const finalImages = appendResolved(imageAssets, 'image');
         const finalMeshes = appendResolved(meshAssets, 'mesh');
 
-        const kfCount =
-          scriptRefAssets.filter((asset) => asset.kind === 'UnuploadedAnimation').length || 0;
-        setKeyframeWarningCount(kfCount);
+        const rawKfsAssets = appendResolved(
+          scriptRefAssets.filter((asset) => asset.kind === 'UnuploadedAnimation'),
+          'raw_keyframe_sequence',
+        );
 
         const unknownRefs = scriptRefAssets.filter((asset) => {
           if (asset.kind === 'UnuploadedAnimation') return false;
@@ -291,6 +291,10 @@ export default function AssetExplorer({ isOpen, setIsOpen }: AssetExplorerProps)
           children.push(pluginAssetsToNode('Images', 'Model', finalImages, 'image'));
         if (finalMeshes.length > 0)
           children.push(pluginAssetsToNode('Meshes', 'Model', finalMeshes, 'mesh'));
+        if (rawKfsAssets.length > 0)
+          children.push(
+            pluginAssetsToNode('Animations', 'Model', rawKfsAssets, 'raw_keyframe_sequence'),
+          );
         if (unknownRefs.length > 0)
           children.push(
             pluginAssetsToNode(
@@ -353,11 +357,12 @@ export default function AssetExplorer({ isOpen, setIsOpen }: AssetExplorerProps)
           });
       }
     },
-    [setKeyframeWarningCount, setRootInstances, setLoadedFileName],
+    [setRootInstances, setLoadedFileName],
   );
 
-  useStudioAssetPoll(studioConnected, config.advanced.pluginPort || '14285', (bundle) => {
+  useStudioAssetPoll(studioConnected, (bundle) => {
     processStudioData(bundle.anims, bundle.sounds, bundle.images, bundle.meshes, bundle.scriptRefs);
+    if (onScanReceived) onScanReceived();
   });
 
   const toggleAsset = useCallback(
@@ -440,9 +445,22 @@ export default function AssetExplorer({ isOpen, setIsOpen }: AssetExplorerProps)
         logIsm('warn', w);
       }
 
-      setSelectedAssetIds(new Set());
-      setRootInstances(result.rootInstances);
       setLoadedFileName(fileName);
+
+      const autoSelected = new Set<string>();
+
+      const autoSelectAsset = (node: RbxInstance) => {
+        for (const asset of node.assets) {
+          if (asset.assetId) {
+            autoSelected.add(asset.assetId);
+          }
+        }
+        node.children.forEach(autoSelectAsset);
+      };
+
+      result.rootInstances.forEach(autoSelectAsset);
+      setSelectedAssetIds(autoSelected);
+      setRootInstances(result.rootInstances);
 
       let totalAssets = 0;
       const countAssets = (node: RbxInstance) => {
@@ -543,11 +561,11 @@ export default function AssetExplorer({ isOpen, setIsOpen }: AssetExplorerProps)
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="absolute inset-0 z-50 flex items-center justify-center bg-bg-surface/90 backdrop-blur-sm border-2 border-dashed border-primary m-1 rounded-[var(--radius-md)] pointer-events-none"
+            className="absolute inset-0 z-50 flex items-center justify-center bg-bg-surface/90 backdrop-blur-sm border-2 border-dashed border-primary m-1 rounded-md pointer-events-none"
           >
             <div className="flex flex-col items-center gap-3 text-primary">
               <FileUp size={28} />
-              <span className="font-semibold text-sm">Drop .rbxl / .rbxlx</span>
+              <span className="font-semibold text-sm">{t('misc.dropRbxl')}</span>
             </div>
           </motion.div>
         )}
@@ -565,13 +583,13 @@ export default function AssetExplorer({ isOpen, setIsOpen }: AssetExplorerProps)
               className="flex items-center gap-2 pl-1 overflow-hidden"
             >
               <span className="text-sm font-bold tracking-wide text-text-primary whitespace-nowrap">
-                Explorer
+                {t('explorer.title')}
               </span>
             </motion.div>
           )}
         </AnimatePresence>
 
-        <div className="flex items-center gap-1.5 justify-end z-[100]">
+        <div className="flex items-center gap-1.5 justify-end z-100">
           <Button
             isIconOnly
             variant="ghost"
@@ -599,7 +617,7 @@ export default function AssetExplorer({ isOpen, setIsOpen }: AssetExplorerProps)
                 <Spinner size="sm" color="current" />
                 <div className="flex flex-col items-center text-center gap-1">
                   <span className="text-xs font-semibold text-text-primary">
-                    Resolving Script References
+                    {t('explorer.resolvingScriptRefs')}
                   </span>
                   {resolverProgress && resolverProgress.total > 0 && (
                     <span className="text-[10px]">
@@ -643,7 +661,7 @@ export default function AssetExplorer({ isOpen, setIsOpen }: AssetExplorerProps)
                   <span className="text-text-muted/60 text-xs font-medium select-none text-center">
                     {studioConnected && scanStatus?.scanning ? (
                       <div className="flex flex-col gap-1 items-center">
-                        <span className="text-primary font-bold">Scanning Studio...</span>
+                        <span className="text-primary font-bold">{t('misc.scanningStudio')}</span>
                         <span className="text-text-muted">
                           {scanStatus.current_service} (
                           {Math.round((scanStatus.scanned / Math.max(1, scanStatus.total)) * 100)}
@@ -651,21 +669,21 @@ export default function AssetExplorer({ isOpen, setIsOpen }: AssetExplorerProps)
                         </span>
                       </div>
                     ) : studioConnected ? (
-                      'Waiting for Studio scan...'
+                      t('misc.waitingForScan')
                     ) : (
-                      'No place loaded'
+                      t('misc.noPlaceLoaded')
                     )}
                   </span>
                 </div>
                 {}
                 <div
-                  className="mx-3 mb-3 h-28 flex-shrink-0 flex flex-col items-center justify-center gap-2 rounded-[var(--radius-lg)] border-2 border-dashed border-border-strong hover:border-primary/60 hover:bg-primary/5 transition-colors cursor-pointer text-text-muted hover:text-primary select-none"
+                  className="mx-3 mb-3 h-28 shrink-0 flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-border-strong hover:border-primary/60 hover:bg-primary/5 transition-colors cursor-pointer text-text-muted hover:text-primary select-none"
                   onClick={handleBrowse}
                 >
                   <FolderOpen size={24} className="opacity-60" />
                   <div className="text-center px-4">
-                    <p className="text-[11px] font-semibold">Drop or click to browse</p>
-                    <p className="text-[9px] mt-1 opacity-60">.rbxl &amp; .rbxlx only</p>
+                    <p className="text-[11px] font-semibold">{t('misc.dropOrClick')}</p>
+                    <p className="text-[9px] mt-1 opacity-60">{t('misc.rbxlOnly')}</p>
                   </div>
                 </div>
               </motion.div>
@@ -681,10 +699,22 @@ export default function AssetExplorer({ isOpen, setIsOpen }: AssetExplorerProps)
                       <Filter size={13} className="shrink-0 text-text-muted" />
                       <div className="min-w-0 flex-1">
                         <MultiSelectDropdown
-                          options={ASSET_TYPE_OPTIONS.map(a => ({ ...a, label: t('explorer.' + (a.value === 'image' ? 'images' : a.value === 'animation' ? 'animations' : a.value === 'mesh' ? 'meshes' : a.value)) }))}
+                          options={ASSET_TYPE_OPTIONS.map((a) => ({
+                            ...a,
+                            label: t(
+                              'explorer.' +
+                                (a.value === 'image'
+                                  ? 'images'
+                                  : a.value === 'animation'
+                                    ? 'animations'
+                                    : a.value === 'mesh'
+                                      ? 'meshes'
+                                      : a.value),
+                            ),
+                          }))}
                           values={activeAssetFilters}
                           onChange={setActiveAssetFilters}
-                          placeholder="All asset types"
+                          placeholder={t('explorer.allAssetTypes')}
                         />
                       </div>
                     </div>
@@ -710,20 +740,6 @@ export default function AssetExplorer({ isOpen, setIsOpen }: AssetExplorerProps)
                   ))}
                 </div>
 
-                {keyframeWarningCount > 0 && (
-                  <div className="mx-3 mb-2 p-3 rounded-md bg-yellow-500/10 border border-yellow-500/20 text-yellow-600 dark:text-yellow-400">
-                    <p className="text-xs font-semibold mb-1 flex items-center gap-1">
-                      <span>⚠️</span> Un-uploaded Animations Found
-                    </p>
-                    <p className="text-[10px] leading-tight opacity-90">
-                      {keyframeWarningCount} animation
-                      {keyframeWarningCount !== 1 ? 's are' : ' is'} present as raw{' '}
-                      <code>KeyframeSequence</code> data. These must be published to Roblox before
-                      they can be spoofed.
-                    </p>
-                  </div>
-                )}
-
                 <Button
                   onClick={() => {
                     setRootInstances([]);
@@ -733,7 +749,7 @@ export default function AssetExplorer({ isOpen, setIsOpen }: AssetExplorerProps)
                   variant="flat"
                   className="mx-3 mb-3 mt-1 text-[11px]"
                 >
-                  Clear Explorer
+                  {t('explorer.clearExplorer')}
                 </Button>
               </div>
             )}
@@ -776,7 +792,7 @@ function AnimationPreviewFallback({ onClose }: { onClose: () => void }) {
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       onClick={onClose}
-      className="fixed inset-0 z-[9999] bg-black/80 backdrop-blur-md flex items-center justify-center p-6 pointer-events-auto"
+      className="fixed inset-0 z-9999 bg-black/80 backdrop-blur-md flex items-center justify-center p-6 pointer-events-auto"
     >
       <Spinner size="lg" />
     </motion.div>,
@@ -806,7 +822,7 @@ function ImageOverlay({ assetId, onClose }: { assetId: string; onClose: () => vo
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       onClick={onClose}
-      className="fixed inset-0 z-[9999] bg-black/85 backdrop-blur-md flex items-center justify-center p-6 md:p-12 cursor-zoom-out pointer-events-auto"
+      className="fixed inset-0 z-9999 bg-black/85 backdrop-blur-md flex items-center justify-center p-6 md:p-12 cursor-zoom-out pointer-events-auto"
     >
       <button
         className="absolute top-6 right-6 p-2 bg-white/10 hover:bg-white/20 text-white rounded-full transition-colors z-10"

@@ -1,4 +1,4 @@
-import { ListChecks, Trash2 } from 'lucide-react';
+import { Copy, ListChecks, Trash2 } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 
 import { useLanguage } from '../../../contexts/LanguageContext';
@@ -22,17 +22,13 @@ export default function ExecutionLogs({
 
   useEffect(() => {
     if (outputRef.current) {
-      const { scrollTop, scrollHeight, clientHeight } = outputRef.current;
-      const isAtBottom = scrollHeight - scrollTop - clientHeight < 100;
-      if (isAtBottom) {
-        outputRef.current.scrollTop = scrollHeight;
-      }
+      outputRef.current.scrollTop = outputRef.current.scrollHeight;
     }
   }, [logs]);
 
   return (
-    <div className="flex flex-col gap-2">
-      <div className="flex items-center justify-between">
+    <div className="flex flex-col gap-2 h-full min-h-0">
+      <div className="flex items-center justify-between shrink-0">
         <span className="text-sm font-semibold text-text-primary">{t('spoof.output')}</span>
         <div className="flex items-center gap-3">
           {Object.keys(lastReplacements).length > 0 && (
@@ -40,23 +36,30 @@ export default function ExecutionLogs({
               onClick={() => setResultsModalOpen(true)}
               className="flex items-center gap-1.5 text-xs font-semibold text-primary hover:text-primary/80 transition-colors"
             >
-              <ListChecks size={14} /> View Results
+              <ListChecks size={14} /> {t('spoof.viewResults')}
             </button>
           )}
           {logs && logs.length > 0 && (
-            <button
-              onClick={() => setLogs([])}
-              className="flex items-center gap-1.5 text-xs font-semibold text-text-secondary hover:text-danger transition-colors"
-            >
-              <Trash2 size={14} /> Clear Logs
-            </button>
+            <>
+              <button
+                onClick={() => void navigator.clipboard.writeText(logs.join(''))}
+                className="flex items-center gap-1.5 text-xs font-semibold text-text-secondary hover:text-primary transition-colors"
+              >
+                <Copy size={14} /> Copy Logs
+              </button>
+              <button
+                onClick={() => setLogs([])}
+                className="flex items-center gap-1.5 text-xs font-semibold text-text-secondary hover:text-danger transition-colors"
+              >
+                <Trash2 size={14} /> {t('spoof.clearLogs')}
+              </button>
+            </>
           )}
         </div>
       </div>
       <div
         ref={outputRef}
-        className="w-full rounded-[var(--radius-md)] border border-border-strong bg-bg-surface p-3 font-mono text-[13px] font-medium text-text-primary shadow-inner overflow-y-auto whitespace-pre-wrap break-words"
-        style={{ height: '24rem', minHeight: '13rem', maxHeight: '50vh' }}
+        className="w-full flex-1 min-h-30 rounded-md border border-border-strong bg-bg-surface p-3 font-mono text-[13px] font-medium text-text-primary shadow-inner overflow-y-auto whitespace-pre-wrap wrap-break-word"
       >
         {logs && logs.length > 0 ? (
           <div className="flex flex-col gap-1">

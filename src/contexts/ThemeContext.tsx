@@ -1,6 +1,7 @@
 import type { ThemeConfig } from '@codycon/ism-library';
 import { ThemeProvider as UIThemeProvider, useThemeAccent } from '@codycon/ism-library';
-import React, { useEffect } from 'react';
+import type React from 'react';
+import { useEffect } from 'react';
 
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   return (
@@ -78,5 +79,5 @@ const ThemeModeGuard = () => {
   return null;
 };
 
-export { useThemeAccent };
 export type { ThemeConfig };
+export { useThemeAccent };

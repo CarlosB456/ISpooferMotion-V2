@@ -1,6 +1,6 @@
 import { Button, FormToggle, Group, Row } from '@codycon/ism-library';
 import { invoke } from '@tauri-apps/api/core';
-import { FolderOpen, Terminal, Trash2 } from 'lucide-react';
+import { FolderOpen, Trash2 } from 'lucide-react';
 
 import { useConfig } from '../../../contexts/ConfigContext';
 import { useLanguage } from '../../../contexts/LanguageContext';
@@ -81,19 +81,6 @@ export default function DebugSection() {
           onClick={() =>
             invoke('open_logs_folder').catch((err) =>
               logIsm('error', `Failed to open logs folder: ${String(err)}`),
-            )
-          }
-        />
-
-        <Button
-          label={t('settings.openAppLog')}
-          variant="bordered"
-          fullWidth={true}
-          startContent={<Terminal size={16} />}
-          title="Tails the latest debug log file in a terminal window. For the browser DevTools console press F12."
-          onClick={() =>
-            invoke('open_dev_console').catch((err) =>
-              logIsm('error', `Failed to open app log: ${String(err)}`),
             )
           }
         />

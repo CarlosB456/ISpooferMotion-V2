@@ -1,6 +1,6 @@
 [package]
 name = "app"
-version = "2.0.0-rc.5"
+version = "2.0.0"
 authors = ["IncredibroXP <incredibroxpdev@gmail.com>"]
 description = "Animation spoofing utility for Roblox"
 edition = "2021"
@@ -30,10 +30,9 @@ chrono = "0.4"
 tauri-plugin-dialog = "2"
 axum = "0.7"
 tower-http = { version = "0.6", features = ["cors", "limit"] }
-tauri-plugin-shell = "2.3.5"
+
 tauri-plugin-fs = "2.5.1"
 thiserror = "2.0.18"
-parking_lot = "0.12.5"
 base64 = "0.22"
 rusqlite = { version = "0.32", features = ["bundled"] }
 aes-gcm = "0.10"
@@ -42,6 +41,7 @@ rbx_xml = "2.0.1"
 rbx_dom_weak = "4.1.0"
 tauri-plugin-global-shortcut = "2.3.2"
 
+tauri-plugin-os = "2"
 tauri-plugin-http = "2.5.9"
 uuid = { version = "1.20.0", features = ["v4"] }
 futures = "0.3.32"
@@ -54,13 +54,10 @@ rand = "0.9.4"
 hex = "0.4.3"
 subtle = "2"
 crc32fast = "1.5.0"
-scraper = "0.27.0"
-html-escape = "0.2.13"
 dashmap = "6.2.1"
 specta = { version = "=2.0.0-rc.25", features = ["serde_json"] }
 tauri-specta = { version = "=2.0.0-rc.25", features = ["typescript", "javascript"] }
 specta-typescript = "0.0.12"
-semver = "1.0.28"
 tauri-plugin-deep-link = "2.4.9"
 validator = { version = "0.19.0", features = ["derive"] }
 full_moon = { version = "2.2.0", features = ["luau", "roblox"] }

@@ -1,6 +1,6 @@
 {
   "name": "ispoofermotion",
-  "version": "2.0.0-rc.5",
+  "version": "2.0.0",
   "description": "Animation spoofing utility for Roblox",
   "author": {
     "name": "IncredibroXP",
@@ -33,8 +33,6 @@
   },
   "dependencies": {
     "@codycon/ism-library": "file:./ISM-Library/packages/ui",
-    "@floating-ui/react-dom": "^2.1.8",
-    "@tanstack/react-query": "^5.101.1",
     "@tauri-apps/api": "^2.11.1",
     "@tauri-apps/plugin-clipboard-manager": "^2.3.2",
     "@tauri-apps/plugin-dialog": "^2.7.1",
@@ -43,7 +41,6 @@
     "@tauri-apps/plugin-http": "^2.5.9",
     "@tauri-apps/plugin-notification": "^2.3.3",
     "@tauri-apps/plugin-os": "^2.3.2",
-    "@tauri-apps/plugin-shell": "^2.3.5",
     "clsx": "^2.1.1",
     "framer-motion": "^12.41.0",
     "fzstd": "^0.1.1",
@@ -60,7 +57,6 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@tailwindcss/vite": "^4.3.0",
-    "@tanstack/react-query-devtools": "^5.101.1",
     "@tauri-apps/cli": "^2.11.3",
     "@types/node": "^26.0.0",
     "@types/react": "^19.2.15",

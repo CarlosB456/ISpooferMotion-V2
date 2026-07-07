@@ -10,10 +10,7 @@ use std::collections::HashMap;
 use tauri::AppHandle;
 
 // hits the asset delivery api to actually pull the raw bytes, spoofing the user agent if needed
-pub async fn get_scraped_asset_cdn_url(
-    client: &reqwest::Client,
-    asset_id: &str,
-) -> Option<String> {
+pub async fn get_scraped_asset_cdn_url(client: &reqwest::Client, asset_id: &str) -> Option<String> {
     let url = format!("https://www.roblox.com/library/{}/", asset_id);
     if let Ok(resp) = client
         .get(&url)
@@ -121,7 +118,7 @@ pub async fn write_download_response(
     let total_length = content_length.map(|l| l + if is_resuming { resume_offset } else { 0 });
 
     let mut last_progress: u64 = if is_resuming && total_length.unwrap_or(0) > 0 {
-        (resume_offset * 100) / total_length.expect("total length must be valid")
+        (resume_offset * 100) / total_length.unwrap_or(1)
     } else {
         0
     };

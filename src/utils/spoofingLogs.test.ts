@@ -8,9 +8,9 @@ describe('appendSpoofingLog', () => {
     expect(result).toEqual(['[INFO] hello']);
   });
 
-  it('splits multi-line chunks into separate entries', () => {
+  it('preserves multi-line chunks as a single entry for color formatting', () => {
     const result = appendSpoofingLog([], 'line1\nline2\nline3');
-    expect(result).toEqual(['line1', 'line2', 'line3']);
+    expect(result).toEqual(['line1\nline2\nline3']);
   });
 
   it('ignores empty or whitespace-only chunks', () => {
@@ -18,22 +18,22 @@ describe('appendSpoofingLog', () => {
     expect(appendSpoofingLog(['existing'], '   ')).toEqual(['existing']);
   });
 
-  it('trims chunk before splitting', () => {
+  it('trims chunk before appending', () => {
     const result = appendSpoofingLog([], '  [WARN] trimmed  ');
     expect(result).toEqual(['[WARN] trimmed']);
   });
 
-  it('caps the log at 500 lines', () => {
-    const existing = Array.from({ length: 498 }, (_, i) => `line ${i}`);
-    const result = appendSpoofingLog(existing, 'A\nB\nC');
-    expect(result).toHaveLength(500);
-    expect(result[result.length - 1]).toBe('C');
+  it('caps the log at 750 lines', () => {
+    const existing = Array.from({ length: 749 }, (_, i) => `line ${i}`);
+    const result = appendSpoofingLog(existing, 'new entry');
+    expect(result).toHaveLength(750);
+    expect(result[result.length - 1]).toBe('new entry');
   });
 
   it('slices from the end when over the limit', () => {
-    const existing = Array.from({ length: 500 }, (_, i) => `old ${i}`);
+    const existing = Array.from({ length: 750 }, (_, i) => `old ${i}`);
     const result = appendSpoofingLog(existing, 'new line');
-    expect(result).toHaveLength(500);
+    expect(result).toHaveLength(750);
     expect(result[result.length - 1]).toBe('new line');
     expect(result[0]).toBe('old 1');
   });

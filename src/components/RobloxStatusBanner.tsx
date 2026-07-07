@@ -1,11 +1,14 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { AlertCircle } from 'lucide-react';
 
+import { useLanguage } from '../contexts/LanguageContext';
+
 interface RobloxStatusBannerProps {
   isVisible: boolean;
 }
 
 export function RobloxStatusBanner({ isVisible }: RobloxStatusBannerProps) {
+  const { t } = useLanguage();
   // simple banner that drops down when roblox APIs are having a bad time
   // helps prevent users from thinking the app is broken when it's actually roblox's fault
   return (
@@ -21,7 +24,7 @@ export function RobloxStatusBanner({ isVisible }: RobloxStatusBannerProps) {
           <div className="rounded-md border border-danger/40 bg-danger/10 px-4 py-3 flex items-center justify-center gap-3">
             <AlertCircle size={18} className="text-danger shrink-0" strokeWidth={2.5} />
             <span className="text-sm font-medium text-danger truncate text-center">
-              Roblox APIs are currently experiencing issues. Some features may be unavailable.
+              {t('misc.robloxApiDown')}
             </span>
           </div>
         </motion.div>

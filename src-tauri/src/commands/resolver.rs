@@ -242,10 +242,15 @@ pub async fn resolve_script_references(
     if total == 0 {
         return Ok(resolved_map);
     }
-    
+
     // get an anonymous CSRF token from catalog
     let mut csrf_token = String::new();
-    if let Ok(res) = client.post("https://catalog.roblox.com/v1/catalog/items/details").header("Content-Length", "0").send().await {
+    if let Ok(res) = client
+        .post("https://catalog.roblox.com/v1/catalog/items/details")
+        .header("Content-Length", "0")
+        .send()
+        .await
+    {
         if let Some(token) = res.headers().get("x-csrf-token") {
             csrf_token = token.to_str().unwrap_or_default().to_string();
         }
@@ -256,19 +261,24 @@ pub async fn resolve_script_references(
     if !csrf_token.is_empty() {
         let chunks = asset_ids.chunks(120);
         for chunk in chunks {
-            let items: Vec<serde_json::Value> = chunk.iter().filter_map(|id| {
-                if let Ok(id_num) = id.parse::<u64>() {
-                    Some(serde_json::json!({
-                        "itemType": "Asset",
-                        "id": id_num
-                    }))
-                } else {
-                    None
-                }
-            }).collect();
-            
-            if items.is_empty() { continue; }
-            
+            let items: Vec<serde_json::Value> = chunk
+                .iter()
+                .filter_map(|id| {
+                    if let Ok(id_num) = id.parse::<u64>() {
+                        Some(serde_json::json!({
+                            "itemType": "Asset",
+                            "id": id_num
+                        }))
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+
+            if items.is_empty() {
+                continue;
+            }
+
             let payload = serde_json::json!({ "items": items });
             let req = client
                 .post("https://catalog.roblox.com/v1/catalog/items/details")
@@ -276,14 +286,14 @@ pub async fn resolve_script_references(
                 .header("Content-Type", "application/json")
                 .header("Accept", "application/json")
                 .json(&payload);
-                
+
             if let Ok(res) = req.send().await {
                 if let Ok(json) = res.json::<serde_json::Value>().await {
                     if let Some(data) = json.get("data").and_then(|v| v.as_array()) {
                         for item in data {
                             if let (Some(id), Some(type_id)) = (
                                 item.get("id").and_then(serde_json::Value::as_u64),
-                                item.get("assetType").and_then(serde_json::Value::as_u64)
+                                item.get("assetType").and_then(serde_json::Value::as_u64),
                             ) {
                                 let category = match type_id {
                                     24 => Some("animation"),
@@ -307,7 +317,7 @@ pub async fn resolve_script_references(
 
     let app_arc = Arc::new(app);
     let mut resolved_count = total - remaining_ids.len();
-    
+
     emit_script_ref_progress(
         &app_arc,
         ScriptRefProgress {
@@ -318,22 +328,28 @@ pub async fn resolve_script_references(
         },
     );
 
-    let valid_ids: Vec<String> = remaining_ids.into_iter().filter(|id| id.parse::<u64>().is_ok()).collect();
-    
-    for chunk in valid_ids.chunks(100) {
-        let items: Vec<serde_json::Value> = chunk.iter().map(|id| {
-            serde_json::json!({
-                "assetId": id.parse::<u64>().unwrap_or(0),
-                "requestId": id
-            })
-        }).collect();
+    let valid_ids: Vec<String> =
+        remaining_ids.into_iter().filter(|id| id.parse::<u64>().is_ok()).collect();
 
-        if let Ok(resp) = client.post("https://assetdelivery.roblox.com/v2/assets/batch")
+    for chunk in valid_ids.chunks(100) {
+        let items: Vec<serde_json::Value> = chunk
+            .iter()
+            .map(|id| {
+                serde_json::json!({
+                    "assetId": id.parse::<u64>().unwrap_or(0),
+                    "requestId": id
+                })
+            })
+            .collect();
+
+        if let Ok(resp) = client
+            .post("https://assetdelivery.roblox.com/v2/assets/batch")
             .header("Content-Type", "application/json")
             .header("Accept", "application/json")
             .json(&items)
-            .send().await {
-            
+            .send()
+            .await
+        {
             if let Ok(json) = resp.json::<Vec<serde_json::Value>>().await {
                 for item in json {
                     if let Some(request_id) = item.get("requestId").and_then(|v| v.as_str()) {
@@ -341,13 +357,19 @@ pub async fn resolve_script_references(
                         let mut category = None;
 
                         if let Some(errors) = item.get("errors").and_then(|v| v.as_array()) {
-                            if errors.iter().any(|e| e.get("code").and_then(serde_json::Value::as_u64) == Some(404) || e.get("code").and_then(serde_json::Value::as_u64) == Some(401)) {
+                            if errors.iter().any(|e| {
+                                e.get("code").and_then(serde_json::Value::as_u64) == Some(404)
+                                    || e.get("code").and_then(serde_json::Value::as_u64)
+                                        == Some(401)
+                            }) {
                                 is_false_positive = true;
                             }
                         }
 
                         if !is_false_positive {
-                            if let Some(type_id) = item.get("assetTypeId").and_then(serde_json::Value::as_u64) {
+                            if let Some(type_id) =
+                                item.get("assetTypeId").and_then(serde_json::Value::as_u64)
+                            {
                                 category = match type_id {
                                     24 => Some("animation".to_string()),
                                     3 => Some("sound".to_string()),
@@ -358,13 +380,14 @@ pub async fn resolve_script_references(
                                             is_false_positive = true;
                                         }
                                         None
-                                    },
+                                    }
                                 };
                             }
                         }
 
                         if is_false_positive {
-                            resolved_map.insert(request_id.to_string(), "false_positive".to_string());
+                            resolved_map
+                                .insert(request_id.to_string(), "false_positive".to_string());
                         } else if let Some(cat) = &category {
                             resolved_map.insert(request_id.to_string(), cat.clone());
                         }
@@ -376,7 +399,11 @@ pub async fn resolve_script_references(
                                 resolved: resolved_count,
                                 total,
                                 asset_id: request_id.to_string(),
-                                resolved_category: if is_false_positive { Some("false_positive".to_string()) } else { category },
+                                resolved_category: if is_false_positive {
+                                    Some("false_positive".to_string())
+                                } else {
+                                    category
+                                },
                             },
                         );
                     }
@@ -399,9 +426,14 @@ pub async fn validate_asset_ids(
     if asset_ids.is_empty() {
         return Ok(result_map);
     }
-    
+
     let mut csrf_token = String::new();
-    if let Ok(res) = client.post("https://catalog.roblox.com/v1/catalog/items/details").header("Content-Length", "0").send().await {
+    if let Ok(res) = client
+        .post("https://catalog.roblox.com/v1/catalog/items/details")
+        .header("Content-Length", "0")
+        .send()
+        .await
+    {
         if let Some(token) = res.headers().get("x-csrf-token") {
             csrf_token = token.to_str().unwrap_or_default().to_string();
         }
@@ -412,19 +444,24 @@ pub async fn validate_asset_ids(
     if !csrf_token.is_empty() {
         let chunks = asset_ids.chunks(120);
         for chunk in chunks {
-            let items: Vec<serde_json::Value> = chunk.iter().filter_map(|id| {
-                if let Ok(id_num) = id.parse::<u64>() {
-                    Some(serde_json::json!({
-                        "itemType": "Asset",
-                        "id": id_num
-                    }))
-                } else {
-                    None
-                }
-            }).collect();
-            
-            if items.is_empty() { continue; }
-            
+            let items: Vec<serde_json::Value> = chunk
+                .iter()
+                .filter_map(|id| {
+                    if let Ok(id_num) = id.parse::<u64>() {
+                        Some(serde_json::json!({
+                            "itemType": "Asset",
+                            "id": id_num
+                        }))
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+
+            if items.is_empty() {
+                continue;
+            }
+
             let payload = serde_json::json!({ "items": items });
             let req = client
                 .post("https://catalog.roblox.com/v1/catalog/items/details")
@@ -432,14 +469,14 @@ pub async fn validate_asset_ids(
                 .header("Content-Type", "application/json")
                 .header("Accept", "application/json")
                 .json(&payload);
-                
+
             if let Ok(res) = req.send().await {
                 if let Ok(json) = res.json::<serde_json::Value>().await {
                     if let Some(data) = json.get("data").and_then(|v| v.as_array()) {
                         for item in data {
                             if let (Some(id), Some(type_id)) = (
                                 item.get("id").and_then(serde_json::Value::as_u64),
-                                item.get("assetType").and_then(serde_json::Value::as_u64)
+                                item.get("assetType").and_then(serde_json::Value::as_u64),
                             ) {
                                 let category = match type_id {
                                     24 => "animation",

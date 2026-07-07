@@ -2,6 +2,10 @@
 @import '../ISM-Library/packages/ui/theme/ism-library.css';
 @source "../ISM-Library/packages/ui";
 
+html {
+  font-size: 85% !important;
+}
+
 input[type='number']::-webkit-inner-spin-button,
 input[type='number']::-webkit-outer-spin-button {
   -webkit-appearance: none;

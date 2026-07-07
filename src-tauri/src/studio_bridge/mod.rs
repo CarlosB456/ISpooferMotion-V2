@@ -4,7 +4,7 @@ pub mod messages;
 pub mod middleware;
 pub mod server;
 
-use crate::commands::discord::AnyValue;
+use crate::commands::AnyValue;
 use axum::{
     extract::{DefaultBodyLimit, State},
     http::{HeaderValue, Method},
@@ -12,31 +12,28 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
-use keyring::Entry;
 use serde_json::{json, Value};
 use std::net::SocketAddr;
 use std::sync::{Arc, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
-use tauri::{AppHandle, Emitter};
+use tauri::AppHandle;
 use tokio::sync::RwLock;
 use tower_http::{
     cors::{AllowOrigin, CorsLayer},
     limit::RequestBodyLimitLayer,
 };
-use uuid::Uuid;
 
 use messages::plan_patches;
-use middleware::{require_auth, require_json_for_post};
+use middleware::require_json_for_post;
 use server::{
     get_last_animations, get_last_images, get_last_meshes, get_last_script_refs, get_last_sounds,
     handle_animations_complete, handle_api_dump, handle_assets_animations, handle_assets_images,
-    handle_assets_meshes, handle_assets_script_refs, handle_assets_sounds, handle_confirm_pairing,
-    handle_discover_key, handle_images_complete, handle_meshes_complete, handle_poll,
-    handle_poll_animations, handle_poll_images, handle_poll_replacements, handle_poll_sounds,
-    handle_replace_ids, handle_scan_abort, handle_scan_complete, handle_scan_progress,
-    handle_scan_records, handle_scan_start, handle_script_refs_complete, handle_sounds_complete,
-    handle_studio_health, request_animations, request_images, request_meshes, request_script_refs,
-    request_sounds,
+    handle_assets_meshes, handle_assets_script_refs, handle_assets_sounds, handle_images_complete,
+    handle_meshes_complete, handle_poll, handle_poll_animations, handle_poll_images,
+    handle_poll_replacements, handle_poll_sounds, handle_replace_ids, handle_scan_abort,
+    handle_scan_complete, handle_scan_progress, handle_scan_records, handle_scan_start,
+    handle_script_refs_complete, handle_sounds_complete, handle_studio_health, request_animations,
+    request_images, request_meshes, request_script_refs, request_sounds,
 };
 
 const PLUGIN_PORT_START: u16 = 14285;
@@ -45,64 +42,15 @@ const STUDIO_PROTOCOL_VERSION: u8 = 2;
 const MAX_STUDIO_RECORDS: usize = 2_000_000;
 const MAX_SCRIPT_SOURCE_BYTES: usize = 8_000_000;
 
-static PLUGIN_API_KEY: OnceLock<String> = OnceLock::new();
 static ACTIVE_BRIDGE_PORT: OnceLock<RwLock<Option<u16>>> = OnceLock::new();
-static ALLOW_KEY_DISCOVERY: OnceLock<RwLock<bool>> = OnceLock::new();
-static PAIRING_CONFIRMED: OnceLock<RwLock<bool>> = OnceLock::new();
 static BRIDGE_DATA: OnceLock<Arc<RwLock<AssetServerStateData>>> = OnceLock::new();
 
 pub fn bridge_data() -> Option<Arc<RwLock<AssetServerStateData>>> {
     BRIDGE_DATA.get().cloned()
 }
 
-pub fn bridge_api_key() -> String {
-    PLUGIN_API_KEY.get_or_init(get_persistent_api_key).clone()
-}
-
 pub(crate) fn active_bridge_port() -> &'static RwLock<Option<u16>> {
     ACTIVE_BRIDGE_PORT.get_or_init(|| RwLock::new(None))
-}
-
-pub(crate) fn allow_key_discovery() -> &'static RwLock<bool> {
-    ALLOW_KEY_DISCOVERY.get_or_init(|| RwLock::new(true))
-}
-
-pub(crate) fn pairing_confirmed() -> &'static RwLock<bool> {
-    PAIRING_CONFIRMED.get_or_init(|| RwLock::new(false))
-}
-
-pub(crate) fn get_persistent_api_key() -> String {
-    let entry = Entry::new("ISpooferMotion", "plugin_api_key");
-    if let Ok(entry) = entry {
-        if let Ok(key) = entry.get_password() {
-            return key;
-        }
-        let new_key = Uuid::new_v4().to_string();
-        let _ = entry.set_password(&new_key);
-        new_key
-    } else {
-        Uuid::new_v4().to_string()
-    }
-}
-
-#[tauri::command]
-#[specta::specta]
-pub fn get_plugin_api_key() -> String {
-    PLUGIN_API_KEY.get_or_init(get_persistent_api_key).clone()
-}
-
-#[tauri::command]
-#[specta::specta]
-pub async fn trigger_key_pairing() {
-    *allow_key_discovery().write().await = true;
-    *pairing_confirmed().write().await = false;
-}
-
-#[tauri::command]
-#[specta::specta]
-#[must_use]
-pub async fn confirm_key_pairing() -> bool {
-    *pairing_confirmed().read().await
 }
 
 #[tauri::command]
@@ -127,24 +75,11 @@ pub async fn queue_replace_mappings_internal(mappings: Vec<Value>) -> bool {
     let records = std::sync::Arc::clone(&data.read().await.studio_records);
     // Generate patches from scan records if available; otherwise Studio will fall back
     // to raw ID mapping substitution on its own side.
-    let patches = if records.is_empty() {
-        Vec::new()
-    } else {
-        plan_patches(&records, &mappings)
-    };
+    let patches = if records.is_empty() { Vec::new() } else { plan_patches(&records, &mappings) };
     let mut guard = data.write().await;
     guard.stored_mappings = mappings;
     guard.stored_patches = patches;
     true
-}
-
-#[tauri::command]
-#[specta::specta]
-#[must_use]
-pub async fn get_pairing_status() -> AnyValue {
-    let confirmed = *pairing_confirmed().read().await;
-    let open = *allow_key_discovery().read().await;
-    AnyValue(json!({ "confirmed": confirmed, "open": open }))
 }
 
 use messages::AssetServerStateData;
@@ -158,14 +93,12 @@ pub struct AppState {
 }
 
 pub async fn start_server(_app_handle: AppHandle) {
-    let Some((listener, addr)) = bind_available_listener().await else {
-        eprintln!(
-            "Could not start plugin HTTP server: ports {PLUGIN_PORT_START}-{PLUGIN_PORT_END} are unavailable"
-        );
-        return;
-    };
     let data = Arc::new(RwLock::new(AssetServerStateData::default()));
     let _ = BRIDGE_DATA.set(Arc::clone(&data));
+    let Some((listener, addr)) = bind_available_listener().await else {
+        eprintln!("Could not start plugin HTTP server: no available TCP ports found");
+        return;
+    };
     let state = AppState {
         data: Arc::clone(&data),
         bridge_port: addr.port(),
@@ -198,11 +131,7 @@ pub async fn start_server(_app_handle: AppHandle) {
             },
         ))
         .allow_methods([Method::GET, Method::POST, Method::OPTIONS])
-        .allow_headers([
-            axum::http::header::CONTENT_TYPE,
-            axum::http::header::AUTHORIZATION,
-            axum::http::HeaderName::from_static("x-api-key"),
-        ])
+        .allow_headers([axum::http::header::CONTENT_TYPE, axum::http::header::AUTHORIZATION])
         .allow_private_network(true);
 
     let app = Router::new()
@@ -210,18 +139,14 @@ pub async fn start_server(_app_handle: AppHandle) {
             "/health",
             get(|State(state): State<AppState>| async move {
                 let port = *active_bridge_port().read().await;
-                let open = *allow_key_discovery().read().await;
                 Json(json!({
                     "app": "ISpooferMotion",
                     "port": port.unwrap_or(14285),
                     "startedAt": state.started_at,
-                    "allowStudioPairing": open
+                    "allowStudioPairing": true
                 }))
             }),
         )
-        .route("/auth/discord", post(handle_auth_discord))
-        .route("/discover-key", get(handle_discover_key))
-        .route("/confirm-pairing", get(handle_confirm_pairing))
         .route("/studio-health", get(handle_studio_health))
         .route("/api-dump", get(handle_api_dump))
         .route("/poll", get(handle_poll))
@@ -255,7 +180,6 @@ pub async fn start_server(_app_handle: AppHandle) {
         .route("/request-images", post(request_images))
         .route("/request-meshes", post(request_meshes))
         .route("/request-script-refs", post(request_script_refs))
-        .layer(axum_middleware::from_fn(require_auth))
         .layer(axum_middleware::from_fn(require_json_for_post))
         .layer(RequestBodyLimitLayer::new(64 * 1024 * 1024))
         .layer(DefaultBodyLimit::disable())
@@ -272,28 +196,6 @@ pub async fn start_server(_app_handle: AppHandle) {
     });
 }
 
-#[derive(serde::Deserialize)]
-pub struct AuthDiscordPayload {
-    #[serde(rename = "loginToken")]
-    pub login_token: String,
-    pub user: Option<Value>,
-}
-
-pub async fn handle_auth_discord(
-    State(state): State<AppState>,
-    Json(payload): Json<AuthDiscordPayload>,
-) -> impl axum::response::IntoResponse {
-    let mut auth_payload = serde_json::json!({ "loginToken": payload.login_token });
-    if let Some(user) = payload.user {
-        auth_payload["user"] = user;
-    }
-    let _ = crate::commands::discord::save_discord_report_auth(crate::commands::discord::AnyValue(
-        auth_payload,
-    ));
-    let _ = state.app_handle.emit("discord-login-success", ());
-    Json(serde_json::json!({ "success": true }))
-}
-
 #[tauri::command]
 #[specta::specta]
 #[must_use]
@@ -308,6 +210,12 @@ async fn bind_available_listener() -> Option<(tokio::net::TcpListener, SocketAdd
         let addr = SocketAddr::from(([127, 0, 0, 1], port));
         if let Ok(listener) = tokio::net::TcpListener::bind(addr).await {
             return Some((listener, addr));
+        }
+    }
+    let addr = SocketAddr::from(([127, 0, 0, 1], 0));
+    if let Ok(listener) = tokio::net::TcpListener::bind(addr).await {
+        if let Ok(local_addr) = listener.local_addr() {
+            return Some((listener, local_addr));
         }
     }
     None

@@ -21,8 +21,7 @@
     "dialog:allow-confirm",
     "dialog:allow-ask",
     "dialog:allow-message",
-    "shell:default",
-    "shell:allow-open",
+
     "opener:default",
     "notification:default",
     "clipboard-manager:default",

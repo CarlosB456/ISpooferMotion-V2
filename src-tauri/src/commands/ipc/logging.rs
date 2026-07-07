@@ -2,7 +2,7 @@ use super::{
     app, append_log_entry, redact_log_message, write_json_file, AppHandle, Command, Manager, Path,
     Value,
 };
-use crate::commands::discord::AnyValue;
+use crate::commands::AnyValue;
 
 pub(super) fn cleanup_logs_dir(logs_dir: &Path) {
     // automatically delete log files older than 30 days so we don't fill up their hard drive

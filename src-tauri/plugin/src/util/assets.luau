@@ -1,3 +1,7 @@
+--!nocheck
+--!nolint
+-- luacheck: ignore
+---@diagnostic disable: undefined-global, unused-local, unused-function, lowercase-global
 local function countBundledClasses(propertyMap: { [string]: { string } }): number
 	local count = 0
 	for _ in pairs(propertyMap) do

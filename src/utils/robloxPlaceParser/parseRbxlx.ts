@@ -76,7 +76,14 @@ export async function parseRbxlx(
     const tagPrefix = decodeSlice(openAngle, Math.min(openAngle + 15, totalLength));
 
     if (tagPrefix.startsWith('</Item>')) {
-      pathStack.pop();
+      const closedItem = pathStack.pop();
+      if (
+        closedItem &&
+        closedItem.className === 'KeyframeSequence' &&
+        closedItem._xmlStartPos !== undefined
+      ) {
+        closedItem.rawXml = decodeSlice(closedItem._xmlStartPos, openAngle + 7);
+      }
       pos = openAngle + 7;
     } else if (tagPrefix.startsWith('</Properties>')) {
       inProperties = false;
@@ -98,6 +105,7 @@ export async function parseRbxlx(
         name: className,
         assets: [],
         children: [],
+        _xmlStartPos: openAngle,
       };
 
       if (pathStack.length > 0) {
@@ -107,6 +115,9 @@ export async function parseRbxlx(
       }
 
       if (tagStr.endsWith('/>')) {
+        if (newInstance.className === 'KeyframeSequence') {
+          newInstance.rawXml = decodeSlice(openAngle, closeAngle + 1);
+        }
       } else {
         pathStack.push(newInstance);
       }
@@ -239,6 +250,28 @@ export async function parseRbxlx(
       }
     }
   }
+
+  function flagKeyframes(nodes: RbxInstance[]) {
+    for (const node of nodes) {
+      if (node.className === 'KeyframeSequence') {
+        node.assets.push(
+          buildAssetRef(
+            node.className,
+            node.name,
+            'Raw KeyframeSequence',
+            node.rawXml || '',
+            `RAW_KFS_${node.referent}`,
+            '',
+            'raw_keyframe_sequence' as any, // Cast because it might conflict with types if not updated yet
+          ),
+        );
+      }
+      if (node.children) {
+        flagKeyframes(node.children);
+      }
+    }
+  }
+  flagKeyframes(rootInstances);
 
   function buildPaths(node: RbxInstance, currentPath: string) {
     const nextPath = currentPath ? `${currentPath}/${node.name}` : node.name;

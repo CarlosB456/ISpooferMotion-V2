@@ -30,35 +30,6 @@ export default function ActivityView() {
       const data = await invoke<SpoofJob[]>('get_jobs');
       const finalJobs = data ? [...data] : [];
 
-      // Inject a fake job for UI testing in development mode
-      if (import.meta.env.DEV) {
-        finalJobs.push({
-          id: 'fake-dev-job-123',
-          status: 'partially_finished',
-          startTime: new Date(Date.now() - 1000 * 60 * 60).toISOString(),
-          endTime: new Date(Date.now() - 1000 * 60 * 55).toISOString(),
-          durationMs: 1000 * 60 * 5,
-          account: {
-            id: '1',
-            name: 'DevUser',
-            avatarUrl:
-              'https://tr.rbxcdn.com/38c6edcb50633730ff4cf39ac8859840/150/150/AvatarHeadshot/Png',
-          },
-          assetResults: [
-            { id: '123456', success: true, newId: '654321', type: 'Animation' },
-            { id: '111111', success: false, errorReason: 'Roblox API Error', type: 'Mesh' },
-            { id: '222222', success: true, newId: '333333', type: 'Audio' },
-          ],
-          config: {
-            assets: '123456, 111111, 222222',
-            spoofSounds: true,
-            downloadOnly: false,
-            uploadTypes: ['animation', 'mesh', 'audio'],
-          },
-          logFilePath: '',
-        });
-      }
-
       setJobs(finalJobs);
     } catch (e) {
       logIsm('error', `Failed to load job history: ${e}`, true);
@@ -182,21 +153,27 @@ export default function ActivityView() {
                                 <img
                                   src={job.group.iconUrl}
                                   alt=""
-                                  className="w-[22px] h-[22px] rounded-full border-[2.5px] border-bg-elevated absolute -bottom-1 -right-1 object-cover bg-bg-base shadow-sm"
+                                  className="w-5.5 h-5.5 rounded-full border-[2.5px] border-bg-elevated absolute -bottom-1 -right-1 object-cover bg-bg-base shadow-sm"
                                 />
                               )}
                             </div>
-                            <div className="flex flex-col items-start gap-[2px]">
+                            <div className="flex flex-col items-start gap-0.5">
                               <span className="text-[15px] font-semibold text-text-primary tracking-tight">
                                 {job.group
-                                  ? `Spoofed to ${job.group.name}`
-                                  : `Spoofed to ${job.account?.name || 'Unknown'}`}
+                                  ? t('activity.spoofedTo').replace('{name}', job.group.name)
+                                  : t('activity.spoofedTo').replace(
+                                      '{name}',
+                                      job.account?.name || t('common.unknown'),
+                                    )}
                               </span>
                               <span className="text-[13px] text-text-muted flex items-center gap-2">
                                 {dateStr}
                                 <span className="w-1 h-1 rounded-full bg-border-strong" />
                                 <span className="font-medium text-text-secondary">
-                                  {totalAssets} asset{totalAssets !== 1 ? 's' : ''}
+                                  {t('activity.assetCount').replace(
+                                    '{count}',
+                                    totalAssets.toString(),
+                                  )}
                                 </span>
                               </span>
                             </div>
@@ -212,7 +189,7 @@ export default function ActivityView() {
                             className="flex items-center text-[13px] font-medium text-text-muted hover:text-primary transition-colors"
                           >
                             <Play size={14} className="mr-1.5" />
-                            Redo Job
+                            {t('activity.redoJob')}
                           </button>
                           {failedAssets > 0 && (
                             <button
@@ -221,7 +198,10 @@ export default function ActivityView() {
                               className="flex items-center text-[13px] font-medium text-text-muted hover:text-yellow-400 transition-colors"
                             >
                               <RotateCcw size={14} className="mr-1.5" />
-                              Retry Failed ({failedAssets})
+                              {t('activity.retryFailed').replace(
+                                '{count}',
+                                failedAssets.toString(),
+                              )}
                             </button>
                           )}
                           {job.logFilePath && (
@@ -231,7 +211,7 @@ export default function ActivityView() {
                               className="flex items-center text-[13px] font-medium text-text-muted hover:text-text-primary transition-colors"
                             >
                               <FileText size={14} className="mr-1.5" />
-                              View Log
+                              {t('activity.viewLog')}
                             </button>
                           )}
                           <button
@@ -240,11 +220,11 @@ export default function ActivityView() {
                             className="flex items-center text-[13px] font-medium text-text-muted hover:text-red-400 transition-colors ml-auto"
                           >
                             <Trash2 size={14} className="mr-1.5" />
-                            Delete
+                            {t('common.delete')}
                           </button>
                         </div>
 
-                        <div className="space-y-1 max-h-[300px] overflow-y-auto pr-2 rounded-[var(--radius-md)] border border-border-subtle/30 p-2 bg-bg-base/30">
+                        <div className="space-y-1 max-h-75 overflow-y-auto pr-2 rounded-md border border-border-subtle/30 p-2 bg-bg-base/30">
                           {job.assetResults?.map((res, i) => (
                             <div
                               key={i}
@@ -254,8 +234,8 @@ export default function ActivityView() {
                                 {res.success ? (
                                   <CheckCircle2 size={14} className="text-green-500/70 shrink-0" />
                                 ) : res.skipped ? (
-                                  <div className="w-[14px] h-[14px] rounded-full border border-yellow-500/50 flex items-center justify-center shrink-0">
-                                    <div className="w-[6px] h-[2px] bg-yellow-500/50 rounded-full" />
+                                  <div className="w-3.5 h-3.5 rounded-full border border-yellow-500/50 flex items-center justify-center shrink-0">
+                                    <div className="w-1.5 h-0.5 bg-yellow-500/50 rounded-full" />
                                   </div>
                                 ) : (
                                   <XCircle size={14} className="text-red-500/70 shrink-0" />
@@ -263,8 +243,8 @@ export default function ActivityView() {
                                 <span className="font-mono text-text-secondary opacity-70 w-24 shrink-0">
                                   {res.id}
                                 </span>
-                                <span className="truncate text-text-primary max-w-[200px]">
-                                  {res.name || 'Unknown Asset'}
+                                <span className="truncate text-text-primary max-w-50">
+                                  {res.name || t('activity.unknownAsset')}
                                 </span>
                               </div>
                               <div className="flex items-center gap-3">
@@ -273,14 +253,14 @@ export default function ActivityView() {
                                 )}
                                 {res.errorReason && (
                                   <span
-                                    className="text-red-400/80 max-w-[200px] truncate"
+                                    className="text-red-400/80 max-w-50 truncate"
                                     title={res.errorReason}
                                   >
                                     {res.errorReason}
                                   </span>
                                 )}
                                 {res.reason && res.skipped && (
-                                  <span className="text-yellow-500/80 max-w-[200px] truncate">
+                                  <span className="text-yellow-500/80 max-w-50 truncate">
                                     {res.reason}
                                   </span>
                                 )}

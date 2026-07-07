@@ -1,11 +1,7 @@
-local function clearPairingState()
-	BASE_URL = nil
-	API_KEY = nil
-	pcall(function()
-		plugin:SetSetting(API_KEY_SETTING, "")
-	end)
-end
-
+--!nocheck
+--!nolint
+-- luacheck: ignore
+---@diagnostic disable: undefined-global, unused-local, unused-function, lowercase-global
 local function decodeJsonResponseBody(response: any): (boolean, any)
 	if not response then
 		return false, nil
@@ -50,16 +46,9 @@ local function getJson(endpoint: string): (boolean, any)
 			Method = "GET",
 			Headers = {
 				["Content-Type"] = "application/json",
-				["X-API-Key"] = API_KEY or "",
 			},
 		})
 	end)
-
-	if ok and response and response.StatusCode == 401 then
-		warn("[ISpooferMotion] Pairing expired")
-		clearPairingState()
-		return false, nil
-	end
 
 	if not ok or not response or not response.Success then
 		warn("[ISpooferMotion] Failed to GET from " .. endpoint)
@@ -100,17 +89,10 @@ local function postJson(endpoint: string, payload: any): (boolean, any)
 			Method = "POST",
 			Headers = {
 				["Content-Type"] = "application/json",
-				["X-API-Key"] = API_KEY or "",
 			},
 			Body = body,
 		})
 	end)
-
-	if ok and response and response.StatusCode == 401 then
-		warn("[ISpooferMotion] Pairing expired")
-		clearPairingState()
-		return false, nil
-	end
 
 	if not ok or not response or not response.Success then
 		warn(

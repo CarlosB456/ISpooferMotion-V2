@@ -1,3 +1,7 @@
+--!nocheck
+--!nolint
+-- luacheck: ignore
+---@diagnostic disable: undefined-global, unused-local, unused-function, lowercase-global
 local BLOCKED_SET_PROPERTIES: { [string]: boolean } = {
 	Parent = true,
 	ClassName = true,
@@ -374,22 +378,22 @@ end
 
 local function applyPatches(patches: any)
 	if patchRunning then
-		warn("[ISpooferMotion] Patch batch already running")
+		logToPlugin("[Warning] Patch batch already running")
 		return
 	end
 	if type(patches) ~= "table" then
-		warn("[ISpooferMotion] Invalid patch batch")
+		logToPlugin("[Warning] Invalid patch batch")
 		return
 	end
 	if #patches > MAX_PATCHES_PER_BATCH then
-		warn(
-			"[ISpooferMotion] Large patch batch: "
+		logToPlugin(
+			"[Warning] Large patch batch: "
 				.. tostring(#patches)
 				.. " patches - processing in chunks"
 		)
 	end
 	if scanRunning then
-		warn("[ISpooferMotion] Scan already running; skipping patch batch")
+		logToPlugin("[Warning] Scan already running; skipping patch batch")
 		return
 	end
 
@@ -420,8 +424,9 @@ local function applyPatches(patches: any)
 				local patchName = if type(rawPatch) == "table"
 					then rawPatch.fullName or rawPatch.token
 					else "unknown patch"
-				warn(
-					"[ISpooferMotion] Patch failed for "
+				logToPlugin(
+					"[Warning] "
+						.. "[ISpooferMotion] Patch failed for "
 						.. tostring(patchName)
 						.. ": "
 						.. tostring(err)
@@ -429,7 +434,9 @@ local function applyPatches(patches: any)
 			end
 
 			if index % 50 == 0 then
-				setPluginGuiStatus(string.format("Applying replacements (%d/%d)...", index, #patches))
+				setPluginGuiStatus(
+					string.format("Applying replacements (%d/%d)...", index, #patches)
+				)
 				task.wait()
 			end
 		end
@@ -437,7 +444,7 @@ local function applyPatches(patches: any)
 
 	if not batchOk then
 		failed += 1
-		warn("[ISpooferMotion] Patch batch failed: " .. tostring(batchErr))
+		logToPlugin("[Warning] " .. "[ISpooferMotion] Patch batch failed: " .. tostring(batchErr))
 	end
 
 	if recording then
@@ -448,7 +455,7 @@ local function applyPatches(patches: any)
 
 	patchRunning = false
 
-	print(
+	logToPlugin(
 		string.format(
 			"[ISpooferMotion] Targeted replacement complete: %d patches applied, %d failed",
 			succeeded,

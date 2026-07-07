@@ -70,11 +70,7 @@ fn asset_id_pattern() -> &'static Regex {
     RE.get_or_init(|| {
         Regex::new(
             r#"^(?i)(?:(?:https?://(?:www\.)?)?roblox\.com/(?:asset/?\?[^"'\s&]*?id=|library/)|create\.roblox\.com/(?:marketplace/)?|rbxassetid://|rbxasset://|rbxthumb://[^/]*/?)?(\d+)$"#,
-        )
-        .unwrap_or_else(|e| {
-            log::error!("Invalid asset id regex: {}", e);
-            Regex::new("^$").unwrap()
-        })
+        ).expect("Invalid asset id regex")
     })
 }
 
@@ -83,33 +79,21 @@ fn script_ref_pattern() -> &'static Regex {
     RE.get_or_init(|| {
         Regex::new(
             r#"(?ix)(?:(?:https?://(?:www\.)?)?roblox\.com/asset/?\?[^"'\s&]*?id=|rbxassetid://|rbxthumb://[^/]*/?)?(\d{7,15})"#,
-        )
-        .unwrap_or_else(|e| {
-            log::error!("Invalid script reference regex: {}", e);
-            Regex::new("^$").unwrap()
-        })
+        ).expect("Invalid script reference regex")
     })
 }
 
 fn script_rewrite_pattern() -> &'static Regex {
     static RE: std::sync::OnceLock<Regex> = std::sync::OnceLock::new();
     RE.get_or_init(|| {
-        Regex::new(r#"(?ix)((?:(?:https?://(?:www\.)?)?roblox\.com/asset/?\?[^"'\s&]*?id=|rbxassetid://|rbxthumb://[^/]*/?)?)(\d{4,15})"#)
-            .unwrap_or_else(|e| {
-                log::error!("Invalid script rewrite regex: {}", e);
-                Regex::new("^$").unwrap()
-            })
+        Regex::new(r#"(?ix)((?:(?:https?://(?:www\.)?)?roblox\.com/asset/?\?[^"'\s&]*?id=|rbxassetid://|rbxthumb://[^/]*/?)?)(\d{4,15})"#).expect("Invalid script rewrite regex")
     })
 }
 
 fn table_block_pattern() -> &'static Regex {
     static RE: std::sync::OnceLock<Regex> = std::sync::OnceLock::new();
     RE.get_or_init(|| {
-        Regex::new(r"(?ix)(?:(anim|sound|audio|music|mesh|texture|image|assetid)[a-zA-Z0-9_]*\s*(?:=|:)\s*\{)")
-            .unwrap_or_else(|e| {
-                log::error!("Invalid table block regex: {}", e);
-                Regex::new("^$").unwrap()
-            })
+        Regex::new(r"(?ix)(?:(anim|sound|audio|music|mesh|texture|image|assetid)[a-zA-Z0-9_]*\s*(?:=|:)\s*\{)").expect("Invalid table block regex")
     })
 }
 
@@ -117,10 +101,7 @@ fn rich_text_pattern() -> &'static Regex {
     static RE: std::sync::OnceLock<Regex> = std::sync::OnceLock::new();
     RE.get_or_init(|| {
         Regex::new(r#"(?i)<image\s*=\s*["']?(?:rbxassetid://)?(\d{4,15})["']?\s*/?>"#)
-            .unwrap_or_else(|e| {
-                log::error!("Invalid rich text regex: {}", e);
-                Regex::new("^$").unwrap()
-            })
+            .expect("Invalid rich text regex")
     })
 }
 
@@ -140,10 +121,7 @@ fn runtime_load_pattern() -> &'static Regex {
                 DataStoreService\s*:\s*GetDataStore\s*\(\s*["'](\d{7,15})["']
             )"#,
         )
-        .unwrap_or_else(|e| {
-            log::error!("Invalid runtime load regex: {}", e);
-            Regex::new("^$").unwrap()
-        })
+        .expect("Invalid runtime load regex")
     })
 }
 
@@ -1050,7 +1028,7 @@ fn replace_script_asset_ids<'a>(
     source: &'a str,
     mappings: &HashMap<&str, &str>,
 ) -> std::borrow::Cow<'a, str> {
-    // We removed full_moon AST parsing because deeply nested or obfuscated scripts 
+    // We removed full_moon AST parsing because deeply nested or obfuscated scripts
     // cause a stack overflow in Rust which silently crashes the entire desktop app.
     // Fallback to regex is sufficient and much faster.
     script_rewrite_pattern().replace_all(source, |captures: &Captures<'_>| {

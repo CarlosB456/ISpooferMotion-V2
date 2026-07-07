@@ -1,11 +1,15 @@
-local objectRegistry: { [string]: Instance } = setmetatable({} :: any, { __mode = "v" })
-local objectTokens: { [Instance]: string } = setmetatable({} :: any, { __mode = "k" })
+--!nocheck
+--!nolint
+-- luacheck: ignore
+---@diagnostic disable: undefined-global, unused-local, unused-function, lowercase-global
+local objectRegistry: { [string]: Instance } = {}
+local objectTokens: { [Instance]: string } = {}
 local scanGeneration: number = 0
 
 local function resetObjectRegistry()
 	scanGeneration += 1
-	objectRegistry = setmetatable({} :: any, { __mode = "v" })
-	objectTokens = setmetatable({} :: any, { __mode = "k" })
+	objectRegistry = {}
+	objectTokens = {}
 end
 
 local function registerObject(obj: Instance): string

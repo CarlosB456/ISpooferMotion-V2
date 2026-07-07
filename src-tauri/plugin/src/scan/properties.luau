@@ -1,3 +1,7 @@
+--!nocheck
+--!nolint
+-- luacheck: ignore
+---@diagnostic disable: undefined-global, unused-local, unused-function, lowercase-global
 local MAX_RECORD_VALUE_BYTES: number = 1000000
 local MAX_RECORD_TEXT_VALUE_BYTES: number = 100000
 local recordKeys: { [string]: boolean } = {}

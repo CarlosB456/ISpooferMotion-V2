@@ -419,11 +419,14 @@ pub async fn publish_asset_with_progress(
             let status_code = status.as_u16();
 
             if status_code == 401 {
-                upload_error = Some(
-                    "Invalid API key (401 Unauthorized). Check your Open Cloud API key."
-                        .to_string(),
+                return Err(
+                    "Invalid Open Cloud API key (401 Unauthorized). Please check your API key."
+                        .into(),
                 );
-                break;
+            }
+
+            if status_code == 403 {
+                return Err("Upload rejected (403 Forbidden). Your Open Cloud API Key is missing 'Assets' Write permissions, or you forgot to add '0.0.0.0/0' to the Accepted IP Addresses in the Creator Dashboard.".into());
             }
 
             if (500..600).contains(&status_code) {

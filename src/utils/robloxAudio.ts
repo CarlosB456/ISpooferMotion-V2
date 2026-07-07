@@ -1,6 +1,6 @@
 import { convertFileSrc, invoke } from '@tauri-apps/api/core';
 
-import { AppConfig } from '../contexts/ConfigContext';
+import type { AppConfig } from '../contexts/ConfigContext';
 import { logIsm } from './robloxProfiles';
 
 let currentAudio: HTMLAudioElement | null = null;

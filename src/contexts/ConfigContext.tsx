@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useEffect, useMemo } from 'react';
+import type React from 'react';
+import { createContext, useContext, useEffect, useMemo } from 'react';
 
 import { type AppConfig, useConfigStore } from '../stores/configStore';
 import { applyReplacements, useSpooferStore } from '../stores/spooferStore';

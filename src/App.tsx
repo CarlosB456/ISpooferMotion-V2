@@ -9,21 +9,16 @@ import { useEffect, useState } from 'react';
 import Sidebar from './components/layout/Sidebar';
 import StatusBar from './components/layout/StatusBar';
 import Titlebar from './components/layout/Titlebar';
-import CreditsModal from './components/modals/CreditsModal';
 import { RobloxStatusBanner } from './components/RobloxStatusBanner';
 import ActivityView from './components/views/ActivityView';
 import AssetExplorer from './components/views/AssetExplorer';
-import ConfigView from './components/views/ConfigView';
 import DebugConsole from './components/views/DebugConsole';
-import DiscordLoginScreen from './components/views/DiscordLoginScreen';
 import ExperimentalView from './components/views/ExperimentalView';
 import SettingsView from './components/views/SettingsView';
 import SpoofingView from './components/views/SpoofingView';
 import { useConfig } from './contexts/ConfigContext';
 import { useLanguage } from './contexts/LanguageContext';
 import { useThemeAccent } from './contexts/ThemeContext';
-import { useCloudThemeSync } from './hooks/useCloudThemeSync';
-import { type StoredDiscordAuth } from './types/discordAuth';
 import { isTauriRuntime } from './utils/tauriRuntime';
 
 // Resolves custom background paths to something the browser/tauri can actually render
@@ -47,42 +42,19 @@ function resolveThemeBackgroundUrl(path: string) {
 export default function App() {
   const { t } = useLanguage();
 
-  const [isCreditsOpen, setCreditsOpen] = useState(false);
   const { customBackground } = useThemeAccent();
   const { config, updateConfig } = useConfig();
   const activeTab = config.ui.activeTab;
   const isExplorerOpen = config.ui.assetExplorerOpen;
 
   const [isRobloxApiDown, setIsRobloxApiDown] = useState(false);
-  const [maintenance, setMaintenance] = useState<{ mode: boolean; message: string }>({
+  const [maintenance, setMaintenance] = useState<{
+    mode: boolean;
+    message: string;
+  }>({
     mode: false,
     message: '',
   });
-
-  const [discordAuth, setDiscordAuth] = useState<StoredDiscordAuth | null | undefined>(undefined);
-
-  useCloudThemeSync();
-
-  useEffect(() => {
-    if (!isTauriRuntime()) {
-      setDiscordAuth({
-        loginToken: 'mock-token',
-        user: {
-          id: 'web-preview',
-          username: 'Web Preview',
-        },
-      });
-      return;
-    }
-
-    invoke<StoredDiscordAuth | null>('load_discord_report_auth')
-      .then((auth) => setDiscordAuth(auth ?? null))
-      .catch(() => setDiscordAuth(null));
-
-    const handleDisconnect = () => setDiscordAuth(null);
-    window.addEventListener('discord-disconnected', handleDisconnect);
-    return () => window.removeEventListener('discord-disconnected', handleDisconnect);
-  }, []);
 
   useEffect(() => {
     // Check if we need to lock the app via live config
@@ -168,7 +140,7 @@ export default function App() {
   const backgroundUrl = customBackground ? resolveThemeBackgroundUrl(customBackground.path) : null;
 
   useEffect(() => {
-    const allowedTabs = ['spoofing', 'activity', 'settings', 'config'];
+    const allowedTabs = ['spoofing', 'activity', 'settings'];
     // only show the experimental tab if they've explicitly enabled it in debug settings
     if (config.debug?.enableExperimentalTab) {
       allowedTabs.push('experimental');
@@ -180,9 +152,6 @@ export default function App() {
   }, [activeTab, config.debug?.enableExperimentalTab, updateConfig]);
 
   useEffect(() => {
-    const handleCredits = () => setCreditsOpen(true);
-    document.addEventListener('open-credits', handleCredits);
-
     const preventDrag = (e: Event) => e.preventDefault();
     window.addEventListener('dragover', preventDrag);
     window.addEventListener('drop', preventDrag);
@@ -224,7 +193,6 @@ export default function App() {
 
     return () => {
       isCancelled = true;
-      document.removeEventListener('open-credits', handleCredits);
       window.removeEventListener('dragover', preventDrag);
       window.removeEventListener('drop', preventDrag);
       window.removeEventListener('keydown', handleKeyDown);
@@ -263,130 +231,119 @@ export default function App() {
         </div>
         <h1 className="text-3xl font-bold tracking-tight">{t('misc.maintenanceBreak')}</h1>
         <p className="text-text-muted max-w-md">
-          {maintenance.message ||
-            'ISpooferMotion is currently down for maintenance. Please check back later!'}
+          {maintenance.message || t('misc.maintenanceDesc')}
         </p>
       </div>
     );
   }
 
   return (
-    <IsmProvider config={{ autoScrollAccordions: config.ui.autoScrollSections }}>
-      <AnimatePresence mode="wait">
-        {discordAuth === undefined ? null : discordAuth === null ? (
-          <DiscordLoginScreen key="login" onVerified={(auth) => setDiscordAuth(auth)} />
-        ) : (
-          <motion.div
-            key="app"
-            initial={{ opacity: 0, scale: 0.98 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.98 }}
-            transition={{ duration: 0.3, ease: 'easeOut' }}
-            className="flex flex-col h-screen w-screen overflow-hidden text-foreground relative font-sans selection:bg-primary/30 antialiased"
-            style={{ backgroundColor: 'var(--bg-base)' }}
-          >
-            {customBackground && backgroundUrl && (
-              <div className="absolute inset-0 w-full h-full z-0 pointer-events-none overflow-hidden">
-                {customBackground.type === 'video' ? (
-                  <video
-                    autoPlay
-                    loop
-                    muted
-                    playsInline
-                    className="absolute inset-0 w-full h-full object-cover"
-                    src={backgroundUrl}
-                    style={{
-                      mixBlendMode: (customBackground.blend_mode as any) || 'normal',
-                      filter: customBackground.filter || 'none',
-                    }}
-                  />
-                ) : (
-                  <img
-                    className="absolute inset-0 w-full h-full object-cover"
-                    src={backgroundUrl}
-                    alt="Custom background"
-                    style={{
-                      mixBlendMode: (customBackground.blend_mode as any) || 'normal',
-                      filter: customBackground.filter || 'none',
-                    }}
-                  />
-                )}
-                <div className="absolute inset-0 bg-background/20" />
-              </div>
-            )}
-
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 1, ease: [0.16, 1, 0.3, 1] }}
-              className="flex flex-col h-full w-full relative z-10"
-            >
-              <Titlebar />
-
-              <div className="flex flex-1 overflow-hidden relative">
-                <Sidebar activeTab={activeTab} onTabChange={setActiveTab} />
-
-                <div className="flex-1 relative overflow-hidden bg-transparent flex flex-col">
-                  <RobloxStatusBanner isVisible={isRobloxApiDown} />
-
-                  <div className="flex-1 relative overflow-hidden">
-                    <AnimatePresence mode="wait" initial={false}>
-                      {activeTab === 'spoofing' && <SpoofingView key="spoofing" />}
-                      {activeTab === 'activity' && <ActivityView key="activity" />}
-                      {activeTab === 'settings' && <SettingsView key="settings" />}
-                      {activeTab === 'config' && <ConfigView key="config" />}
-                      {activeTab === 'experimental' && <ExperimentalView key="experimental" />}
-                    </AnimatePresence>
-                  </div>
-
-                  <DebugConsole
-                    isOpen={config.debug?.debugMode || false}
-                    onClose={() => updateConfig('debug', 'debugMode', false)}
-                  />
-                </div>
-
-                <AssetExplorer isOpen={isExplorerOpen} setIsOpen={setIsExplorerOpen} />
-
-                {!isExplorerOpen && (
-                  <motion.div
-                    initial={{ x: 20, opacity: 0 }}
-                    animate={{ x: 0, opacity: 1 }}
-                    exit={{ x: 20, opacity: 0 }}
-                    transition={{ type: 'spring', damping: 20, stiffness: 300 }}
-                    className="absolute right-0 top-1/2 -translate-y-1/2 z-45 cursor-pointer flex items-center justify-end group"
-                    onClick={() => setIsExplorerOpen(true)}
-                  >
-                    <motion.div
-                      whileHover={{
-                        width: 28,
-                        backgroundColor: 'var(--bg-elevated)',
-                      }}
-                      className="w-6 h-28 bg-bg-elevated/60 backdrop-blur-xl border border-border-subtle border-r-0 rounded-l-2xl flex items-center justify-center shadow-floating transition-colors"
-                    >
-                      <ChevronLeft
-                        size={16}
-                        strokeWidth={2.5}
-                        className="text-text-secondary group-hover:text-text-primary transition-colors"
-                      />
-                    </motion.div>
-                  </motion.div>
-                )}
-              </div>
-
-              <div
-                className="absolute bottom-0 left-0 right-0 h-32 pointer-events-none z-60 opacity-[0.03] mix-blend-screen"
+    <IsmProvider config={{ autoScrollAccordions: true }}>
+      <div
+        className="flex flex-col h-screen w-screen overflow-hidden text-foreground relative font-sans selection:bg-primary/30 antialiased"
+        style={{ backgroundColor: 'var(--bg-base)' }}
+      >
+        {customBackground && backgroundUrl && (
+          <div className="absolute inset-0 w-full h-full z-0 pointer-events-none overflow-hidden">
+            {customBackground.type === 'video' ? (
+              <video
+                autoPlay
+                loop
+                muted
+                playsInline
+                className="absolute inset-0 w-full h-full object-cover"
+                src={backgroundUrl}
                 style={{
-                  background: 'linear-gradient(to top, var(--primary), transparent)',
+                  mixBlendMode: (customBackground.blend_mode as any) || 'normal',
+                  filter: customBackground.filter || 'none',
                 }}
               />
-
-              <StatusBar />
-            </motion.div>
-
-            <CreditsModal isOpen={isCreditsOpen} onClose={() => setCreditsOpen(false)} />
-          </motion.div>
+            ) : (
+              <img
+                className="absolute inset-0 w-full h-full object-cover"
+                src={backgroundUrl}
+                alt="Custom background"
+                style={{
+                  mixBlendMode: (customBackground.blend_mode as any) || 'normal',
+                  filter: customBackground.filter || 'none',
+                }}
+              />
+            )}
+            <div className="absolute inset-0 bg-background/20" />
+          </div>
         )}
-      </AnimatePresence>
+
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 1, ease: [0.16, 1, 0.3, 1] }}
+          className="flex flex-col h-full w-full relative z-10"
+        >
+          <Titlebar />
+
+          <div className="flex flex-1 overflow-hidden relative">
+            <Sidebar activeTab={activeTab} onTabChange={setActiveTab} />
+
+            <div className="flex-1 relative overflow-hidden bg-transparent flex flex-col">
+              <RobloxStatusBanner isVisible={isRobloxApiDown} />
+
+              <div className="flex-1 relative overflow-hidden">
+                <AnimatePresence mode="wait" initial={false}>
+                  {activeTab === 'spoofing' && <SpoofingView key="spoofing" />}
+                  {activeTab === 'activity' && <ActivityView key="activity" />}
+                  {activeTab === 'settings' && <SettingsView key="settings" />}
+                  {activeTab === 'experimental' && <ExperimentalView key="experimental" />}
+                </AnimatePresence>
+              </div>
+
+              <DebugConsole
+                isOpen={config.debug?.debugMode || false}
+                onClose={() => updateConfig('debug', 'debugMode', false)}
+              />
+            </div>
+
+            <AssetExplorer
+              isOpen={isExplorerOpen}
+              setIsOpen={setIsExplorerOpen}
+              onScanReceived={() => setIsExplorerOpen(true)}
+            />
+
+            {!isExplorerOpen && (
+              <motion.div
+                initial={{ x: 20, opacity: 0 }}
+                animate={{ x: 0, opacity: 1 }}
+                exit={{ x: 20, opacity: 0 }}
+                transition={{ type: 'spring', damping: 20, stiffness: 300 }}
+                className="absolute right-0 top-1/2 -translate-y-1/2 z-45 cursor-pointer flex items-center justify-end group"
+                onClick={() => setIsExplorerOpen(true)}
+              >
+                <motion.div
+                  whileHover={{
+                    width: 28,
+                    backgroundColor: 'var(--bg-elevated)',
+                  }}
+                  className="w-6 h-28 bg-bg-elevated/60 backdrop-blur-xl border border-border-subtle border-r-0 rounded-l-2xl flex items-center justify-center shadow-floating transition-colors"
+                >
+                  <ChevronLeft
+                    size={16}
+                    strokeWidth={2.5}
+                    className="text-text-secondary group-hover:text-text-primary transition-colors"
+                  />
+                </motion.div>
+              </motion.div>
+            )}
+          </div>
+
+          <div
+            className="absolute bottom-0 left-0 right-0 h-32 pointer-events-none z-60 opacity-[0.03] mix-blend-screen"
+            style={{
+              background: 'linear-gradient(to top, var(--primary), transparent)',
+            }}
+          />
+
+          <StatusBar />
+        </motion.div>
+      </div>
     </IsmProvider>
   );
 }

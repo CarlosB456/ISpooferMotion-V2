@@ -113,8 +113,6 @@ function EmptyAvatar({ group = false, size = 12 }: { group?: boolean; size?: num
 export function AvatarDropdown({
   users,
   value,
-  onChange,
-  loading,
   audioQuota,
   showAudioQuota,
 }: {
@@ -126,138 +124,56 @@ export function AvatarDropdown({
   showAudioQuota?: boolean;
 }) {
   const { t } = useLanguage();
-  const [open, setOpen] = useState(false);
-  const buttonRef = useRef<HTMLButtonElement>(null);
-  const [coords, setCoords] = useState({ top: 0, left: 0, width: 200 });
   const selected = users.find((user) => normalizeId(user.id) === normalizeId(value));
-  const label = selected ? selected.displayName || selected.name : 'None';
+  const label = selected ? selected.displayName || selected.name : t('common.none');
   const audioQuotaLabel = !selected
-    ? 'Audio quota: select a user'
+    ? t('spoof.audioQuotaSelectUser')
     : !showAudioQuota
-      ? 'Audio quota: enable Audio to check'
+      ? t('spoof.audioQuotaEnableAudio')
       : audioQuota.status === 'idle'
-        ? 'Audio quota: add or detect a cookie'
+        ? t('spoof.audioQuotaAddCookie')
         : audioQuota.status === 'loading'
-          ? 'Audio quota: checking...'
+          ? t('spoof.audioQuotaChecking')
           : audioQuota.status === 'ready'
-            ? `Audio quota: ${audioQuota.remaining} / ${audioQuota.capacity} left`
-            : 'Audio quota: unavailable';
-
-  const toggle = () => {
-
-    if (buttonRef.current) {
-      const rect = buttonRef.current.getBoundingClientRect();
-      setCoords({ top: rect.bottom + 4, left: rect.left, width: rect.width });
-    }
-    setOpen((current) => !current);
-  };
+            ? t('spoof.audioQuotaLeft')
+                .replace('{remaining}', String(audioQuota.remaining))
+                .replace('{capacity}', String(audioQuota.capacity))
+            : t('spoof.audioQuotaUnavailable');
 
   return (
     <div className="flex w-full flex-col gap-1.5">
-      <div className="flex items-center justify-between w-full">
-        <span className="text-sm font-medium text-text-primary mr-4 shrink-0">{t('spoof.selectedUser')}</span>
-        <button
-          ref={buttonRef}
-          type="button"
-          onClick={toggle}
-          className="flex items-center gap-2 h-12 px-3 bg-bg-surface border border-border-strong rounded-md text-[13px] font-medium text-text-primary hover:border-primary transition-colors min-w-47.5 max-w-67.5 w-full"
+      <span className="text-sm font-medium text-text-primary shrink-0">
+        {t('spoof.selectedUser')}
+      </span>
+      <div className="flex items-center gap-3 h-12 w-full">
+        <motion.div
+          key={`${selected?.id || 'none'}-img`}
+          initial={{ opacity: 0, scale: 0.85 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="relative w-8 h-8 shrink-0"
         >
-          <motion.div
-            key={`${selected?.id || 'none'}-img`}
-            initial={{ opacity: 0, x: 8 }}
-            animate={{ opacity: 1, x: 0 }}
-            className="relative w-6 h-6 shrink-0 flex items-center justify-center"
-          >
-            {loading ? (
-              <Spinner size="sm" color="current" className="text-text-muted" />
-            ) : selected?.avatarUrl ? (
-              <img
-                src={selected.avatarUrl}
-                alt={label}
-                className="w-6 h-6 rounded-full object-cover"
-              />
-            ) : (
-              <EmptyAvatar />
-            )}
-          </motion.div>
-          <motion.div
-            key={`${selected?.id || 'none'}-info`}
-            initial={{ opacity: 0, x: 8 }}
-            animate={{ opacity: 1, x: 0 }}
-            className="min-w-0 flex-1 text-left"
-          >
-            <div className="truncate leading-4">{label}</div>
-            <div className="truncate text-[9px] leading-3 font-medium text-text-muted">
-              {audioQuotaLabel}
-            </div>
-          </motion.div>
-          <DropdownChevron open={open} />
-        </button>
-      </div>
-
-      <DropdownPortal open={open} setOpen={setOpen} coords={coords}>
-        <button
-          type="button"
-          onClick={() => {
-            onChange('none');
-            setOpen(false);
-          }}
-          className={cn(
-            'flex items-center gap-3 w-full px-2 py-1.5 text-left text-[13px] rounded-sm hover:bg-bg-elevated transition-colors',
-            value === 'none' ? 'text-primary font-semibold' : 'text-text-primary',
-          )}
-        >
-          <div className="w-7 h-7 shrink-0">
+          {selected?.avatarUrl ? (
+            <img
+              src={selected.avatarUrl}
+              alt={label}
+              className="w-8 h-8 rounded-full object-cover ring-2 ring-primary/20"
+            />
+          ) : (
             <EmptyAvatar size={14} />
+          )}
+        </motion.div>
+        <motion.div
+          key={`${selected?.id || 'none'}-info`}
+          initial={{ opacity: 0, x: 6 }}
+          animate={{ opacity: 1, x: 0 }}
+          className="min-w-0 flex-1"
+        >
+          <div className="truncate text-sm font-semibold text-text-primary leading-4">{label}</div>
+          <div className="truncate text-[10px] leading-3 font-medium text-text-muted mt-0.5">
+            {audioQuotaLabel}
           </div>
-          None
-        </button>
-        {users.map((user, index) => (
-          <motion.button
-            key={user.id}
-            type="button"
-            initial={{ opacity: 0, x: -4 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{
-              duration: 0.14,
-              delay: Math.min(index * 0.025, 0.12),
-            }}
-            onClick={() => {
-              onChange(String(user.id));
-              setOpen(false);
-            }}
-            className={cn(
-              'flex items-center gap-3 w-full px-2 py-1.5 text-left text-[13px] rounded-sm hover:bg-bg-elevated transition-colors',
-              normalizeId(user.id) === normalizeId(value)
-                ? 'text-primary font-semibold'
-                : 'text-text-primary',
-            )}
-          >
-            <div className="w-7 h-7 shrink-0">
-              {user.avatarUrl ? (
-                <img
-                  src={user.avatarUrl}
-                  alt={user.displayName}
-                  className="w-full h-full rounded-full object-cover ring-1 ring-border-subtle"
-                />
-              ) : (
-                <EmptyAvatar size={14} />
-              )}
-            </div>
-            <div className="flex flex-col min-w-0">
-              <span className="truncate font-medium">{user.displayName || user.name}</span>
-              {user.displayName !== user.name && (
-                <span className="text-[11px] text-text-muted truncate">@{user.name}</span>
-              )}
-            </div>
-          </motion.button>
-        ))}
-        {users.length === 0 && !loading && (
-          <div className="px-3 py-4 text-center text-[12px] text-text-muted">
-            No saved users. Add one in Config.
-          </div>
-        )}
-      </DropdownPortal>
+        </motion.div>
+      </div>
     </div>
   );
 }
@@ -288,13 +204,15 @@ export function GroupDropdown({
   };
 
   return (
-    <div className="flex items-center justify-between w-full">
-      <span className="text-sm font-medium text-text-primary mr-4 shrink-0">{t('spoof.selectedGroup')}</span>
+    <div className="flex flex-col items-start gap-1.5 w-full">
+      <span className="text-sm font-medium text-text-primary shrink-0">
+        {t('spoof.selectedGroup')}
+      </span>
       <button
         ref={buttonRef}
         type="button"
         onClick={toggle}
-        className="flex items-center gap-2 h-10 px-3 bg-bg-surface border border-border-strong rounded-md text-[13px] font-medium text-text-primary hover:border-primary transition-colors min-w-45 max-w-60 w-full"
+        className="flex items-center gap-2 h-10 px-3 bg-bg-surface border border-border-strong rounded-md text-[13px] font-medium text-text-primary hover:border-primary transition-colors w-full"
       >
         <motion.div
           key={`${selected?.id || 'none'}-icon`}
@@ -320,7 +238,7 @@ export function GroupDropdown({
           animate={{ opacity: 1, x: 0 }}
           className="min-w-0 flex-1 text-left truncate"
         >
-          {selected?.name || 'None'}
+          {selected?.name || t('common.none')}
         </motion.div>
         <DropdownChevron open={open} />
       </button>
@@ -340,7 +258,7 @@ export function GroupDropdown({
           <div className="w-7 h-7 shrink-0">
             <EmptyAvatar group size={14} />
           </div>
-          None
+          {t('common.none')}
         </button>
         {groups.map((group, index) => (
           <motion.button
@@ -379,7 +297,7 @@ export function GroupDropdown({
         ))}
         {groups.length === 0 && !loading && (
           <div className="px-3 py-4 text-center text-[12px] text-text-muted">
-            No groups found. Add credentials in Config, then select a user.
+            {t('spoof.noGroupsFound')}
           </div>
         )}
       </DropdownPortal>

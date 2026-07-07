@@ -1,4 +1,4 @@
-use crate::commands::discord::AnyValue;
+use crate::commands::AnyValue;
 use validator::Validate;
 
 #[derive(serde::Deserialize, specta::Type, Validate)]
@@ -19,8 +19,7 @@ pub struct SpooferActionRequest {
     pub download_path: Option<String>,
     #[serde(rename = "forcePlaceIds")]
     pub force_place_ids: Option<String>,
-    #[serde(rename = "placeIdSearchLimit")]
-    pub place_id_search_limit: Option<String>,
+
     #[serde(rename = "placeName")]
     pub place_name: Option<String>,
     pub concurrent: Option<bool>,

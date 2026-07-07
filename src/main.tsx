@@ -1,8 +1,6 @@
 import './index.css';
 import './utils/debugLogger';
 
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 
@@ -12,16 +10,6 @@ import { ConfigProvider } from './contexts/ConfigContext';
 import { LanguageProvider } from './contexts/LanguageContext';
 import { StudioConnectionProvider } from './contexts/StudioConnectionContext';
 import { ThemeProvider } from './contexts/ThemeContext';
-
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      // we really don't want it randomly refetching when users alt-tab back into the app
-      refetchOnWindowFocus: false,
-      retry: 1,
-    },
-  },
-});
 
 const savedTheme = localStorage.getItem('theme') || 'dark';
 // force the theme early on so we don't flashbang the user with light mode on load
@@ -72,12 +60,9 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
           <ThemeProvider>
             <TitleAttributeGuard>
               <main className="text-text-primary bg-bg-base min-h-screen h-full font-sans transition-colors duration-300">
-                <QueryClientProvider client={queryClient}>
-                  <ErrorBoundary>
-                    <App />
-                  </ErrorBoundary>
-                  {import.meta.env.DEV && <ReactQueryDevtools initialIsOpen={false} />}
-                </QueryClientProvider>
+                <ErrorBoundary>
+                  <App />
+                </ErrorBoundary>
               </main>
             </TitleAttributeGuard>
           </ThemeProvider>

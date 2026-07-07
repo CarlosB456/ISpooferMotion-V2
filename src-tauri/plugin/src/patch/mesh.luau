@@ -1,3 +1,7 @@
+--!nocheck
+--!nolint
+-- luacheck: ignore
+---@diagnostic disable: undefined-global, unused-local, unused-function, lowercase-global
 local function copyMeshPartPropertiesInto(src: MeshPart, dst: BasePart, overrideTextureId: string?)
 	pcall(function()
 		dst.Name = src.Name

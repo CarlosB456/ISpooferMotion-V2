@@ -1,5 +1,5 @@
 use super::{read_json_file, write_json_file, AppHandle, Entry, Manager, PathBuf};
-use crate::commands::discord::AnyValue;
+use crate::commands::AnyValue;
 use serde_json::Value;
 
 fn get_settings_path(app: &AppHandle) -> crate::error::Result<PathBuf> {

@@ -58,7 +58,7 @@ pub fn get_http_client_with_proxy(proxy_url: Option<&str>) -> reqwest::Client {
 #[must_use]
 pub fn extract_retry_after(response: &reqwest::Response) -> Option<u64> {
     let mut needs_wait = false;
-    
+
     // Explicit rate limit exhaustion
     if let Some(remaining) = response.headers().get("x-ratelimit-remaining") {
         if let Ok(rem_str) = remaining.to_str() {
@@ -76,7 +76,8 @@ pub fn extract_retry_after(response: &reqwest::Response) -> Option<u64> {
         if let Some(reset) = response.headers().get("x-ratelimit-reset") {
             if let Ok(reset_str) = reset.to_str() {
                 if let Ok(reset_secs) = reset_str.parse::<u64>() {
-                    if let Ok(now) = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
+                    if let Ok(now) =
+                        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
                     {
                         let now_secs = now.as_secs();
                         if reset_secs > now_secs {
@@ -87,7 +88,7 @@ pub fn extract_retry_after(response: &reqwest::Response) -> Option<u64> {
                 }
             }
         }
-        
+
         // Fallback to standard retry-after if the fancy one isn't there
         if let Some(retry) = response.headers().get("retry-after") {
             if let Ok(retry_str) = retry.to_str() {
@@ -96,7 +97,7 @@ pub fn extract_retry_after(response: &reqwest::Response) -> Option<u64> {
                 }
             }
         }
-        
+
         return Some(2000); // generic wait if we got 429 or 0 remaining but no reset header
     }
 

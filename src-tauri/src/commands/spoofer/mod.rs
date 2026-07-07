@@ -421,14 +421,15 @@ pub use permissions::{
 pub use place::{
     __cmd__clear_downloads_directory_command, __cmd__find_asset_by_name,
     __cmd__get_multiple_place_ids, __cmd__get_place_id_from_creator,
-    __cmd__get_universe_id_from_place_id, __cmd__get_place_id_from_universe_id, __tauri_command_name_clear_downloads_directory_command,
+    __cmd__get_place_id_from_universe_id, __cmd__get_universe_id_from_place_id,
+    __tauri_command_name_clear_downloads_directory_command,
     __tauri_command_name_find_asset_by_name, __tauri_command_name_get_multiple_place_ids,
     __tauri_command_name_get_place_id_from_creator,
     __tauri_command_name_get_place_id_from_universe_id,
     __tauri_command_name_get_universe_id_from_place_id, clear_downloads_directory_command,
     find_asset_by_name, get_asset_creator_for_asset, get_multiple_place_ids,
-    get_place_id_from_creator, get_place_id_from_universe_id, get_universe_id_from_place_id, parse_excluded_id_list,
-    should_skip_asset_for_spoofing,
+    get_place_id_from_creator, get_place_id_from_universe_id, get_universe_id_from_place_id,
+    parse_excluded_id_list, should_skip_asset_for_spoofing,
 };
 pub use remote_cache::{
     __cmd__initialize_remote_cache, __tauri_command_name_initialize_remote_cache,

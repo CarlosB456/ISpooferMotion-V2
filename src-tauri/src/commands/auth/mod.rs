@@ -391,7 +391,7 @@ pub async fn validate_opencloud_api_key(key: String) -> crate::error::Result<boo
 
 #[tauri::command]
 #[specta::specta]
-pub async fn get_auth_metadata() -> crate::error::Result<crate::commands::discord::AnyValue> {
+pub async fn get_auth_metadata() -> crate::error::Result<crate::commands::AnyValue> {
     let url = "https://auth.roblox.com/v2/metadata";
     let client = crate::utils::get_http_client();
 
@@ -411,5 +411,5 @@ pub async fn get_auth_metadata() -> crate::error::Result<crate::commands::discor
         .await
         .map_err(|e| crate::error::AppError::Custom(format!("Invalid JSON: {e}")))?;
 
-    Ok(crate::commands::discord::AnyValue(json))
+    Ok(crate::commands::AnyValue(json))
 }

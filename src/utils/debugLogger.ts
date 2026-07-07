@@ -150,7 +150,7 @@ export function clearDebugLogs() {
   state.listeners.forEach((listener) => listener([]));
 }
 
-export function installDebugLogger() {
+function installDebugLogger() {
   const state = getState();
   if (state.patched) return;
 

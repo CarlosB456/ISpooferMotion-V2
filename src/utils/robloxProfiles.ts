@@ -19,7 +19,7 @@ export interface CookieValidationResult {
   cookie: string;
 }
 
-export const USER_CACHE_KEY = 'ISpooferMotion_DetectedUsers';
+const USER_CACHE_KEY = 'ISpooferMotion_DetectedUsers';
 const GROUP_CACHE_KEY_PREFIX = 'ISpooferMotion_DetectedGroups_';
 
 export const normalizeId = (value: string | number | null | undefined) =>
@@ -35,7 +35,7 @@ export const loadCachedUsers = (): RobloxUserInfo[] => {
   }
 };
 
-export const saveCachedUsers = (nextUsers: RobloxUserInfo[]) => {
+const saveCachedUsers = (nextUsers: RobloxUserInfo[]) => {
   const unique = Array.from(
     new Map(
       nextUsers.map((user) => [`${normalizeId(user.id)}_${user.authType || 'cookie'}`, user]),
@@ -88,11 +88,6 @@ export const detectCookie = async (mode: 'studio' | 'browser', userId: string | 
   return null;
 };
 
-export const deleteSavedProfileCookie = async (userId: string) => {
-  if (!userId || userId === 'none') return;
-  await invoke('delete_saved_roblox_profile_cookie', { userId }).catch(() => null);
-};
-
 export const logIsm = (
   level: 'info' | 'success' | 'warn' | 'error',
   message: string,
@@ -109,7 +104,7 @@ export const logIsm = (
   else console.info(message);
 };
 
-export const hydrateUserProfile = async (
+const hydrateUserProfile = async (
   userId: string,
   authType: RobloxUserInfo['authType'] = 'cookie',
 ) => {

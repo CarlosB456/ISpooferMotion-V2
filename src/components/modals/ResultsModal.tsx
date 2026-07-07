@@ -1,5 +1,5 @@
 import { Button, Modal, ModalBody, ModalContent, ModalHeader } from '@codycon/ism-library';
-import { motion, Variants } from 'framer-motion';
+import { motion, type Variants } from 'framer-motion';
 import { ArrowRight, Check, Copy, ListChecks, X } from 'lucide-react';
 import { useState } from 'react';
 
@@ -20,7 +20,6 @@ export default function ResultsModal({
   const replacementsArray = Object.entries(lastReplacements);
 
   const handleCopyAll = () => {
-
     const text = replacementsArray.map(([oldId, newId]) => `${oldId} -> ${newId}`).join('\n');
     navigator.clipboard.writeText(text);
     setCopied(true);
@@ -46,10 +45,10 @@ export default function ResultsModal({
         <ModalHeader className="flex items-start justify-between">
           <div className="flex flex-col gap-1">
             <h2 className="text-xl font-bold flex items-center gap-2">
-              <ListChecks className="text-primary" /> Spoofing Results
+              <ListChecks className="text-primary" /> {t('results.title')}
             </h2>
             <p className="text-sm font-medium text-text-secondary">
-              {replacementsArray.length} asset IDs were spoofed.
+              {t('results.assetsSpoofed').replace('{count}', replacementsArray.length.toString())}
             </p>
           </div>
           <Button
@@ -64,11 +63,13 @@ export default function ResultsModal({
         <ModalBody className="pb-6">
           <div className="flex flex-col gap-4">
             <div className="flex items-center justify-between">
-              <span className="text-sm font-semibold text-text-primary">{t('misc.assetIdMappings')}</span>
+              <span className="text-sm font-semibold text-text-primary">
+                {t('misc.assetIdMappings')}
+              </span>
               {replacementsArray.length > 0 && (
                 <Button size="sm" variant="flat" onClick={handleCopyAll} className="gap-2">
                   {copied ? <Check size={16} className="text-success" /> : <Copy size={16} />}
-                  {copied ? 'Copied!' : 'Copy All'}
+                  {copied ? t('common.copied') : t('results.copyAll')}
                 </Button>
               )}
             </div>
@@ -87,32 +88,38 @@ export default function ResultsModal({
                     className="flex items-center justify-between p-3 rounded-md bg-bg-surface border border-border-strong"
                   >
                     <div className="flex flex-col">
-                      <span className="text-xs text-text-secondary font-medium">{t('misc.originalId')}</span>
+                      <span className="text-xs text-text-secondary font-medium">
+                        {t('misc.originalId')}
+                      </span>
                       <span className="text-sm font-mono font-semibold text-danger">{oldId}</span>
                     </div>
                     <ArrowRight size={16} className="text-text-secondary opacity-50" />
                     <div className="flex flex-col text-right">
-                      <span className="text-xs text-text-secondary font-medium">{t('misc.spoofedId')}</span>
+                      <span className="text-xs text-text-secondary font-medium">
+                        {t('misc.spoofedId')}
+                      </span>
                       <span className="text-sm font-mono font-semibold text-success">{newId}</span>
                     </div>
                   </motion.div>
                 ))}
                 {replacementsArray.length > 100 && (
                   <div className="p-3 text-center text-xs font-medium text-text-secondary bg-bg-surface border border-border-strong rounded-md">
-                    + {replacementsArray.length - 100} more replacements (use Copy All to view)
+                    {t('results.moreReplacements').replace(
+                      '{count}',
+                      (replacementsArray.length - 100).toString(),
+                    )}
                   </div>
                 )}
               </motion.div>
             ) : (
               <div className="p-8 text-center text-text-secondary bg-bg-surface rounded-lg border border-border-strong border-dashed">
-                No successful replacements to display.
+                {t('results.noReplacements')}
               </div>
             )}
 
             <div className="rounded-md border border-primary/20 bg-primary/10 px-4 py-3 mt-2">
               <p className="text-sm font-medium text-text-primary">
-                If the plugin or memory injection is active, these IDs have already been replaced in
-                your Roblox Studio automatically!
+                {t('results.autoReplacedDesc')}
               </p>
             </div>
           </div>

@@ -97,14 +97,14 @@ export default function GeneralSection() {
 
       <FormToggle
         label={t('settings.hideToTray')}
-        description="When closing the app, it will minimize to the system tray instead of quitting."
+        description={t('settings.hideToTrayDesc')}
         checked={config.general.hideToTrayOnClose}
         onChange={(v: boolean) => updateConfig('general', 'hideToTrayOnClose', v)}
       />
 
       <FormToggle
         label={t('settings.telemetry')}
-        description="Allow ISpooferMotion to automatically send anonymous crash reports and telemetry to the developers."
+        description={t('settings.telemetryDesc')}
         checked={config.general.telemetryEnabled}
         onChange={(v: boolean) => updateConfig('general', 'telemetryEnabled', v)}
       />
@@ -203,17 +203,17 @@ export default function GeneralSection() {
           fullWidth={true}
           className="w-full h-10 font-bold text-sm shadow-elevated"
           onClick={async () => {
-            const confirmed = await ask(
-              'Are you sure you want to reset all settings to their default values? This action cannot be undone.',
-              { title: t('settings.confirmResetTitle'), kind: 'warning' },
-            );
+            const confirmed = await ask(t('settings.confirmResetDesc'), {
+              title: t('settings.confirmResetTitle'),
+              kind: 'warning',
+            });
             if (confirmed) {
               resetConfig();
-              window.ismLog?.('success', 'All settings have been reset to their default values.');
+              window.ismLog?.('success', t('settings.resetSuccess'));
             }
           }}
         >
-          Reset All Settings to Default
+          {t('settings.resetAllSettings')}
         </Button>
       </div>
     </Group>
