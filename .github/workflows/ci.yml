@@ -26,7 +26,7 @@ env:
   DISCORD_REPORT_API_URL: ${{ vars.DISCORD_REPORT_API_URL }}
 
 jobs:
-  # ─── Code Quality Checks ──────────────────────────────────────────────────
+  # Code Quality Checks
   typecheck:
     name: TypeScript Check
     runs-on: ubuntu-latest
@@ -86,7 +86,7 @@ jobs:
       - run: bun run rust:lint
       - run: bun run rust:test
 
-  # ─── Prepare Release (runs after checks pass) ─────────────────────────────
+  # Prepare Release (runs after checks pass)
   prepare-release:
     name: Prepare Release
     needs: [typecheck, lint-js, rust-check]
@@ -164,7 +164,7 @@ jobs:
           draft: false
           prerelease: false
 
-  # ─── Platform Builds (all run in parallel once release is created) ─────────
+  # Platform Builds (all run in parallel once release is created)
   build-and-release:
     name: Build & Release (${{ matrix.os }})
     needs: [prepare-release, create-release]
@@ -229,7 +229,7 @@ jobs:
           files: src-tauri/target/release/bundle/nsis/*setup*.exe
           fail_on_unmatched_files: true
 
-  # ─── Plugin Build (runs in parallel with platform builds) ─────────────────
+  # Plugin Build (runs in parallel with platform builds)
   plugin-release:
     name: Build & Release Plugin
     needs: [prepare-release, create-release]
@@ -263,3 +263,55 @@ jobs:
           tag_name: ${{ needs.prepare-release.outputs.RELEASE_TAG }}
           files: dist-plugin/ISpooferMotion.rbxmx
           fail_on_unmatched_files: true
+  # Discord Announcement
+  announce-release:
+    name: Announce on Discord
+    needs: [prepare-release, build-and-release, plugin-release]
+    if: needs.prepare-release.outputs.SHOULD_RELEASE == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Post to Discord
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_RELEASE_WEBHOOK }}
+          RELEASE_TAG: ${{ needs.prepare-release.outputs.RELEASE_TAG }}
+        run: |
+          python3 <<'PY'
+          import os, json, urllib.request
+
+          webhook_url = os.environ.get("DISCORD_WEBHOOK_URL")
+          release_tag = os.environ.get("RELEASE_TAG")
+
+          if not webhook_url:
+              print("No webhook URL configured. Skipping.")
+              exit(0)
+
+          changelog = "No changelog provided."
+          try:
+              with open(f"changelogs/{release_tag}.md", "r", encoding="utf-8") as f:
+                  changelog = f.read()
+          except Exception:
+              pass
+
+          if len(changelog) > 3800:
+              changelog = changelog[:3800] + "...\n\n[Read more on GitHub]"
+
+          payload = {
+              "username": "ISpooferMotion Updates",
+              "avatar_url": "https://github.com/ISpooferMotion.png",
+              "content": f"🚀 **ISpooferMotion {release_tag}** is now live!",
+              "embeds": [{
+                  "title": f"Release Notes ({release_tag})",
+                  "description": changelog,
+                  "color": 5814783,
+                  "url": f"https://github.com/ISpooferMotion/ISpooferMotion-V2/releases/tag/{release_tag}",
+                  "footer": {
+                      "text": "The auto-updater will prompt you on next launch."
+                  }
+              }]
+          }
+
+          req = urllib.request.Request(webhook_url, method="POST", data=json.dumps(payload).encode("utf-8"), headers={"Content-Type": "application/json"})
+          urllib.request.urlopen(req)
+          print("Successfully posted to Discord")
+          PY

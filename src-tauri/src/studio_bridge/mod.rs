@@ -96,7 +96,7 @@ pub async fn start_server(_app_handle: AppHandle) {
     let data = Arc::new(RwLock::new(AssetServerStateData::default()));
     let _ = BRIDGE_DATA.set(Arc::clone(&data));
     let Some((listener, addr)) = bind_available_listener().await else {
-        eprintln!("Could not start plugin HTTP server: no available TCP ports found");
+        log::error!("Could not start plugin HTTP server: no available TCP ports found");
         return;
     };
     let state = AppState {
@@ -187,7 +187,7 @@ pub async fn start_server(_app_handle: AppHandle) {
         .with_state(state);
 
     tokio::spawn(async move {
-        println!("Plugin HTTP server listening on {addr}");
+        log::info!("Plugin HTTP server listening on {addr}");
         let _ = axum::serve(listener, app).await;
         let mut active_port = active_bridge_port().write().await;
         if *active_port == Some(addr.port()) {

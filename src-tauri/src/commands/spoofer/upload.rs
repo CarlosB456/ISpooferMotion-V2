@@ -80,12 +80,12 @@ async fn poll_roblox_operation(
             Ok(r) => r,
             Err(e) => return Err(format!("Operation poll request failed: {e}")),
         };
-        if let Some(wait_ms) = crate::utils::extract_retry_after(&resp) {
+        if let Some(wait_ms) = crate::utils::extract_retry_after(&resp, None) {
             crate::commands::spoofer::record_explicit_rate_limit(wait_ms);
         }
         if !resp.status().is_success() {
             if resp.status() == 429 || resp.status() == 403 {
-                let retry_after_ms = crate::utils::extract_retry_after(&resp).unwrap_or(2000);
+                let retry_after_ms = crate::utils::extract_retry_after(&resp, None).unwrap_or(2000);
                 if resp.status() == 429 {
                     crate::commands::spoofer::record_adaptive_rate_limit(Some(retry_after_ms));
                     set_rate_limit(
@@ -139,54 +139,54 @@ async fn poll_roblox_operation(
 }
 
 struct UploadKind {
-    asset_type: &'static str,
-    file_type: &'static str,
-    extension: &'static str,
+    asset_type: String,
+    file_type: String,
+    extension: String,
     needs_universe_permissions: bool,
 }
 
 fn upload_kind_for_type(asset_type_name: Option<&str>) -> UploadKind {
     match asset_type_name {
         Some("Mesh") => UploadKind {
-            asset_type: "Mesh",
-            file_type: "model/x-rbxm",
-            extension: "mesh",
+            asset_type: "Mesh".into(),
+            file_type: "model/x-rbxm".into(),
+            extension: "mesh".into(),
             needs_universe_permissions: true,
         },
         Some("Audio") => UploadKind {
-            asset_type: "Audio",
-            file_type: "audio/ogg",
-            extension: "ogg",
+            asset_type: "Audio".into(),
+            file_type: "audio/ogg".into(),
+            extension: "ogg".into(),
             needs_universe_permissions: false,
         },
         Some("Image") => UploadKind {
-            asset_type: "Image",
-            file_type: "image/png",
-            extension: "png",
+            asset_type: "Image".into(),
+            file_type: "image/png".into(),
+            extension: "png".into(),
             needs_universe_permissions: true,
         },
         Some("Plugin") => UploadKind {
-            asset_type: "Plugin",
-            file_type: "model/x-rbxm",
-            extension: "rbxm",
+            asset_type: "Plugin".into(),
+            file_type: "model/x-rbxm".into(),
+            extension: "rbxm".into(),
             needs_universe_permissions: false,
         },
         Some("Video") => UploadKind {
-            asset_type: "Video",
-            file_type: "video/mp4",
-            extension: "mp4",
+            asset_type: "Video".into(),
+            file_type: "video/mp4".into(),
+            extension: "mp4".into(),
             needs_universe_permissions: false,
         },
         Some("Font") => UploadKind {
-            asset_type: "Font",
-            file_type: "font/ttf",
-            extension: "ttf",
+            asset_type: "Font".into(),
+            file_type: "font/ttf".into(),
+            extension: "ttf".into(),
             needs_universe_permissions: false,
         },
         _ => UploadKind {
-            asset_type: "Animation",
-            file_type: "model/x-rbxm",
-            extension: "rbxm",
+            asset_type: "Animation".into(),
+            file_type: "model/x-rbxm".into(),
+            extension: "rbxm".into(),
             needs_universe_permissions: false,
         },
     }
@@ -292,7 +292,18 @@ pub async fn publish_asset_with_progress(
         },
     );
 
-    let upload_kind = upload_kind_for_type(asset_type_name.as_deref());
+    let mut upload_kind = upload_kind_for_type(asset_type_name.as_deref());
+
+    match crate::commands::spoofer::inspector::inspect_payload(&canonical_file_path) {
+        Ok(meta) => {
+            if meta.extension != "unknown" {
+                upload_kind.file_type = meta.file_type;
+                upload_kind.extension = meta.extension;
+            }
+        }
+        Err(e) => return Err(e),
+    }
+
     let asset_type = upload_kind.asset_type;
     let file_type = upload_kind.file_type;
     let file_name = format!("{}.{}", sanitize_filename(&name), upload_kind.extension);
@@ -361,7 +372,7 @@ pub async fn publish_asset_with_progress(
             if asset_type == "Audio" || asset_type == "Video" { Some(0) } else { None };
 
         let mut request_metadata = UploadMetadata {
-            asset_type: Some(asset_type.to_string()),
+            asset_type: Some(asset_type.clone()),
             display_name: name.clone(),
             description: description.clone(),
             creation_context: Some(UploadMetadataCreationContext { creator, expected_price }),
@@ -387,13 +398,13 @@ pub async fn publish_asset_with_progress(
             let file_part = if let Some(buf) = &fallback_buffer {
                 reqwest::multipart::Part::bytes(buf.clone())
                     .file_name(file_name.clone())
-                    .mime_str(file_type)?
+                    .mime_str(&file_type)?
             } else {
                 let file =
                     tokio::fs::File::open(&canonical_file_path).await.map_err(|e| e.to_string())?;
                 reqwest::multipart::Part::stream(file)
                     .file_name(file_name.clone())
-                    .mime_str(file_type)?
+                    .mime_str(&file_type)?
             };
             let form = reqwest::multipart::Form::new()
                 .text("request", meta_json.clone())
@@ -411,7 +422,7 @@ pub async fn publish_asset_with_progress(
                 }
             };
 
-            if let Some(wait_ms) = crate::utils::extract_retry_after(&resp) {
+            if let Some(wait_ms) = crate::utils::extract_retry_after(&resp, None) {
                 crate::commands::spoofer::record_explicit_rate_limit(wait_ms);
             }
 
@@ -546,7 +557,8 @@ pub async fn publish_asset_with_progress(
             }
 
             if status_code == 429 {
-                let retry_after_ms = crate::utils::extract_retry_after(&resp).unwrap_or(30_000);
+                let retry_after_ms =
+                    crate::utils::extract_retry_after(&resp, Some(attempt)).unwrap_or(30_000);
                 let jitter_ms: u64 = {
                     use rand::Rng;
                     rand::rng().random_range(0..800)
@@ -598,7 +610,13 @@ pub async fn publish_asset_with_progress(
             }
 
             if !status.is_success() {
-                upload_error = Some(format!("Upload failed ({status}): {resp_text}"));
+                let parsed_err =
+                    if let Ok(json_val) = serde_json::from_str::<serde_json::Value>(&resp_text) {
+                        crate::utils::extract_human_error(&json_val, Some(status.as_u16()))
+                    } else {
+                        format!("HTTP {}: {}", status.as_u16(), resp_text)
+                    };
+                upload_error = Some(format!("Upload failed: {parsed_err}"));
                 break;
             }
 

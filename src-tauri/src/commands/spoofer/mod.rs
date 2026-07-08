@@ -1,5 +1,7 @@
 #![allow(clippy::wildcard_imports, clippy::too_many_lines, clippy::missing_errors_doc)]
 
+pub mod inspector;
+
 use crate::utils::{build_roblox_cookie_header, sanitize_filename};
 use reqwest::header::{CONTENT_LENGTH, COOKIE};
 use serde::{Deserialize, Serialize};
@@ -293,7 +295,9 @@ pub(crate) async fn wait_rate_limit(bucket: RateLimitBucket) {
         max_until.map(|until| until - now)
     };
     if let Some(dur) = wait_dur {
-        tokio::time::sleep(dur).await;
+        let jitter = rand::random::<u64>() % 500;
+        let dur_with_jitter = dur + Duration::from_millis(jitter);
+        tokio::time::sleep(dur_with_jitter).await;
     }
 }
 

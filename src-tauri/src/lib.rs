@@ -97,7 +97,7 @@ pub fn run() {
     // Export typescript bindings in debug mode so our frontend always has up-to-date types
     #[cfg(debug_assertions)]
     {
-        println!("ISpooferMotion: Exporting Specta bindings in a high-stack thread...");
+        log::info!("ISpooferMotion: Exporting Specta bindings in a high-stack thread...");
         std::thread::Builder::new()
             .stack_size(128 * 1024 * 1024)
             .name("specta-export".to_string())
@@ -111,10 +111,22 @@ pub fn run() {
             .expect("Failed to spawn specta thread")
             .join()
             .expect("Failed to join specta thread");
-        println!("ISpooferMotion: Finished Exporting Specta bindings!");
+        log::info!("ISpooferMotion: Finished Exporting Specta bindings!");
     }
 
-    println!("ISpooferMotion: Initializing Tauri Builder...");
+    // Set up native OS panic dialogs and logging
+    std::panic::set_hook(Box::new(|info| {
+        let msg =
+            format!("ISpooferMotion encountered a fatal error. Please check the logs.\n\n{}", info);
+        log::error!("FATAL PANIC: {}", msg);
+        let _ = rfd::MessageDialog::new()
+            .set_title("Fatal Error")
+            .set_description(&msg)
+            .set_level(rfd::MessageLevel::Error)
+            .show();
+    }));
+
+    log::info!("ISpooferMotion: Initializing Tauri Builder...");
     let builder = tauri_specta::Builder::<tauri::Wry>::new().commands(specta_commands!());
 
     tauri::Builder::default()
@@ -128,6 +140,7 @@ pub fn run() {
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_deep_link::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             #[cfg(any(windows, target_os = "linux"))]
             {
@@ -154,11 +167,9 @@ pub fn run() {
                 }
             });
 
-            if cfg!(debug_assertions) {
-                app.handle().plugin(
-                    tauri_plugin_log::Builder::default().level(log::LevelFilter::Info).build(),
-                )?;
-            }
+            app.handle().plugin(
+                tauri_plugin_log::Builder::default().level(log::LevelFilter::Info).build(),
+            )?;
 
             // Spin up the bridge server in the background
             tauri::async_runtime::spawn(crate::studio_bridge::start_server(app.handle().clone()));
@@ -191,5 +202,5 @@ pub fn run() {
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
-    println!("ISpooferMotion: Exiting run()");
+    log::info!("ISpooferMotion: Exiting run()");
 }

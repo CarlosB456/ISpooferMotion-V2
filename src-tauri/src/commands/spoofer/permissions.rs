@@ -81,11 +81,14 @@ pub async fn set_asset_privacy(
         .await?;
 
     if !resp.status().is_success() {
-        return Err(format!(
-            "Failed to update asset privacy: {}",
-            resp.text().await.unwrap_or_default()
-        )
-        .into());
+        let status = resp.status();
+        let text = resp.text().await.unwrap_or_default();
+        let parsed_err = if let Ok(json_val) = serde_json::from_str::<serde_json::Value>(&text) {
+            crate::utils::extract_human_error(&json_val, Some(status.as_u16()))
+        } else {
+            format!("HTTP {}: {}", status.as_u16(), text)
+        };
+        return Err(format!("Failed to update asset privacy: {parsed_err}").into());
     }
 
     Ok(true)

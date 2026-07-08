@@ -146,7 +146,8 @@ pub async fn resolve_asset_creators(
                         }
 
                         if resp.status().is_success() {
-                            if let Ok(data) = resp.json::<RobloxAssetAuthResponse>().await {
+                            let text = resp.text().await.unwrap_or_default();
+                            if let Ok(data) = serde_json::from_str::<RobloxAssetAuthResponse>(&text) {
                                 if let Some(dn) = data.display_name.or(data.name) {
                                     resolved_asset.name = Some(dn);
                                 }
@@ -176,7 +177,14 @@ pub async fn resolve_asset_creators(
                                 msg = "Failed to parse API response".to_string();
                             }
                         } else {
-                            msg = format!("API returned {}", resp.status());
+                            let status = resp.status();
+                            let text = resp.text().await.unwrap_or_default();
+                            let parsed_err = if let Ok(json_val) = serde_json::from_str::<serde_json::Value>(&text) {
+                                crate::utils::extract_human_error(&json_val, Some(status.as_u16()))
+                            } else {
+                                format!("HTTP {}: {}", status.as_u16(), text)
+                            };
+                            msg = format!("API returned error: {parsed_err}");
                         }
                         break;
                     },

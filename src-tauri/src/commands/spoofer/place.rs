@@ -241,100 +241,148 @@ pub async fn get_place_id_from_creator(
     let is_group = creator_type.eq_ignore_ascii_case("group");
     let mut root_places: Vec<(String, String)> = Vec::new();
     let mut seen_places = std::collections::HashSet::new();
+    let mut missing_root_universes = Vec::new();
     let mut cursor = String::new();
     let client = crate::utils::get_http_client();
 
-    for filter_opt in [Some("2"), Some("1"), Some("4"), None] {
-        cursor.clear();
-        while root_places.len() < max_results as usize {
-            let mut url = if is_group {
-                if let Some(filter) = filter_opt {
-                    format!("https://games.roblox.com/v2/groups/{creator_id}/games?accessFilter={filter}&limit={limit}")
+    for sort_order in ["Desc", "Asc"] {
+        for filter_opt in [Some("2"), Some("1"), Some("4"), None] {
+            cursor.clear();
+            while root_places.len() < max_results as usize {
+                let mut url = if is_group {
+                    if let Some(filter) = filter_opt {
+                        format!("https://games.roblox.com/v2/groups/{creator_id}/games?accessFilter={filter}&sortOrder={sort_order}&limit={limit}")
+                    } else {
+                        format!("https://games.roblox.com/v2/groups/{creator_id}/games?sortOrder={sort_order}&limit={limit}")
+                    }
                 } else {
-                    format!("https://games.roblox.com/v2/groups/{creator_id}/games?limit={limit}")
+                    if let Some(filter) = filter_opt {
+                        format!("https://games.roblox.com/v2/users/{creator_id}/games?accessFilter={filter}&limit={limit}&sortOrder={sort_order}")
+                    } else {
+                        format!("https://games.roblox.com/v2/users/{creator_id}/games?limit={limit}&sortOrder={sort_order}")
+                    }
+                };
+
+                if !cursor.is_empty() {
+                    url.push_str(&format!("&cursor={cursor}"));
                 }
-            } else {
-                if let Some(filter) = filter_opt {
-                    format!("https://games.roblox.com/v2/users/{creator_id}/games?accessFilter={filter}&limit={limit}&sortOrder=Asc")
-                } else {
-                    format!("https://games.roblox.com/v2/users/{creator_id}/games?limit={limit}&sortOrder=Asc")
+
+                wait_rate_limit(RateLimitBucket::PlaceLookup).await;
+                let Ok(resp) = client
+                    .get(&url)
+                    .header(reqwest::header::COOKIE, &cookie_header)
+                    .header(reqwest::header::USER_AGENT, "RobloxStudio/WinInet")
+                    .send()
+                    .await
+                else {
+                    break;
+                };
+
+                crate::utils::check_for_roblosecurity_update(&app, &resp, &cookie_header);
+
+                if resp.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
+                    let wait_ms = crate::utils::extract_retry_after(&resp, None).unwrap_or(2_000);
+                    set_rate_limit(RateLimitBucket::PlaceLookup, Duration::from_millis(wait_ms));
+                    tokio::time::sleep(Duration::from_millis(wait_ms)).await;
+                    continue;
                 }
-            };
 
-            if !cursor.is_empty() {
-                url.push_str(&format!("&cursor={cursor}"));
-            }
+                if !resp.status().is_success() {
+                    break;
+                }
 
-            wait_rate_limit(RateLimitBucket::PlaceLookup).await;
-            let Ok(resp) = client
-                .get(&url)
-                .header(reqwest::header::COOKIE, &cookie_header)
-                .header(reqwest::header::USER_AGENT, "RobloxStudio/WinInet")
-                .send()
-                .await
-            else {
-                break;
-            };
+                let Ok(data): Result<serde_json::Value, _> = resp.json().await else {
+                    break;
+                };
 
-            crate::utils::check_for_roblosecurity_update(&app, &resp, &cookie_header);
+                let Some(games) = data.get("data").and_then(|d| d.as_array()) else {
+                    break;
+                };
 
-            if resp.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
-                let wait_ms = crate::utils::extract_retry_after(&resp).unwrap_or(2_000);
-                set_rate_limit(RateLimitBucket::PlaceLookup, Duration::from_millis(wait_ms));
-                tokio::time::sleep(Duration::from_millis(wait_ms)).await;
-                continue;
-            }
+                if games.is_empty() {
+                    break;
+                }
 
-            if !resp.status().is_success() {
-                break;
-            }
+                for game in games {
+                    let place_id = game
+                        .get("rootPlace")
+                        .and_then(|rp| rp.get("id"))
+                        .or_else(|| game.get("rootPlaceId"))
+                        .or_else(|| game.get("placeId"))
+                        .or_else(|| game.get("id"))
+                        .and_then(value_to_string);
 
-            let Ok(data): Result<serde_json::Value, _> = resp.json().await else {
-                break;
-            };
+                    let game_name =
+                        game.get("name").and_then(|n| n.as_str()).unwrap_or("").to_string();
 
-            let Some(games) = data.get("data").and_then(|d| d.as_array()) else {
-                break;
-            };
-
-            if games.is_empty() {
-                break;
-            }
-
-            for game in games {
-                let place_id = game
-                    .get("rootPlace")
-                    .and_then(|rp| rp.get("id"))
-                    .or_else(|| game.get("rootPlaceId"))
-                    .or_else(|| game.get("placeId"))
-                    .or_else(|| game.get("id"))
-                    .and_then(|id| {
-                        id.as_u64()
-                            .map(|n| n.to_string())
-                            .or_else(|| id.as_str().map(std::string::ToString::to_string))
-                    });
-
-                let game_name = game.get("name").and_then(|n| n.as_str()).unwrap_or("").to_string();
-
-                if let Some(pid) = place_id {
-                    if seen_places.insert(pid.clone()) {
-                        root_places.push((pid, game_name));
+                    if let Some(pid) = place_id {
+                        if seen_places.insert(pid.clone()) {
+                            root_places.push((pid, game_name));
+                        }
+                    } else if let Some(universe_id) =
+                        game.get("universeId").and_then(value_to_string)
+                    {
+                        missing_root_universes.push((universe_id, game_name));
+                    }
+                    if root_places.len() >= max_results as usize {
+                        break;
                     }
                 }
-                if root_places.len() >= max_results as usize {
+
+                if let Some(next_cursor) = data.get("nextPageCursor").and_then(|c| c.as_str()) {
+                    cursor = next_cursor.to_string();
+                } else {
                     break;
                 }
             }
 
-            if let Some(next_cursor) = data.get("nextPageCursor").and_then(|c| c.as_str()) {
-                cursor = next_cursor.to_string();
-            } else {
+            if root_places.len() >= max_results as usize {
                 break;
             }
         }
-
         if root_places.len() >= max_results as usize {
             break;
+        }
+    }
+
+    if root_places.len() < max_results as usize && !missing_root_universes.is_empty() {
+        missing_root_universes.dedup_by(|a, b| a.0 == b.0);
+        for chunk in missing_root_universes.chunks(50) {
+            if root_places.len() >= max_results as usize {
+                break;
+            }
+            let universe_ids_str =
+                chunk.iter().map(|(uid, _)| uid.as_str()).collect::<Vec<_>>().join(",");
+            let url = format!("https://games.roblox.com/v1/games?universeIds={universe_ids_str}");
+
+            wait_rate_limit(RateLimitBucket::PlaceLookup).await;
+            if let Ok(resp) =
+                client.get(&url).header(reqwest::header::COOKIE, &cookie_header).send().await
+            {
+                if let Ok(data) = resp.json::<serde_json::Value>().await {
+                    if let Some(games) = data.get("data").and_then(|d| d.as_array()) {
+                        for game in games {
+                            if let Some(root_place_id) =
+                                game.get("rootPlaceId").and_then(value_to_string)
+                            {
+                                let uid =
+                                    game.get("id").and_then(value_to_string).unwrap_or_default();
+                                let game_name = chunk
+                                    .iter()
+                                    .find(|(id, _)| *id == uid)
+                                    .map(|(_, n)| n.clone())
+                                    .unwrap_or_default();
+                                if seen_places.insert(root_place_id.clone()) {
+                                    root_places.push((root_place_id, game_name));
+                                }
+                            }
+                            if root_places.len() >= max_results as usize {
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -526,7 +574,7 @@ pub async fn find_asset_by_name(
             .await?;
 
         if resp.status().as_u16() == 429 {
-            let wait_ms = crate::utils::extract_retry_after(&resp).unwrap_or(2000);
+            let wait_ms = crate::utils::extract_retry_after(&resp, None).unwrap_or(2000);
             set_rate_limit(RateLimitBucket::PlaceLookup, Duration::from_millis(wait_ms));
             tokio::time::sleep(Duration::from_millis(wait_ms)).await;
             continue;

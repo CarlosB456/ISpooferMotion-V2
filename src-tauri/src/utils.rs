@@ -56,13 +56,17 @@ pub fn get_http_client_with_proxy(proxy_url: Option<&str>) -> reqwest::Client {
 // Checks for explicitly exhausted rate limits and standard retry-after.
 // Returns Some(milliseconds_to_wait) if we need to back off.
 #[must_use]
-pub fn extract_retry_after(response: &reqwest::Response) -> Option<u64> {
+pub fn extract_retry_after(response: &reqwest::Response, attempt: Option<u32>) -> Option<u64> {
     let mut needs_wait = false;
 
-    // Explicit rate limit exhaustion
+    // Explicit rate limit exhaustion or approaching exhaustion
     if let Some(remaining) = response.headers().get("x-ratelimit-remaining") {
         if let Ok(rem_str) = remaining.to_str() {
-            if rem_str == "0" {
+            if let Ok(rem_num) = rem_str.parse::<i64>() {
+                if rem_num < 5 {
+                    needs_wait = true;
+                }
+            } else if rem_str == "0" {
                 needs_wait = true;
             }
         }
@@ -98,7 +102,13 @@ pub fn extract_retry_after(response: &reqwest::Response) -> Option<u64> {
             }
         }
 
-        return Some(2000); // generic wait if we got 429 or 0 remaining but no reset header
+        // Fallback to exponential backoff if no headers provided
+        let attempt = attempt.unwrap_or(1);
+        let base_ms = 30_000.0;
+        let exp_ms = base_ms * (1.5_f64).powi(attempt.saturating_sub(1) as i32);
+        let capped = exp_ms.min(120_000.0) as u64;
+        let jitter = rand::random::<u64>() % 2000;
+        return Some(capped + jitter);
     }
 
     None
@@ -208,4 +218,52 @@ pub fn check_for_roblosecurity_update(app: &AppHandle, resp: &Response, original
             }
         }
     }
+}
+
+pub fn extract_human_error(err_val: &serde_json::Value, status: Option<u16>) -> String {
+    if let Some(err_str) = err_val.as_str() {
+        return err_str.to_string();
+    }
+
+    if let Some(errors) = err_val.get("errors").and_then(|e| e.as_array()) {
+        if let Some(first_err) = errors.first() {
+            if let Some(msg) = first_err.get("message").and_then(|m| m.as_str()) {
+                if !msg.trim().is_empty() {
+                    return msg.to_string();
+                }
+            }
+            if let Some(msg) = first_err.get("userFacingMessage").and_then(|m| m.as_str()) {
+                if !msg.trim().is_empty() {
+                    return msg.to_string();
+                }
+            }
+        }
+    }
+
+    if let Some(msg) = err_val.get("message").and_then(|m| m.as_str()) {
+        if !msg.trim().is_empty() {
+            return msg.to_string();
+        }
+    }
+
+    if let Some(msg) = err_val.get("userFacingMessage").and_then(|m| m.as_str()) {
+        if !msg.trim().is_empty() {
+            return msg.to_string();
+        }
+    }
+
+    if let Some(obj) = err_val.as_object() {
+        for (_, value) in obj {
+            let nested = extract_human_error(value, None);
+            if !nested.starts_with("HTTP ") && nested != "Unknown error occurred" {
+                return nested;
+            }
+        }
+    }
+
+    if let Some(code) = status {
+        return format!("HTTP {code}");
+    }
+
+    "Unknown error occurred".to_string()
 }

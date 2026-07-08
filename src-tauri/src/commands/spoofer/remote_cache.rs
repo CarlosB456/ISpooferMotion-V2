@@ -110,7 +110,7 @@ pub fn push_discovery(asset_id: String, place_id: String) {
 #[specta::specta]
 // fetch the initial dump of known asset-to-place mappings from the community backend on startup
 pub async fn initialize_remote_cache(
-    url: String,
+    _url: String,
     push_url: Option<String>,
 ) -> Result<usize, String> {
     if let Some(ref pu) = push_url {
@@ -119,38 +119,11 @@ pub async fn initialize_remote_cache(
         }
     }
 
-    if url.trim().is_empty() {
-        if let Ok(mut guard) = get_push_url_lock().write() {
-            *guard = None;
-        }
-        get_remote_cache().clear();
-        return Ok(0);
-    }
-
-    validate_cache_url(&url)?;
-
-    let client = crate::utils::get_http_client();
-    let resp = client.get(&url).send().await.map_err(|e| e.to_string())?;
-
-    if !resp.status().is_success() {
-        return Err(format!("Failed to fetch remote cache: HTTP {}", resp.status()));
-    }
-
-    let items: Vec<RemoteAssetContext> =
-        resp.json().await.map_err(|e| format!("Invalid JSON format: {}", e))?;
-    let cache = get_remote_cache();
-    cache.clear();
-
-    for item in items.iter() {
-        cache.insert(
-            item.asset_id.clone(),
-            CachedContext { place_id: item.place_id.clone(), is_invalidated: false },
-        );
-    }
+    get_remote_cache().clear();
 
     if let Ok(mut guard) = get_push_url_lock().write() {
         *guard = push_url;
     }
 
-    Ok(items.len())
+    Ok(0)
 }

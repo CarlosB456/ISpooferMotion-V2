@@ -60,7 +60,7 @@ pub async fn delete_job(app: AppHandle, job_id: String) -> crate::error::Result<
     let mut jobs = read_json_file(&path).await;
     if let Some(entries) = jobs.as_array_mut() {
         let before_len = entries.len();
-        entries.retain(|job| job.get("id").and_then(Value::as_str) != Some(&job_id));
+        entries.retain(|job| job.get("id").and_then(Value::as_str) != Some(job_id.as_str()));
         if entries.len() == before_len {
             return Ok(false);
         }

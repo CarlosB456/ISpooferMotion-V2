@@ -121,7 +121,12 @@ pub async fn fetch_assets(
             if status.as_u16() == 403 {
                 return Err("Inventory access denied (403). The target user's inventory is private or this account does not have permission to view it. This is expected behavior per Roblox's January 2026 inventory privacy changes.".into());
             }
-            return Err(format!("Inventory fetch failed ({status}): {text}").into());
+            let parsed_err = if let Ok(json_val) = serde_json::from_str::<Value>(&text) {
+                crate::utils::extract_human_error(&json_val, Some(status.as_u16()))
+            } else {
+                format!("HTTP {}: {}", status.as_u16(), text)
+            };
+            return Err(format!("Inventory fetch failed: {parsed_err}").into());
         }
 
         let data: Value = match resp.json().await {

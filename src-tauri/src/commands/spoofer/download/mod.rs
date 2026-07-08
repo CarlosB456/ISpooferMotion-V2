@@ -321,7 +321,7 @@ pub async fn download_animation_asset_with_progress(
             }
 
             if is_retryable_download_status(status) && attempt < 2 {
-                let retry_after_ms = crate::utils::extract_retry_after(&download_resp)
+                let retry_after_ms = crate::utils::extract_retry_after(&download_resp, None)
                     .unwrap_or_else(|| 800 * (attempt + 1));
                 if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
                     crate::commands::spoofer::record_adaptive_rate_limit(Some(retry_after_ms));

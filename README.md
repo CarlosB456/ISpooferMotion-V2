@@ -4,7 +4,7 @@
   <h1>ISpooferMotion</h1>
 
   <p>
-    Real-time animation spoofing for Roblox Studio.<br />
+    The best Asset spoofer for Roblox.<br />
     Swap, preview, and push assets without touching your place files.
   </p>
 

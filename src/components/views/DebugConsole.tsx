@@ -13,7 +13,7 @@ import {
 } from '../../utils/debugLogger';
 import { JsonViewer } from '../ui/JsonViewer';
 
-export function useLogs() {
+function useLogs() {
   const [logs, setLogs] = useState<LogEntry[]>(getDebugLogs());
   useEffect(() => {
     return subscribeDebugLogs(setLogs);

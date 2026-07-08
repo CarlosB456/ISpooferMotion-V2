@@ -328,10 +328,22 @@ pub async fn batch_get_download_urls_for_assets(
 
     let client = crate::utils::get_http_client();
 
-    fn parse_batch_response(data: &serde_json::Value) -> HashMap<String, String> {
+    struct BatchChunkResult {
+        urls: HashMap<String, String>,
+        has_errors: bool,
+    }
+
+    fn parse_batch_response(data: &serde_json::Value) -> BatchChunkResult {
         let mut urls = HashMap::new();
+        let mut has_errors = false;
         if let Some(locations) = data.as_array() {
             for loc in locations {
+                if let Some(errors) = loc.get("errors").and_then(|e| e.as_array()) {
+                    if !errors.is_empty() {
+                        has_errors = true;
+                    }
+                }
+
                 let req_id = loc.get("requestId").and_then(|v| v.as_str());
                 let download_url = loc
                     .get("locations")
@@ -344,101 +356,153 @@ pub async fn batch_get_download_urls_for_assets(
                 }
             }
         }
-        urls
+        BatchChunkResult { urls, has_errors }
     }
 
     let mut urls = HashMap::new();
-    let place_id_str = place_id.clone();
+    let place_ids =
+        crate::commands::spoofer::download::resolution::parse_place_ids(place_id.as_deref());
+    let fallback_place_ids: Vec<Option<String>> =
+        if place_ids.is_empty() { vec![None] } else { place_ids.into_iter().map(Some).collect() };
 
     for chunk in body.chunks(50) {
-        let chunk_vec = chunk.to_vec();
-        let mut chunk_urls = HashMap::new();
+        let mut chunk_vec = chunk.to_vec();
+        let mut best_chunk_urls = HashMap::new();
 
-        let mut req = client
-            .post("https://assetdelivery.roblox.com/v2/assets/batch")
-            .header(COOKIE, &cookie_header)
-            .header(USER_AGENT, "RobloxStudio/WinInet")
-            .header("Content-Type", "application/json");
-        if let Some(ref pid) = place_id_str {
-            req = crate::commands::spoofer::apply_roblox_game_context(req, Some(pid), None);
-        }
-        wait_rate_limit(RateLimitBucket::DownloadResolution).await;
-        if let Ok(resp) = req.json(&chunk_vec).send().await {
-            crate::utils::check_for_roblosecurity_update(&app, &resp, &cookie_header);
-            if resp.status().is_success() {
-                crate::commands::spoofer::record_adaptive_success();
-                if let Ok(data) = resp.json::<serde_json::Value>().await {
-                    chunk_urls = parse_batch_response(&data);
+        for current_place_id_opt in &fallback_place_ids {
+            let mut chunk_urls = HashMap::new();
+            let mut has_errors = false;
+            let current_place_id_num = current_place_id_opt
+                .as_deref()
+                .filter(|id| is_valid_numeric_id(id))
+                .and_then(|id| id.parse::<i64>().ok());
+
+            for item in &mut chunk_vec {
+                if let Some(pid) = current_place_id_num {
+                    item.place_id = Some(pid);
+                    item.server_place_id = Some(pid);
                 }
-            } else if resp.status() == reqwest::StatusCode::UNAUTHORIZED {
-                return Err("Your ROBLOSECURITY cookie is missing, invalid, or expired. Please update it in settings.".into());
-            } else if resp.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
-                let retry_after_ms = crate::utils::extract_retry_after(&resp);
-                crate::commands::spoofer::record_adaptive_rate_limit(retry_after_ms);
-                let wait_ms = retry_after_ms.unwrap_or(2_000);
-                set_rate_limit(RateLimitBucket::DownloadResolution, Duration::from_millis(wait_ms));
-                emit_spoofer_log(
-                    &app,
-                    "warn",
-                    &format!(
-                        "Roblox rate limited batch asset resolution; slowing requests for about {:.1}s.",
-                        wait_ms as f64 / 1000.0
-                    ),
-                );
-            } else if resp.status().is_server_error() {
-                crate::commands::spoofer::record_adaptive_server_error();
             }
-        }
 
-        if chunk_urls.is_empty() && place_id_str.is_some() {
-            let req2 = client
+            let mut req = client
                 .post("https://assetdelivery.roblox.com/v2/assets/batch")
                 .header(COOKIE, &cookie_header)
                 .header(USER_AGENT, "RobloxStudio/WinInet")
                 .header("Content-Type", "application/json");
+            if let Some(ref pid) = current_place_id_opt {
+                req = crate::commands::spoofer::apply_roblox_game_context(req, Some(pid), None);
+            }
             wait_rate_limit(RateLimitBucket::DownloadResolution).await;
-            if let Ok(resp2) = req2.json(&chunk_vec).send().await {
-                if resp2.status().is_success() {
-                    if let Ok(data2) = resp2.json::<serde_json::Value>().await {
-                        chunk_urls = parse_batch_response(&data2);
+
+            let send_future = req.json(&chunk_vec).send();
+            if let Ok(Ok(resp)) = tokio::time::timeout(Duration::from_secs(15), send_future).await {
+                crate::utils::check_for_roblosecurity_update(&app, &resp, &cookie_header);
+                if resp.status().is_success() {
+                    crate::commands::spoofer::record_adaptive_success();
+                    if let Ok(data) = resp.json::<serde_json::Value>().await {
+                        let res = parse_batch_response(&data);
+                        chunk_urls = res.urls;
+                        has_errors = res.has_errors;
                     }
-                } else if resp2.status() == reqwest::StatusCode::UNAUTHORIZED {
+                } else if resp.status() == reqwest::StatusCode::UNAUTHORIZED {
                     return Err("Your ROBLOSECURITY cookie is missing, invalid, or expired. Please update it in settings.".into());
-                } else if resp2.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
-                    let wait_ms = crate::utils::extract_retry_after(&resp2).unwrap_or(2_000);
+                } else if resp.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
+                    let retry_after_ms = crate::utils::extract_retry_after(&resp, None);
+                    crate::commands::spoofer::record_adaptive_rate_limit(retry_after_ms);
+                    let wait_ms = retry_after_ms.unwrap_or(2_000);
                     set_rate_limit(
                         RateLimitBucket::DownloadResolution,
                         Duration::from_millis(wait_ms),
                     );
-                }
-            }
-        }
-
-        if chunk_urls.is_empty() {
-            let req3 = client
-                .post("https://assetdelivery.roblox.com/v2/assets/batch")
-                .header(COOKIE, &cookie_header)
-                .header(USER_AGENT, "RobloxApp/WinInet")
-                .header("Content-Type", "application/json");
-            wait_rate_limit(RateLimitBucket::DownloadResolution).await;
-            if let Ok(resp3) = req3.json(&chunk_vec).send().await {
-                if resp3.status().is_success() {
-                    if let Ok(data3) = resp3.json::<serde_json::Value>().await {
-                        chunk_urls = parse_batch_response(&data3);
-                    }
-                } else if resp3.status() == reqwest::StatusCode::UNAUTHORIZED {
-                    return Err("Your ROBLOSECURITY cookie is missing, invalid, or expired. Please update it in settings.".into());
-                } else if resp3.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
-                    let wait_ms = crate::utils::extract_retry_after(&resp3).unwrap_or(2_000);
-                    set_rate_limit(
-                        RateLimitBucket::DownloadResolution,
-                        Duration::from_millis(wait_ms),
+                    emit_spoofer_log(
+                        &app,
+                        "warn",
+                        &format!(
+                            "Roblox rate limited batch asset resolution; slowing requests for about {:.1}s.",
+                            wait_ms as f64 / 1000.0
+                        ),
                     );
+                    has_errors = true; // force retry if rate limited
+                } else if resp.status().is_server_error() {
+                    crate::commands::spoofer::record_adaptive_server_error();
+                    has_errors = true;
                 }
+            } else {
+                has_errors = true; // timeout or network error
+            }
+
+            // Fallback UA 1
+            if chunk_urls.is_empty() && current_place_id_opt.is_some() && has_errors {
+                let req2 = client
+                    .post("https://assetdelivery.roblox.com/v2/assets/batch")
+                    .header(COOKIE, &cookie_header)
+                    .header(USER_AGENT, "RobloxStudio/WinInet")
+                    .header("Content-Type", "application/json");
+                wait_rate_limit(RateLimitBucket::DownloadResolution).await;
+                let send_future2 = req2.json(&chunk_vec).send();
+                if let Ok(Ok(resp2)) =
+                    tokio::time::timeout(Duration::from_secs(15), send_future2).await
+                {
+                    if resp2.status().is_success() {
+                        if let Ok(data2) = resp2.json::<serde_json::Value>().await {
+                            let res = parse_batch_response(&data2);
+                            chunk_urls = res.urls;
+                            has_errors = res.has_errors;
+                        }
+                    } else if resp2.status() == reqwest::StatusCode::UNAUTHORIZED {
+                        return Err("Your ROBLOSECURITY cookie is missing, invalid, or expired. Please update it in settings.".into());
+                    } else if resp2.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
+                        let wait_ms =
+                            crate::utils::extract_retry_after(&resp2, None).unwrap_or(2_000);
+                        set_rate_limit(
+                            RateLimitBucket::DownloadResolution,
+                            Duration::from_millis(wait_ms),
+                        );
+                    }
+                }
+            }
+
+            // Fallback UA 2
+            if chunk_urls.is_empty() && has_errors {
+                let req3 = client
+                    .post("https://assetdelivery.roblox.com/v2/assets/batch")
+                    .header(COOKIE, &cookie_header)
+                    .header(USER_AGENT, "RobloxApp/WinInet")
+                    .header("Content-Type", "application/json");
+                wait_rate_limit(RateLimitBucket::DownloadResolution).await;
+                let send_future3 = req3.json(&chunk_vec).send();
+                if let Ok(Ok(resp3)) =
+                    tokio::time::timeout(Duration::from_secs(15), send_future3).await
+                {
+                    if resp3.status().is_success() {
+                        if let Ok(data3) = resp3.json::<serde_json::Value>().await {
+                            let res = parse_batch_response(&data3);
+                            chunk_urls = res.urls;
+                            has_errors = res.has_errors;
+                        }
+                    } else if resp3.status() == reqwest::StatusCode::UNAUTHORIZED {
+                        return Err("Your ROBLOSECURITY cookie is missing, invalid, or expired. Please update it in settings.".into());
+                    } else if resp3.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
+                        let wait_ms =
+                            crate::utils::extract_retry_after(&resp3, None).unwrap_or(2_000);
+                        set_rate_limit(
+                            RateLimitBucket::DownloadResolution,
+                            Duration::from_millis(wait_ms),
+                        );
+                    }
+                }
+            }
+
+            if chunk_urls.len() > best_chunk_urls.len() {
+                best_chunk_urls = chunk_urls.clone();
+            }
+
+            if !has_errors && !chunk_urls.is_empty() {
+                break; // entire chunk succeeded with this place ID
             }
         }
 
-        urls.extend(chunk_urls);
+        urls.extend(best_chunk_urls);
     }
 
     Ok(urls)
