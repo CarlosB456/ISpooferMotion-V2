@@ -10,7 +10,6 @@
 
   <p>
     <a href="https://github.com/ISpooferMotion/ISpooferMotion/releases/latest"><img alt="Latest Release" src="https://img.shields.io/github/v/release/ISpooferMotion/ISpooferMotion?style=flat-square&label=release&color=6366f1" /></a>
-    <a href="https://github.com/ISpooferMotion/ISpooferMotion-V2/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/ISpooferMotion/ISpooferMotion-V2/ci.yml?branch=main&style=flat-square&label=ci" /></a>
     <a href="https://github.com/ISpooferMotion/ISpooferMotion-V2/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/github/license/ISpooferMotion/ISpooferMotion-V2?style=flat-square&color=22c55e" /></a>
     <a href="https://github.com/ISpooferMotion/ISpooferMotion/releases"><img alt="Downloads" src="https://img.shields.io/github/downloads/ISpooferMotion/ISpooferMotion/total?style=flat-square&color=0ea5e9" /></a>
   </p>
