@@ -146,7 +146,7 @@ jobs:
 
       - name: Create Release (with changelog)
         if: steps.changelog.outputs.has_changelog == 'true'
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ needs.prepare-release.outputs.RELEASE_TAG }}
           name: ISpooferMotion ${{ needs.prepare-release.outputs.RELEASE_TAG }}
@@ -156,7 +156,7 @@ jobs:
 
       - name: Create Release (auto-generate notes)
         if: steps.changelog.outputs.has_changelog != 'true'
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ needs.prepare-release.outputs.RELEASE_TAG }}
           name: ISpooferMotion ${{ needs.prepare-release.outputs.RELEASE_TAG }}
@@ -223,7 +223,7 @@ jobs:
 
       - name: Upload Windows bundle to release
         if: matrix.os == 'windows'
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ needs.prepare-release.outputs.RELEASE_TAG }}
           files: src-tauri/target/release/bundle/nsis/*setup*.exe
@@ -258,7 +258,7 @@ jobs:
         run: bun run build:plugin
 
       - name: Upload plugin to release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ needs.prepare-release.outputs.RELEASE_TAG }}
           files: dist-plugin/ISpooferMotion.rbxmx
