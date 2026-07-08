@@ -4,7 +4,7 @@ import { isTauriRuntime } from './tauriRuntime';
 
 export const DEFAULT_PLUGIN_PORT = '14285';
 
-export interface PluginBridgeHealth {
+interface PluginBridgeHealth {
   app: string;
   port: number;
   startedAt?: number;
@@ -77,10 +77,4 @@ export async function findPluginBridgePort() {
   });
 
   return pendingDiscovery;
-}
-
-export async function reopenPluginPairing() {
-  if (isTauriRuntime()) {
-    await invoke('trigger_key_pairing');
-  }
 }

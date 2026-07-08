@@ -15,7 +15,7 @@ export function isTauriRuntime() {
 
 let cachedPlatform: string | null | undefined;
 
-export async function getTauriPlatform(): Promise<string | null> {
+async function getTauriPlatform(): Promise<string | null> {
   if (!isTauriRuntime()) {
     return null;
   }

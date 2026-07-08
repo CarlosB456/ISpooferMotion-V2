@@ -13,7 +13,7 @@ import { ThemeProvider } from './contexts/ThemeContext';
 
 const savedTheme = localStorage.getItem('theme') || 'dark';
 // force the theme early on so we don't flashbang the user with light mode on load
-if (savedTheme === 'dark' || savedTheme === 'custom') {
+if (savedTheme === 'dark') {
   document.documentElement.classList.add('dark');
 } else {
   document.documentElement.classList.remove('dark');

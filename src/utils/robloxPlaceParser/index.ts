@@ -1,16 +1,11 @@
-export { parseRbxl } from './parseRbxl';
-export { parseRbxlx } from './parseRbxlx';
 export type {
   ParsedAssetRef,
   ParseProgress,
   ParseProgressCallback,
   PlaceParseResult,
   RbxInstance,
-  RobloxFileType,
 } from './types';
 
-import { parseRbxl } from './parseRbxl';
-import { parseRbxlx } from './parseRbxlx';
 import type { ParseProgressCallback, PlaceParseResult, RobloxFileType } from './types';
 
 // magic byte detection to figure out if it's binary (.rbxl) or xml (.rbxlx)
@@ -29,32 +24,6 @@ function detectFormat(fileName: string, bytes: Uint8Array): RobloxFileType {
     return 'rbxl';
   }
   return 'unknown';
-}
-
-export async function parsePlaceBytes(
-  bytes: Uint8Array,
-  fileName: string,
-  onProgress?: ParseProgressCallback,
-): Promise<PlaceParseResult> {
-  const fmt = detectFormat(fileName, bytes);
-
-  if (fmt === 'rbxlx') {
-    const text = new TextDecoder('utf-8', { fatal: false }).decode(bytes);
-    return await parseRbxlx(text, fileName, onProgress);
-  }
-
-  if (fmt === 'rbxl') {
-    return await parseRbxl(
-      bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer,
-      fileName,
-    );
-  }
-
-  return {
-    fileType: 'unknown',
-    rootInstances: [],
-    warnings: [`"${fileName}" does not have a recognised Roblox place extension (.rbxl / .rbxlx).`],
-  };
 }
 
 // spins up a web worker to parse the place file so we don't lock up the main thread

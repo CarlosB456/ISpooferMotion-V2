@@ -39,7 +39,7 @@ import { useStudioConnectionState } from '../../contexts/StudioConnectionContext
 import { useSpooferStore } from '../../stores/spooferStore';
 import { cn } from '../../utils/cn';
 import { type PendingSpoofRetry, takeSpoofRetry } from '../../utils/jobTypes';
-import { findPluginBridgePort } from '../../utils/pluginBridge';
+import { findPluginBridgePort, type PluginAsset } from '../../utils/pluginBridge';
 import type { RbxInstance } from '../../utils/robloxPlaceParser';
 import {
   loadCachedGroups,
@@ -111,6 +111,25 @@ async function getStudioPlaceIdFallback(): Promise<string> {
   }
 }
 
+const SpoofProgressText = () => {
+  const { t } = useLanguage();
+  const spoofProgress = useSpooferStore((s) => s.spoofProgress);
+  return <>{`${t('spoof.spoofingProgress')} ${Math.round(spoofProgress)}%`}</>;
+};
+
+const SpoofProgressOverlay = () => {
+  const spoofProgress = useSpooferStore((s) => s.spoofProgress);
+  return (
+    <div
+      className="absolute left-0 top-0 bottom-0 bg-black/25 pointer-events-none"
+      style={{
+        width: `${spoofProgress}%`,
+        transition: 'width 50ms linear',
+      }}
+    />
+  );
+};
+
 export default function SpoofingView() {
   const { t } = useLanguage();
   const { studioPlaceId } = useStudioConnectionState();
@@ -124,7 +143,6 @@ export default function SpoofingView() {
     setSpoofingLogs: setLogs,
     isSpoofing,
     setIsSpoofing,
-    spoofProgress,
     setSpoofProgress,
     lastReplacements,
     spoofCompletionVersion,
@@ -149,7 +167,6 @@ export default function SpoofingView() {
       setSpoofingLogs: s.setSpoofingLogs,
       isSpoofing: s.isSpoofing,
       setIsSpoofing: s.setIsSpoofing,
-      spoofProgress: s.spoofProgress,
       setSpoofProgress: s.setSpoofProgress,
       lastReplacements: s.lastReplacements,
       spoofCompletionVersion: s.spoofCompletionVersion,
@@ -501,11 +518,11 @@ export default function SpoofingView() {
       await triggerStudioScan();
       const { invoke } = await import('@tauri-apps/api/core');
       const snapshots = await invoke<{
-        anims: { assets: any[] };
-        sounds: { assets: any[] };
-        images: { assets: any[] };
-        meshes: { assets: any[] };
-        scriptRefs: { assets: any[] };
+        anims: { assets: PluginAsset[] };
+        sounds: { assets: PluginAsset[] };
+        images: { assets: PluginAsset[] };
+        meshes: { assets: PluginAsset[] };
+        scriptRefs: { assets: PluginAsset[] };
       }>('get_studio_asset_snapshots');
 
       let totalAssets = 0;
@@ -905,7 +922,7 @@ export default function SpoofingView() {
       <div className="w-full h-full p-4 flex flex-col overflow-hidden">
         <div className="w-full flex-1 min-h-0 flex flex-col gap-4 relative px-2 pt-2">
           <Modal isOpen={showAdvanced} onOpenChange={setShowAdvanced} size="5xl">
-            <ModalContent className="w-[95vw]! max-w-[95vw]! sm:max-w-[1200px]! max-h-[90vh]! p-0! overflow-hidden">
+            <ModalContent className="w-[95vw]! max-w-[95vw]! sm:max-w-300! max-h-[90vh]! p-0! overflow-hidden">
               <div className="flex h-full min-h-[75vh]">
                 {/* Sidebar Nav */}
                 <div className="w-56 shrink-0 flex flex-col gap-1 p-4 border-r border-border-subtle bg-bg-base">
@@ -1185,19 +1202,11 @@ export default function SpoofingView() {
                     : replaceError
                       ? t('spoof.retryReplacing')
                       : isSpoofing
-                        ? `${t('spoof.spoofingProgress')} ${Math.round(spoofProgress)}%`
+                        ? <SpoofProgressText />
                         : t('spoof.runSpoofer')}
                 </span>
               </div>
-              {(isSpoofing || isReplacing) && (
-                <div
-                  className="absolute left-0 top-0 bottom-0 bg-black/25 pointer-events-none"
-                  style={{
-                    width: `${spoofProgress}%`,
-                    transition: 'width 50ms linear',
-                  }}
-                />
-              )}
+              {(isSpoofing || isReplacing) && <SpoofProgressOverlay />}
             </Button>
           </motion.div>
         </div>

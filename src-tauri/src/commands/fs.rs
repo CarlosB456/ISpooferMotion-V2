@@ -33,27 +33,7 @@ pub async fn open_data_folder(app: AppHandle) -> crate::error::Result<bool> {
     Ok(cmd.is_ok())
 }
 
-#[tauri::command]
-#[specta::specta]
-pub async fn open_themes_folder(app: AppHandle) -> crate::error::Result<bool> {
-    let Ok(data_dir) = app.path().app_data_dir() else {
-        return Ok(false);
-    };
 
-    let themes_dir = data_dir.join("themes");
-    if !themes_dir.exists() {
-        let _ = tokio::fs::create_dir_all(&themes_dir).await;
-    }
-
-    #[cfg(target_os = "windows")]
-    let cmd = Command::new("explorer").arg(themes_dir).spawn();
-    #[cfg(target_os = "macos")]
-    let cmd = Command::new("open").arg(themes_dir).spawn();
-    #[cfg(target_os = "linux")]
-    let cmd = Command::new("xdg-open").arg(themes_dir).spawn();
-
-    Ok(cmd.is_ok())
-}
 
 #[tauri::command]
 #[specta::specta]

@@ -2,8 +2,8 @@ import { invoke } from '@tauri-apps/api/core';
 
 import { isTauriRuntime } from './tauriRuntime';
 
-export type LogLevel = 'info' | 'success' | 'warn' | 'error';
-export type LogSource = 'console' | 'ism';
+type LogLevel = 'info' | 'success' | 'warn' | 'error';
+type LogSource = 'console' | 'ism';
 
 export interface LogEntry {
   id: number;
@@ -18,6 +18,13 @@ export interface LogEntry {
 let cachedConfigStore: typeof import('../stores/configStore') | null = null;
 
 const MAX_LOGS = 1000;
+
+const timeFormatter = new Intl.DateTimeFormat(undefined, {
+  hour: 'numeric',
+  minute: 'numeric',
+  second: 'numeric',
+  hour12: false,
+});
 
 type Listener = (logs: LogEntry[]) => void;
 
@@ -87,7 +94,7 @@ export function addDebugLog(
     source,
     message: messageArgs.length > 0 ? messageArgs.map(formatArg).join(' ') : '',
     payload: payloadArgs.length > 0 ? payloadArgs : undefined,
-    timestamp: new Date().toLocaleTimeString([], { hour12: false }),
+    timestamp: timeFormatter.format(new Date()),
   };
 
   // If there's no string message but there is a payload, set a default message

@@ -4,22 +4,23 @@ import { getCurrentWindow } from '@tauri-apps/api/window';
 import { isRegistered, register, unregister } from '@tauri-apps/plugin-global-shortcut';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ChevronLeft } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { lazy, Suspense,useEffect, useState } from 'react';
 
 import Sidebar from './components/layout/Sidebar';
 import StatusBar from './components/layout/StatusBar';
 import Titlebar from './components/layout/Titlebar';
 import { RobloxStatusBanner } from './components/RobloxStatusBanner';
-import ActivityView from './components/views/ActivityView';
-import AssetExplorer from './components/views/AssetExplorer';
-import DebugConsole from './components/views/DebugConsole';
-import ExperimentalView from './components/views/ExperimentalView';
-import SettingsView from './components/views/SettingsView';
-import SpoofingView from './components/views/SpoofingView';
 import { useConfig } from './contexts/ConfigContext';
 import { useLanguage } from './contexts/LanguageContext';
 import { useThemeAccent } from './contexts/ThemeContext';
 import { isTauriRuntime } from './utils/tauriRuntime';
+
+const ActivityView = lazy(() => import('./components/views/ActivityView'));
+const AssetExplorer = lazy(() => import('./components/views/AssetExplorer'));
+const DebugConsole = lazy(() => import('./components/views/DebugConsole'));
+const ExperimentalView = lazy(() => import('./components/views/ExperimentalView'));
+const SettingsView = lazy(() => import('./components/views/SettingsView'));
+const SpoofingView = lazy(() => import('./components/views/SpoofingView'));
 
 // Resolves custom background paths to something the browser/tauri can actually render
 // kinda hacky but it handles local files, blobs, and web URLs
@@ -288,25 +289,31 @@ export default function App() {
               <RobloxStatusBanner isVisible={isRobloxApiDown} />
 
               <div className="flex-1 relative overflow-hidden">
-                <AnimatePresence mode="wait" initial={false}>
-                  {activeTab === 'spoofing' && <SpoofingView key="spoofing" />}
-                  {activeTab === 'activity' && <ActivityView key="activity" />}
-                  {activeTab === 'settings' && <SettingsView key="settings" />}
-                  {activeTab === 'experimental' && <ExperimentalView key="experimental" />}
-                </AnimatePresence>
+                <Suspense fallback={<div className="w-full h-full bg-bg-base/50" />}>
+                  <AnimatePresence mode="wait" initial={false}>
+                    {activeTab === 'spoofing' && <SpoofingView key="spoofing" />}
+                    {activeTab === 'activity' && <ActivityView key="activity" />}
+                    {activeTab === 'settings' && <SettingsView key="settings" />}
+                    {activeTab === 'experimental' && <ExperimentalView key="experimental" />}
+                  </AnimatePresence>
+                </Suspense>
               </div>
 
-              <DebugConsole
-                isOpen={config.debug?.debugMode || false}
-                onClose={() => updateConfig('debug', 'debugMode', false)}
-              />
+              <Suspense fallback={null}>
+                <DebugConsole
+                  isOpen={config.debug?.debugMode || false}
+                  onClose={() => updateConfig('debug', 'debugMode', false)}
+                />
+              </Suspense>
             </div>
 
-            <AssetExplorer
-              isOpen={isExplorerOpen}
-              setIsOpen={setIsExplorerOpen}
-              onScanReceived={() => setIsExplorerOpen(true)}
-            />
+            <Suspense fallback={null}>
+              <AssetExplorer
+                isOpen={isExplorerOpen}
+                setIsOpen={setIsExplorerOpen}
+                onScanReceived={() => setIsExplorerOpen(true)}
+              />
+            </Suspense>
 
             {!isExplorerOpen && (
               <motion.div

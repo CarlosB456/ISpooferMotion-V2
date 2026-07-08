@@ -14,7 +14,7 @@ export default function ResultsModal({
   onClose: () => void;
 }) {
   const { t } = useLanguage();
-  const { lastReplacements } = useSpooferStore();
+  const lastReplacements = useSpooferStore((s) => s.lastReplacements);
   const [copied, setCopied] = useState(false);
 
   const replacementsArray = Object.entries(lastReplacements);

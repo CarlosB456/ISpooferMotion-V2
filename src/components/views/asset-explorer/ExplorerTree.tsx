@@ -94,7 +94,7 @@ export const ExplorerTreeNode = memo(function ExplorerTreeNode({
     return name || `${asset.type} ${asset.assetId}`;
   };
 
-  const renderAssetRow = (asset: ParsedAssetRef, index: number) => {
+  const renderAssetRow = (asset: ParsedAssetRef) => {
     // render each individual asset inside the explorer tree, kinda matches studio's look
     const assetId = getAssetId(asset);
     const isSound = asset.type === 'audio';
@@ -102,7 +102,7 @@ export const ExplorerTreeNode = memo(function ExplorerTreeNode({
     const isMesh = asset.type === 'mesh';
     const isImage = asset.type === 'image';
     const instanceCount = (asset as ParsedAssetRef & { instanceCount?: number }).instanceCount;
-    const assetKey = `${asset.type}:${asset.path}:${asset.propertyName}:${assetId}:${index}`;
+    const assetKey = `${asset.type}:${asset.path}:${asset.propertyName}:${assetId}`;
     const isOpen = expandedAssetKey === assetKey;
 
     return (
@@ -116,7 +116,7 @@ export const ExplorerTreeNode = memo(function ExplorerTreeNode({
         >
           <div
             className="mr-2 cursor-pointer flex items-center justify-center shrink-0"
-            onClick={(event: any) => {
+            onClick={(event: React.MouseEvent) => {
               event.stopPropagation();
               toggleAsset(assetId, !selectedAssetIds.has(assetId));
             }}
@@ -136,7 +136,7 @@ export const ExplorerTreeNode = memo(function ExplorerTreeNode({
               src={getTypeIconSrc(asset)}
               alt=""
               className="w-full h-full object-contain"
-              onError={(event: any) => {
+              onError={(event: React.SyntheticEvent<HTMLImageElement, Event>) => {
                 event.currentTarget.style.display = 'none';
               }}
             />
@@ -164,7 +164,7 @@ export const ExplorerTreeNode = memo(function ExplorerTreeNode({
                 title={
                   playingAudioId === assetId ? t('explorer.stopAudio') : t('explorer.playAudio')
                 }
-                onClick={(event: any) => {
+                onClick={(event: React.MouseEvent) => {
                   event.stopPropagation();
                   void playAsset(asset);
                 }}
@@ -183,7 +183,7 @@ export const ExplorerTreeNode = memo(function ExplorerTreeNode({
                 size="sm"
                 className="h-6 w-6 min-w-6 text-primary"
                 title={t('explorer.previewAnimation')}
-                onClick={(event: any) => {
+                onClick={(event: React.MouseEvent) => {
                   event.stopPropagation();
                   setPreviewingAnimation({
                     id: assetId,
@@ -201,7 +201,7 @@ export const ExplorerTreeNode = memo(function ExplorerTreeNode({
                 size="sm"
                 className="h-6 w-6 min-w-6"
                 title={isMesh ? t('explorer.previewMeshThumbnail') : t('explorer.previewImage')}
-                onClick={(event: any) => {
+                onClick={(event: React.MouseEvent) => {
                   event.stopPropagation();
                   setEnlargedImage({ id: assetId, name: asset.instanceName });
                 }}
@@ -215,7 +215,7 @@ export const ExplorerTreeNode = memo(function ExplorerTreeNode({
               size="sm"
               className="h-6 w-6 min-w-6"
               title={t('explorer.copyAssetId')}
-              onClick={(event: any) => {
+              onClick={(event: React.MouseEvent) => {
                 event.stopPropagation();
                 void copyAssetId(asset);
               }}
@@ -254,7 +254,7 @@ export const ExplorerTreeNode = memo(function ExplorerTreeNode({
       >
         <div
           className="mr-2 cursor-pointer flex items-center justify-center shrink-0"
-          onClick={(event: any) => {
+          onClick={(event: React.MouseEvent) => {
             event.stopPropagation();
             toggleNode(node, !isChecked);
           }}
@@ -274,7 +274,7 @@ export const ExplorerTreeNode = memo(function ExplorerTreeNode({
             src={`/icons/${node.className}.png`}
             alt=""
             className="w-full h-full object-contain"
-            onError={(event: any) => {
+            onError={(event: React.SyntheticEvent<HTMLImageElement, Event>) => {
               const target = event.target as HTMLImageElement;
               if (!target.src.endsWith('Object.png')) {
                 target.src = '/icons/Object.png';
@@ -293,19 +293,19 @@ export const ExplorerTreeNode = memo(function ExplorerTreeNode({
         <div className="flex flex-col overflow-hidden">
           {filteredAssets.length > 0 && (
             <div className="flex flex-col">
-              {filteredAssets.map((asset, index) => (
+              {filteredAssets.map((asset) => (
                 <div
-                  key={`${asset.type}:${asset.path}:${asset.propertyName}:${getAssetId(asset)}:${index}`}
+                  key={`${asset.type}:${asset.path}:${asset.propertyName}:${getAssetId(asset)}`}
                 >
-                  {renderAssetRow(asset, index)}
+                  {renderAssetRow(asset)}
                 </div>
               ))}
             </div>
           )}
 
-          {node.children.map((child, index) => (
+          {node.children.map((child) => (
             <ExplorerTreeNode
-              key={`${child.referent}-${index}`}
+              key={child.referent}
               node={child}
               level={level + 1}
               config={config}

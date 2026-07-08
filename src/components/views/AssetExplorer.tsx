@@ -162,15 +162,13 @@ export default function AssetExplorer({ isOpen, setIsOpen, onScanReceived }: Ass
   const [, setUnknownScriptRefs] = useState<PluginAsset[]>([]);
 
   const { config } = useConfig();
-  const {
-    rootInstances,
-    setRootInstances,
-    loadedFileName,
-    setLoadedFileName,
-    setParsingFileName,
-    selectedAssetIds,
-    setSelectedAssetIds,
-  } = useSpooferStore();
+  const rootInstances = useSpooferStore((s) => s.rootInstances);
+  const setRootInstances = useSpooferStore((s) => s.setRootInstances);
+  const loadedFileName = useSpooferStore((s) => s.loadedFileName);
+  const setLoadedFileName = useSpooferStore((s) => s.setLoadedFileName);
+  const setParsingFileName = useSpooferStore((s) => s.setParsingFileName);
+  const selectedAssetIds = useSpooferStore((s) => s.selectedAssetIds);
+  const setSelectedAssetIds = useSpooferStore((s) => s.setSelectedAssetIds);
 
   const { studioConnected, scanStatus } = useStudioConnectionState();
   const lastStudioSnapshotRef = useRef('');
@@ -722,9 +720,9 @@ export default function AssetExplorer({ isOpen, setIsOpen, onScanReceived }: Ass
                 )}
 
                 <div className="flex flex-col flex-1 p-2">
-                  {displayedInstances.map((node, i) => (
+                  {displayedInstances.map((node) => (
                     <ExplorerTreeNode
-                      key={`${node.referent}-${i}`}
+                      key={node.referent}
                       node={node}
                       level={0}
                       config={config}

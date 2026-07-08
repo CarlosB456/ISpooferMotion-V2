@@ -214,7 +214,7 @@ pub async fn handle_poll_replacements(State(state): State<AppState>) -> Json<Val
                 let patches = std::mem::take(&mut guard.stored_patches);
                 return Json(serde_json::json!({ "mappings": mappings, "patches": patches }));
             } else if has_mappings {
-                let mappings = guard.stored_mappings.clone();
+                let mappings = std::mem::take(&mut guard.stored_mappings);
                 return Json(serde_json::json!({ "mappings": mappings, "patches": [] }));
             }
         }
@@ -249,6 +249,10 @@ pub async fn handle_replace_ids(
     guard.stored_patches = patches;
     if records.is_empty() {
         guard.request_sounds = true;
+        guard.request_animations = true;
+        guard.request_images = true;
+        guard.request_meshes = true;
+        guard.request_script_refs = true;
     }
     Json(serde_json::json!({ "ok": true, "truncated": over_limit }))
 }

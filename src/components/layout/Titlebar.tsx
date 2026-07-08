@@ -19,7 +19,8 @@ export default function Titlebar() {
 
   const { customLogo } = useThemeAccent();
   const { config, updateConfig } = useConfig();
-  const { showAdvanced, setShowAdvanced } = useSpooferStore();
+  const showAdvanced = useSpooferStore((s) => s.showAdvanced);
+  const setShowAdvanced = useSpooferStore((s) => s.setShowAdvanced);
   const [appVersion, setAppVersion] = useState<string>('');
 
   useEffect(() => {

@@ -9,7 +9,7 @@ export interface RobloxPose {
   easingDirection: number;
 }
 
-export interface RobloxKeyframe {
+interface RobloxKeyframe {
   time: number;
   poses: RobloxPose[];
 }

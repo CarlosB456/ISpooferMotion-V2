@@ -1,7 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { useEffect, useRef } from 'react';
 
-import type { PluginAssetStore } from '../utils/pluginBridge';
+import type { PluginAsset, PluginAssetStore } from '../utils/pluginBridge';
 
 export type StudioScanBundle = {
   anims: PluginAssetStore;
@@ -30,7 +30,7 @@ export function useStudioAssetPoll(
     let lastSnapshot = '';
     let intervalId: ReturnType<typeof setInterval> | undefined;
 
-    const hashAssets = (assets?: any[]) => {
+    const hashAssets = (assets?: PluginAsset[]) => {
       if (!assets || assets.length === 0) return '0';
       // Fast hash: combine length, first asset ID/name, and last asset ID/name
       const first = assets[0].assetId || assets[0].name || '';

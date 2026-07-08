@@ -42,18 +42,28 @@ export function useStudioConnection() {
         if (activePort) {
           const result = await invoke<{
             synced: boolean;
-            scanStatus: any;
+            scanStatus: ScanStatus | null;
             studioPlaceId: string | null;
           }>('get_studio_health_status');
 
           if (!cancelled) {
             success = result.synced === true;
             setStudioConnected(success);
-            setScanStatus(result.scanStatus || null);
+            setScanStatus((prev) => {
+              const next = result.scanStatus || null;
+              if (prev === next) return prev;
+              if (prev && next && prev.scanning === next.scanning && prev.scanned === next.scanned && prev.total === next.total && prev.current_service === next.current_service) {
+                return prev;
+              }
+              return next;
+            });
             const placeId = String(result.studioPlaceId || '').trim();
             if (/^\d+$/.test(placeId) && placeId !== '0') {
-              setStudioPlaceId(placeId);
-              window.localStorage.setItem(STUDIO_PLACE_ID_CACHE_KEY, placeId);
+              setStudioPlaceId((prev) => {
+                if (prev === placeId) return prev;
+                window.localStorage.setItem(STUDIO_PLACE_ID_CACHE_KEY, placeId);
+                return placeId;
+              });
             }
           }
         } else if (!cancelled) {

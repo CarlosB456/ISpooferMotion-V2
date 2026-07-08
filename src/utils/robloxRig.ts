@@ -11,7 +11,7 @@ export type RigType = 'R6' | 'R15';
 
 const IDR = [1, 0, 0, 0, 1, 0, 0, 0, 1];
 
-export const R6_BONES: RigBone[] = [
+const R6_BONES: RigBone[] = [
   {
     name: 'HumanoidRootPart',
     parent: null,
@@ -63,7 +63,7 @@ export const R6_BONES: RigBone[] = [
   },
 ];
 
-export const R15_BONES: RigBone[] = [
+const R15_BONES: RigBone[] = [
   {
     name: 'HumanoidRootPart',
     parent: null,

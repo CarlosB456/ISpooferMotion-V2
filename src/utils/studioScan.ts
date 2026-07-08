@@ -23,7 +23,7 @@ async function waitForStudioScanComplete(): Promise<void> {
         );
       }
     } catch (e) {
-      if (e instanceof Error) throw e;
+      throw e instanceof Error ? e : new Error(String(e));
     }
     await new Promise((resolve) => setTimeout(resolve, SCAN_POLL_MS));
   }

@@ -1,6 +1,6 @@
 [package]
 name = "app"
-version = "2.1.0"
+version = "2.1.1"
 authors = ["IncredibroXP <incredibroxpdev@gmail.com>"]
 description = "Animation spoofing utility for Roblox"
 edition = "2021"
@@ -113,3 +113,4 @@ lto = true
 codegen-units = 1
 opt-level = 3
 strip = true
+panic = "abort"

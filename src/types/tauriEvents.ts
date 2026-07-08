@@ -48,22 +48,6 @@ export type SpooferStartedPayload = {
   logFilePath?: string;
 };
 
-export type RoblosecurityUpdatedPayload = {
-  oldCookie: string;
-  newCookie: string;
-};
-
-export type MemoryPatchProgressPayload = {
-  phase?: 'started' | 'scanning' | 'complete';
-  regions_total?: number;
-  regions_scanned?: number;
-  chunks_total?: number;
-  chunks_scanned?: number;
-  bytes_scanned?: number;
-  matches_found?: number;
-  writes_completed?: number;
-};
-
 export type ScriptRefProgressPayload = {
   resolved?: number;
   total?: number;

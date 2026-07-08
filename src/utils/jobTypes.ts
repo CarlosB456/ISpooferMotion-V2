@@ -1,4 +1,4 @@
-export interface SpoofJobAssetResult {
+interface SpoofJobAssetResult {
   id: string;
   type?: string;
   assetType?: string;
@@ -11,7 +11,7 @@ export interface SpoofJobAssetResult {
   reason?: string;
 }
 
-export interface SpoofJobConfig {
+interface SpoofJobConfig {
   assets: string;
   groupId?: string | null;
   spoofSounds: boolean;

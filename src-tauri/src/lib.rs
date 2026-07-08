@@ -4,7 +4,7 @@ pub mod error;
 pub mod studio_bridge;
 pub mod utils;
 
-use tauri::{Emitter, Listener, Manager};
+use tauri::Manager;
 
 // This giant macro handles tossing all our backend commands over to the frontend.
 // Gotta make sure any new command gets added here otherwise the UI won't be able to invoke it.
@@ -28,7 +28,6 @@ macro_rules! specta_commands {
             crate::commands::auth::validate_opencloud_api_key,
             crate::commands::auth::get_auth_metadata,
             crate::commands::fs::open_data_folder,
-            crate::commands::fs::open_themes_folder,
             crate::commands::fs::clear_app_cache,
             crate::commands::fs::play_roblox_audio,
             crate::commands::fs::show_notification,
@@ -148,24 +147,6 @@ pub fn run() {
                 let _ = app.deep_link().register_all();
             }
 
-            // Deep link handling
-            app.listen("deep-link://new-url", {
-                let app_handle = app.handle().clone();
-                move |event| {
-                    if let Ok(urls) = serde_json::from_str::<Vec<String>>(event.payload()) {
-                        for url in urls {
-                            if url.starts_with("ispoofermotion://theme/apply") {
-                                let _ = app_handle.emit("cloud-theme-sync-now", ());
-                            }
-                        }
-                    } else if let Some(payload_clean) = event.payload().trim_matches('"').into() {
-                        let payload_clean: &str = payload_clean;
-                        if payload_clean.starts_with("ispoofermotion://theme/apply") {
-                            let _ = app_handle.emit("cloud-theme-sync-now", ());
-                        }
-                    }
-                }
-            });
 
             app.handle().plugin(
                 tauri_plugin_log::Builder::default().level(log::LevelFilter::Info).build(),
