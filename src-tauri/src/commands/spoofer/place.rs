@@ -244,7 +244,7 @@ pub async fn get_place_id_from_creator(
             if let Ok(json) = serde_json::from_str::<serde_json::Value>(&data) {
                 if let Some(places) = json.get(&cache_key).and_then(|p| p.as_array()) {
                     let cached_places: Vec<String> =
-                        places.iter().filter_map(|p| p.as_str().map(|s| s.to_string())).collect();
+                        places.iter().filter_map(|p| p.as_str().map(std::string::ToString::to_string)).collect();
                     if !cached_places.is_empty() {
                         return Ok(cached_places);
                     }
