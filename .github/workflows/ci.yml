@@ -19,7 +19,7 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: write
+  contents: read
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -27,8 +27,8 @@ env:
 
 jobs:
   # Code Quality Checks
-  js-checks:
-    name: JS/TS Checks (Type & Lint)
+  js-lua-checks:
+    name: JS/TS/Lua Checks (Type & Lint)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -45,6 +45,11 @@ jobs:
       - run: cd ISM-Library/packages/ui && bun install --frozen-lockfile && bun run build
       - run: bun run typecheck
       - run: bun run lint
+      - uses: ok-b/setup-selene@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Run Selene
+        run: selene src-tauri/plugin
 
   rust-check:
     name: Rust Check & Lint
@@ -72,7 +77,7 @@ jobs:
   # Prepare Release (runs after checks pass)
   prepare-release:
     name: Prepare Release
-    needs: [js-checks, rust-check]
+    needs: [js-lua-checks, rust-check]
     if: >
       (github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')))
       || github.event_name == 'workflow_dispatch'
@@ -115,6 +120,8 @@ jobs:
     needs: prepare-release
     if: needs.prepare-release.outputs.SHOULD_RELEASE == 'true'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v7
       - name: Check for Changelog
@@ -127,25 +134,30 @@ jobs:
             echo "has_changelog=false" >> $GITHUB_OUTPUT
           fi
 
-      - name: Create Release (with changelog)
+      - name: Create or Update Release (with changelog)
         if: steps.changelog.outputs.has_changelog == 'true'
-        uses: softprops/action-gh-release@v3
-        with:
-          tag_name: ${{ needs.prepare-release.outputs.RELEASE_TAG }}
-          name: ISpooferMotion ${{ needs.prepare-release.outputs.RELEASE_TAG }}
-          body_path: ${{ steps.changelog.outputs.path }}
-          draft: false
-          prerelease: false
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: ${{ needs.prepare-release.outputs.RELEASE_TAG }}
+          BODY_PATH: ${{ steps.changelog.outputs.path }}
+        run: |
+          if gh release view "$TAG_NAME" > /dev/null 2>&1; then
+            gh release edit "$TAG_NAME" --notes-file "$BODY_PATH" --title "ISpooferMotion $TAG_NAME"
+          else
+            gh release create "$TAG_NAME" --notes-file "$BODY_PATH" --title "ISpooferMotion $TAG_NAME"
+          fi
 
-      - name: Create Release (auto-generate notes)
+      - name: Create or Update Release (auto-generate notes)
         if: steps.changelog.outputs.has_changelog != 'true'
-        uses: softprops/action-gh-release@v3
-        with:
-          tag_name: ${{ needs.prepare-release.outputs.RELEASE_TAG }}
-          name: ISpooferMotion ${{ needs.prepare-release.outputs.RELEASE_TAG }}
-          generate_release_notes: true
-          draft: false
-          prerelease: false
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: ${{ needs.prepare-release.outputs.RELEASE_TAG }}
+        run: |
+          if gh release view "$TAG_NAME" > /dev/null 2>&1; then
+            gh release edit "$TAG_NAME" --title "ISpooferMotion $TAG_NAME"
+          else
+            gh release create "$TAG_NAME" --generate-notes --title "ISpooferMotion $TAG_NAME"
+          fi
 
   # Platform Builds (all run in parallel once release is created)
   build-and-release:
@@ -153,6 +165,8 @@ jobs:
     needs: [prepare-release, create-release]
     if: needs.prepare-release.outputs.SHOULD_RELEASE == 'true'
     runs-on: ${{ matrix.platform }}
+    permissions:
+      contents: write
     strategy:
       fail-fast: false
       matrix:
@@ -224,6 +238,8 @@ jobs:
     needs: [prepare-release, create-release]
     if: needs.prepare-release.outputs.SHOULD_RELEASE == 'true'
     runs-on: ubuntu-22.04
+    permissions:
+      contents: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
