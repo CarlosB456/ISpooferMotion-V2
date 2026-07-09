@@ -45,9 +45,8 @@ jobs:
       - run: cd ISM-Library/packages/ui && bun install --frozen-lockfile && bun run build
       - run: bun run typecheck
       - run: bun run lint
-      - uses: ok-b/setup-selene@v1
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install Selene
+        run: cargo install selene
       - name: Run Selene
         run: selene src-tauri/plugin
 
