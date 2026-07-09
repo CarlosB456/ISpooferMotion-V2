@@ -921,7 +921,7 @@ export default function SpoofingView() {
     >
       <div className="w-full h-full p-4 flex flex-col overflow-hidden">
         <div className="w-full flex-1 min-h-0 flex flex-col gap-4 relative px-2 pt-2">
-          <Modal isOpen={showAdvanced} onOpenChange={setShowAdvanced} size="5xl">
+          <Modal isOpen={showAdvanced} onOpenChange={setShowAdvanced} size="full">
             <ModalContent className="w-[95vw]! max-w-[95vw]! sm:max-w-300! max-h-[90vh]! p-0! overflow-hidden">
               <div className="flex h-full min-h-[75vh]">
                 {/* Sidebar Nav */}
@@ -1197,13 +1197,15 @@ export default function SpoofingView() {
                   <Play size={18} fill="currentColor" />
                 )}
                 <span>
-                  {isReplacing
-                    ? t('spoof.replacingInStudio')
-                    : replaceError
-                      ? t('spoof.retryReplacing')
-                      : isSpoofing
-                        ? <SpoofProgressText />
-                        : t('spoof.runSpoofer')}
+                  {isReplacing ? (
+                    t('spoof.replacingInStudio')
+                  ) : replaceError ? (
+                    t('spoof.retryReplacing')
+                  ) : isSpoofing ? (
+                    <SpoofProgressText />
+                  ) : (
+                    t('spoof.runSpoofer')
+                  )}
                 </span>
               </div>
               {(isSpoofing || isReplacing) && <SpoofProgressOverlay />}

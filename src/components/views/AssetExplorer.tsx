@@ -97,17 +97,15 @@ function pluginAssetsToNode(
     referent: `studio-${folderName}`,
     className,
     name: folderName,
-    assets: dedupePluginAssets(assets).map(
-      (a: PluginAsset): ParsedAssetRef => ({
-        type: assetType,
-        assetId: a.assetId ?? '',
-        rawValue: `rbxassetid://${a.assetId}`,
-        className: a.kind ?? className,
-        instanceName: a.name ?? a.assetId ?? '',
-        propertyName: a.property ?? a.callType ?? a.sourceHint ?? '',
-        path: a.fullName ?? a.script ?? folderName,
-      }),
-    ),
+    assets: dedupePluginAssets(assets).map((a: PluginAsset): ParsedAssetRef => ({
+      type: assetType,
+      assetId: a.assetId ?? '',
+      rawValue: `rbxassetid://${a.assetId}`,
+      className: a.kind ?? className,
+      instanceName: a.name ?? a.assetId ?? '',
+      propertyName: a.property ?? a.callType ?? a.sourceHint ?? '',
+      path: a.fullName ?? a.script ?? folderName,
+    })),
     children: [],
   };
 }

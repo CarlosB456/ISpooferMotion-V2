@@ -294,9 +294,7 @@ export const ExplorerTreeNode = memo(function ExplorerTreeNode({
           {filteredAssets.length > 0 && (
             <div className="flex flex-col">
               {filteredAssets.map((asset) => (
-                <div
-                  key={`${asset.type}:${asset.path}:${asset.propertyName}:${getAssetId(asset)}`}
-                >
+                <div key={`${asset.type}:${asset.path}:${asset.propertyName}:${getAssetId(asset)}`}>
                   {renderAssetRow(asset)}
                 </div>
               ))}

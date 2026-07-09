@@ -4,7 +4,7 @@ import { getCurrentWindow } from '@tauri-apps/api/window';
 import { isRegistered, register, unregister } from '@tauri-apps/plugin-global-shortcut';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ChevronLeft } from 'lucide-react';
-import { lazy, Suspense,useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 
 import Sidebar from './components/layout/Sidebar';
 import StatusBar from './components/layout/StatusBar';

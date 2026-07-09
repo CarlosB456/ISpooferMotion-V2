@@ -9,7 +9,7 @@ Versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [2.1.1] - 2026-07-08
 
-> *Developer Note: I apologize for the lackluster update this time around-I've primarily focused on under-the-hood optimizations and bug fixes. Better and more exciting updates will be coming soon!*
+> _Developer Note: I apologize for the lackluster update this time around-I've primarily focused on under-the-hood optimizations and bug fixes. Better and more exciting updates will be coming soon!_
 
 ### ✨ What's New & Improved
 

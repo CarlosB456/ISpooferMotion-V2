@@ -52,7 +52,14 @@ export function useStudioConnection() {
             setScanStatus((prev) => {
               const next = result.scanStatus || null;
               if (prev === next) return prev;
-              if (prev && next && prev.scanning === next.scanning && prev.scanned === next.scanned && prev.total === next.total && prev.current_service === next.current_service) {
+              if (
+                prev &&
+                next &&
+                prev.scanning === next.scanning &&
+                prev.scanned === next.scanned &&
+                prev.total === next.total &&
+                prev.current_service === next.current_service
+              ) {
                 return prev;
               }
               return next;
