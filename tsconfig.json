@@ -18,7 +18,8 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@codycon/ism-library": ["./ISM-Library/packages/ui"]
     }
   },
   "include": ["src"],

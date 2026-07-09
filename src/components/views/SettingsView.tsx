@@ -1,4 +1,4 @@
-import { Section, itemVariants, pageVariants, Window } from '@codycon/ism-library';
+import { itemVariants, pageVariants, Section, Window } from '@codycon/ism-library';
 import { motion } from 'framer-motion';
 import { Globe, Settings2 } from 'lucide-react';
 

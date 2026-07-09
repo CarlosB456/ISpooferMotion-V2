@@ -1,6 +1,0 @@
-fix: resolve typecheck errors and remove ism-library stub
-
-- Removed outdated ism-library.d.ts stub that suppressed type checking and caused module resolution failures if dist was absent.
-- Changed Group to Section in SettingsView.tsx to support the icon prop, correctly satisfying ism-library types.
-- Fixed invalid size='5xl' to size='full' for the Modal in SpoofingView.tsx.
-- Auto-formatted files.
