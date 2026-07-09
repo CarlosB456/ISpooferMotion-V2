@@ -48,7 +48,7 @@ jobs:
       - name: Install Selene
         run: cargo install selene
       - name: Run Selene
-        run: selene src-tauri/plugin
+        run: cd src-tauri/plugin && selene .
 
   rust-check:
     name: Rust Check & Lint
