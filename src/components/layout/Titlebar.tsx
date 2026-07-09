@@ -1,5 +1,5 @@
 import { IconButton, Toolbar } from '@codycon/ism-library';
-import { convertFileSrc, invoke } from '@tauri-apps/api/core';
+import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { motion } from 'framer-motion';
 import { Minus, Settings2, Terminal, X } from 'lucide-react';
@@ -9,15 +9,14 @@ import AppIconDark from '../../assets/app_icon.png';
 import AppIconLight from '../../assets/app_icon_light.png';
 import { useConfig } from '../../contexts/ConfigContext';
 import { useLanguage } from '../../contexts/LanguageContext';
-import { useThemeAccent } from '../../contexts/ThemeContext';
+
 import { useSpooferStore } from '../../stores/spooferStore';
-import { cn } from '../../utils/cn';
+
 import { isTauriRuntime } from '../../utils/tauriRuntime';
 
 export default function Titlebar() {
   const { t } = useLanguage();
 
-  const { customLogo } = useThemeAccent();
   const { config, updateConfig } = useConfig();
   const showAdvanced = useSpooferStore((s) => s.showAdvanced);
   const setShowAdvanced = useSpooferStore((s) => s.setShowAdvanced);
@@ -29,9 +28,6 @@ export default function Titlebar() {
       .then((v) => setAppVersion(v))
       .catch(() => setAppVersion(''));
   }, []);
-
-  const logoOpacity = Number.parseFloat(customLogo?.opacity ?? '1');
-  const isLogoHidden = Number.isFinite(logoOpacity) && logoOpacity <= 0;
 
   const handleMinimize = () => {
     getCurrentWindow().minimize();
@@ -56,43 +52,30 @@ export default function Titlebar() {
       className="h-14 w-full flex items-center justify-between px-5 bg-transparent border-b border-border-subtle select-none shrink-0 z-50 relative"
     >
       {/* App Logo & Name */}
-      <div className={cn('flex items-center pointer-events-none', isLogoHidden ? 'pl-1' : 'gap-3')}>
-        {!isLogoHidden && (
-          <div className="w-8 h-8 flex items-center justify-center">
-            {/* user can override the default logo in themes, apply that here if it exists */}
-            {customLogo?.image ? (
+      <div className="flex items-center pointer-events-none gap-3">
+        <div className="w-8 h-8 flex items-center justify-center">
+          {isTauriRuntime() ? (
+            <>
               <img
-                src={isTauriRuntime() ? convertFileSrc(customLogo.image) : customLogo.image}
-                className="w-full h-full object-cover rounded-[calc(var(--radius-md)-4px)]"
-                style={{ opacity: customLogo?.opacity ?? 1 }}
-                alt="Custom Logo"
+                src={AppIconLight}
+                className="w-full h-full object-contain block dark:hidden"
+                alt="Logo Light"
               />
-            ) : isTauriRuntime() ? (
-              <>
-                <img
-                  src={AppIconLight}
-                  className="w-full h-full object-contain block dark:hidden"
-                  style={{ opacity: customLogo?.opacity ?? 1 }}
-                  alt="Logo Light"
-                />
 
-                <img
-                  src={AppIconDark}
-                  className="w-full h-full object-contain hidden dark:block"
-                  style={{ opacity: customLogo?.opacity ?? 1 }}
-                  alt="Logo Dark"
-                />
-              </>
-            ) : (
               <img
-                src="/ispoofermotion-logo-dark.png"
-                className="w-full h-full object-contain"
-                style={{ opacity: customLogo?.opacity ?? 1 }}
-                alt="Logo"
+                src={AppIconDark}
+                className="w-full h-full object-contain hidden dark:block"
+                alt="Logo Dark"
               />
-            )}
-          </div>
-        )}
+            </>
+          ) : (
+            <img
+              src="/ispoofermotion-logo-dark.png"
+              className="w-full h-full object-contain"
+              alt="Logo"
+            />
+          )}
+        </div>
         <div className="flex flex-col justify-center">
           <span className="text-[13px] font-semibold tracking-tight text-text-primary leading-tight">
             ISpooferMotion

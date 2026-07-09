@@ -1,5 +1,5 @@
 import { IsmProvider } from '@codycon/ism-library';
-import { convertFileSrc, invoke } from '@tauri-apps/api/core';
+import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { isRegistered, register, unregister } from '@tauri-apps/plugin-global-shortcut';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -12,7 +12,7 @@ import Titlebar from './components/layout/Titlebar';
 import { RobloxStatusBanner } from './components/RobloxStatusBanner';
 import { useConfig } from './contexts/ConfigContext';
 import { useLanguage } from './contexts/LanguageContext';
-import { useThemeAccent } from './contexts/ThemeContext';
+
 import { isTauriRuntime } from './utils/tauriRuntime';
 
 const ActivityView = lazy(() => import('./components/views/ActivityView'));
@@ -22,28 +22,9 @@ const ExperimentalView = lazy(() => import('./components/views/ExperimentalView'
 const SettingsView = lazy(() => import('./components/views/SettingsView'));
 const SpoofingView = lazy(() => import('./components/views/SpoofingView'));
 
-// Resolves custom background paths to something the browser/tauri can actually render
-// kinda hacky but it handles local files, blobs, and web URLs
-function resolveThemeBackgroundUrl(path: string) {
-  if (/^(?:blob:|data:|https?:|asset:|tauri:)/i.test(path)) {
-    return path;
-  }
-
-  if (path.startsWith('/') || path.startsWith('./') || path.startsWith('../')) {
-    return new URL(path, window.location.href).toString();
-  }
-
-  if (!isTauriRuntime()) {
-    return path;
-  }
-
-  return convertFileSrc(path);
-}
-
 export default function App() {
   const { t } = useLanguage();
 
-  const { customBackground } = useThemeAccent();
   const { config, updateConfig } = useConfig();
   const activeTab = config.ui.activeTab;
   const isExplorerOpen = config.ui.assetExplorerOpen;
@@ -138,7 +119,6 @@ export default function App() {
 
   const setActiveTab = (tabId: string) => updateConfig('ui', 'activeTab', tabId);
   const setIsExplorerOpen = (isOpen: boolean) => updateConfig('ui', 'assetExplorerOpen', isOpen);
-  const backgroundUrl = customBackground ? resolveThemeBackgroundUrl(customBackground.path) : null;
 
   useEffect(() => {
     const allowedTabs = ['spoofing', 'activity', 'settings'];
@@ -244,36 +224,6 @@ export default function App() {
         className="flex flex-col h-screen w-screen overflow-hidden text-foreground relative font-sans selection:bg-primary/30 antialiased"
         style={{ backgroundColor: 'var(--bg-base)' }}
       >
-        {customBackground && backgroundUrl && (
-          <div className="absolute inset-0 w-full h-full z-0 pointer-events-none overflow-hidden">
-            {customBackground.type === 'video' ? (
-              <video
-                autoPlay
-                loop
-                muted
-                playsInline
-                className="absolute inset-0 w-full h-full object-cover"
-                src={backgroundUrl}
-                style={{
-                  mixBlendMode: (customBackground.blend_mode as any) || 'normal',
-                  filter: customBackground.filter || 'none',
-                }}
-              />
-            ) : (
-              <img
-                className="absolute inset-0 w-full h-full object-cover"
-                src={backgroundUrl}
-                alt="Custom background"
-                style={{
-                  mixBlendMode: (customBackground.blend_mode as any) || 'normal',
-                  filter: customBackground.filter || 'none',
-                }}
-              />
-            )}
-            <div className="absolute inset-0 bg-background/20" />
-          </div>
-        )}
-
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}

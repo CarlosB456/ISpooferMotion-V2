@@ -147,7 +147,6 @@ pub fn run() {
                 let _ = app.deep_link().register_all();
             }
 
-
             app.handle().plugin(
                 tauri_plugin_log::Builder::default().level(log::LevelFilter::Info).build(),
             )?;

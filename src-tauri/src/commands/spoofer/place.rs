@@ -96,7 +96,7 @@ pub async fn get_place_ids_for_asset_creator(
     }
 
     if place_ids.is_empty() {
-        return Err(crate::error::AppError::Custom("No candidate place IDs found".into()));
+        place_ids.push("1818".to_string());
     }
 
     Ok(place_ids)
@@ -235,6 +235,24 @@ pub async fn get_place_id_from_creator(
         ));
     }
 
+    let cache_path = app.path().app_data_dir().map(|p| p.join("place_id_cache.json")).ok();
+    let cache_key = format!("{}_{}", creator_type, creator_id);
+
+    // Check persistent cache first
+    if let Some(ref path) = cache_path {
+        if let Ok(data) = std::fs::read_to_string(path) {
+            if let Ok(json) = serde_json::from_str::<serde_json::Value>(&data) {
+                if let Some(places) = json.get(&cache_key).and_then(|p| p.as_array()) {
+                    let cached_places: Vec<String> =
+                        places.iter().filter_map(|p| p.as_str().map(|s| s.to_string())).collect();
+                    if !cached_places.is_empty() {
+                        return Ok(cached_places);
+                    }
+                }
+            }
+        }
+    }
+
     let limit = 50;
     let max_results = max_place_ids.unwrap_or(10).min(100);
 
@@ -304,7 +322,10 @@ pub async fn get_place_id_from_creator(
                 }
 
                 for game in games {
-                    let place_id = game
+                    let game_name =
+                        game.get("name").and_then(|n| n.as_str()).unwrap_or("").to_string();
+
+                    let root_place_id = game
                         .get("rootPlace")
                         .and_then(|rp| rp.get("id"))
                         .or_else(|| game.get("rootPlaceId"))
@@ -312,18 +333,51 @@ pub async fn get_place_id_from_creator(
                         .or_else(|| game.get("id"))
                         .and_then(value_to_string);
 
-                    let game_name =
-                        game.get("name").and_then(|n| n.as_str()).unwrap_or("").to_string();
-
-                    if let Some(pid) = place_id {
-                        if seen_places.insert(pid.clone()) {
-                            root_places.push((pid, game_name));
-                        }
-                    } else if let Some(universe_id) =
-                        game.get("universeId").and_then(value_to_string)
+                    let mut found_subplaces = false;
+                    if let Some(universe_id) =
+                        game.get("id").or_else(|| game.get("universeId")).and_then(value_to_string)
                     {
-                        missing_root_universes.push((universe_id, game_name));
+                        let url = format!("https://develop.roblox.com/v1/universes/{universe_id}/places?limit=100");
+                        wait_rate_limit(RateLimitBucket::PlaceLookup).await;
+                        if let Ok(resp) = client
+                            .get(&url)
+                            .header(reqwest::header::COOKIE, &cookie_header)
+                            .send()
+                            .await
+                        {
+                            if let Ok(data) = resp.json::<serde_json::Value>().await {
+                                if let Some(places) = data.get("data").and_then(|d| d.as_array()) {
+                                    for place in places {
+                                        if let Some(pid) = place.get("id").and_then(value_to_string)
+                                        {
+                                            if seen_places.insert(pid.clone()) {
+                                                root_places.push((pid, game_name.clone()));
+                                                found_subplaces = true;
+                                            }
+                                        }
+                                        if root_places.len() >= max_results as usize {
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
+
+                    if !found_subplaces {
+                        if let Some(pid) = root_place_id {
+                            if seen_places.insert(pid.clone()) {
+                                root_places.push((pid, game_name.clone()));
+                            }
+                        } else if let Some(universe_id) = game
+                            .get("universeId")
+                            .or_else(|| game.get("id"))
+                            .and_then(value_to_string)
+                        {
+                            missing_root_universes.push((universe_id, game_name));
+                        }
+                    }
+
                     if root_places.len() >= max_results as usize {
                         break;
                     }
@@ -414,6 +468,22 @@ pub async fn get_place_id_from_creator(
     }
 
     let mut place_ids: Vec<String> = root_places.into_iter().map(|(id, _)| id).collect();
+
+    if !place_ids.is_empty() {
+        if let Some(ref path) = cache_path {
+            let mut cache_json: serde_json::Value = std::fs::read_to_string(path)
+                .ok()
+                .and_then(|s| serde_json::from_str(&s).ok())
+                .unwrap_or_else(|| serde_json::json!({}));
+
+            if let Some(obj) = cache_json.as_object_mut() {
+                obj.insert(cache_key, serde_json::json!(place_ids));
+                if let Ok(new_data) = serde_json::to_string(&cache_json) {
+                    let _ = std::fs::write(path, new_data);
+                }
+            }
+        }
+    }
 
     if let Some(studio_place_id) = crate::studio_bridge::bridge_data()
         .and_then(|d| d.try_read().ok().and_then(|g| g.studio_place_id.clone()))

@@ -262,7 +262,7 @@ export async function parseRbxlx(
             node.rawXml || '',
             `RAW_KFS_${node.referent}`,
             '',
-            'raw_keyframe_sequence' as any, // Cast because it might conflict with types if not updated yet
+            'raw_keyframe_sequence',
           ),
         );
       }

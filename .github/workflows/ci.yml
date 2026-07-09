@@ -27,8 +27,8 @@ env:
 
 jobs:
   # Code Quality Checks
-  typecheck:
-    name: TypeScript Check
+  js-checks:
+    name: JS/TS Checks (Type & Lint)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -44,23 +44,6 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: cd ISM-Library/packages/ui && bun install --frozen-lockfile && bun run build
       - run: bun run typecheck
-
-  lint-js:
-    name: JS/TS Lint
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          submodules: recursive
-      - uses: oven-sh/setup-bun@v2
-      - name: Cache bun modules
-        uses: actions/cache@v6
-        with:
-          path: ~/.bun/install/cache
-          key: bun-${{ runner.os }}-${{ hashFiles('**/bun.lockb') }}
-          restore-keys: bun-${{ runner.os }}-
-      - run: bun install --frozen-lockfile
-      - run: cd ISM-Library/packages/ui && bun install --frozen-lockfile && bun run build
       - run: bun run lint
 
   rust-check:
@@ -89,7 +72,7 @@ jobs:
   # Prepare Release (runs after checks pass)
   prepare-release:
     name: Prepare Release
-    needs: [typecheck, lint-js, rust-check]
+    needs: [js-checks, rust-check]
     if: >
       (github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')))
       || github.event_name == 'workflow_dispatch'
@@ -174,7 +157,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - platform: windows-2025
+          - platform: windows-latest
             os: windows
             bundles: nsis
             args: ''
@@ -204,6 +187,12 @@ jobs:
           path: ~/.bun/install/cache
           key: bun-${{ runner.os }}-${{ hashFiles('**/bun.lockb') }}
           restore-keys: bun-${{ runner.os }}-
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          cache-on-failure: true
 
       - name: Build ISM-Library
         run: cd ISM-Library/packages/ui && bun install --frozen-lockfile && bun run build

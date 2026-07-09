@@ -58,6 +58,30 @@ Install it by dragging it into Studio or through **Plugins → Manage Plugins**.
 
 ---
 
+## 🚀 Quick Setup
+
+If you already cloned the repository without submodules, or need to initialize the project quickly:
+
+```bash
+# Clone the repository
+git clone https://github.com/ISpooferMotion/ISpooferMotion-V2.git
+cd ISpooferMotion-V2
+
+# Initialize submodules
+bash scripts/init-submodules.sh
+
+# Install dependencies
+bun install
+
+# Build the component library
+cd ISM-Library/packages/ui && bun install && bun run build && cd ../../..
+
+# Start the app in development mode
+bun run tauri:dev
+```
+
+---
+
 ## 🛠️ Building from source
 
 **Prerequisites:** [Rust](https://rustup.rs/) · [Bun](https://bun.sh/) v1+ · [Node.js](https://nodejs.org/) v20+

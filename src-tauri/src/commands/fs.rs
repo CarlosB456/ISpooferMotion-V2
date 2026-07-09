@@ -33,8 +33,6 @@ pub async fn open_data_folder(app: AppHandle) -> crate::error::Result<bool> {
     Ok(cmd.is_ok())
 }
 
-
-
 #[tauri::command]
 #[specta::specta]
 pub async fn clear_app_cache(app: AppHandle) -> crate::error::Result<bool> {
