@@ -12,7 +12,6 @@ import Titlebar from './components/layout/Titlebar';
 import { RobloxStatusBanner } from './components/RobloxStatusBanner';
 import { useConfig } from './contexts/ConfigContext';
 import { useLanguage } from './contexts/LanguageContext';
-
 import { isTauriRuntime } from './utils/tauriRuntime';
 
 const ActivityView = lazy(() => import('./components/views/ActivityView'));

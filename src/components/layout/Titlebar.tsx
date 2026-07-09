@@ -9,9 +9,7 @@ import AppIconDark from '../../assets/app_icon.png';
 import AppIconLight from '../../assets/app_icon_light.png';
 import { useConfig } from '../../contexts/ConfigContext';
 import { useLanguage } from '../../contexts/LanguageContext';
-
 import { useSpooferStore } from '../../stores/spooferStore';
-
 import { isTauriRuntime } from '../../utils/tauriRuntime';
 
 export default function Titlebar() {
