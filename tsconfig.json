@@ -19,7 +19,8 @@
     "noFallthroughCasesInSwitch": true,
     "paths": {
       "@/*": ["./src/*"],
-      "@codycon/ism-library": ["./ISM-Library/packages/ui"]
+      "@codycon/ism-library": ["./ISM-Library/packages/ui"],
+      "framer-motion": ["./node_modules/framer-motion"]
     }
   },
   "include": ["src"],
