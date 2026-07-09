@@ -25,13 +25,13 @@ local function createPluginGui()
 
 	local container = Instance.new("Frame")
 	container.Name = "Container"
-	container.Size = UDim2.new(1, 0, 1, 0)
+	container.Size = UDim2.fromScale(1, 1)
 	container.BackgroundTransparency = 1
 	container.Parent = gui
 
 	local icon = Instance.new("ImageLabel")
 	icon.Name = "Icon"
-	icon.Size = UDim2.new(0, 80, 0, 80)
+	icon.Size = UDim2.fromOffset(80, 80)
 	icon.Position = UDim2.new(0.5, 0, 0, 30)
 	icon.AnchorPoint = Vector2.new(0.5, 0)
 	icon.BackgroundTransparency = 1
@@ -55,7 +55,7 @@ local function createPluginGui()
 
 	logsScrollingFrame = Instance.new("ScrollingFrame")
 	logsScrollingFrame.Name = "Logs"
-	logsScrollingFrame.Size = UDim2.new(0, 600, 0, 300)
+	logsScrollingFrame.Size = UDim2.fromOffset(600, 300)
 	logsScrollingFrame.Position = UDim2.new(0.5, 0, 0, 180)
 	logsScrollingFrame.AnchorPoint = Vector2.new(0.5, 0)
 	logsScrollingFrame.BackgroundTransparency = 0.1
@@ -82,7 +82,7 @@ local function createPluginGui()
 	listLayout.Padding = UDim.new(0, 4)
 
 	listLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-		logsScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, listLayout.AbsoluteContentSize.Y)
+		logsScrollingFrame.CanvasSize = UDim2.fromOffset(0, listLayout.AbsoluteContentSize.Y)
 		logsScrollingFrame.CanvasPosition = Vector2.new(0, listLayout.AbsoluteContentSize.Y)
 	end)
 
@@ -102,7 +102,7 @@ LogService.MessageOut:Connect(function(message, messageType)
 		logCounter += 1
 		local logLabel = Instance.new("TextLabel")
 		logLabel.Name = "Log_" .. logCounter
-		logLabel.Size = UDim2.new(1, 0, 0, 0)
+		logLabel.Size = UDim2.fromScale(1, 0)
 		logLabel.BackgroundTransparency = 1
 		logLabel.Font = Enum.Font.RobotoMono
 		logLabel.TextSize = 13
@@ -139,7 +139,7 @@ LogService.MessageOut:Connect(function(message, messageType)
 	end
 end)
 
-local function logToPlugin(text)
+function logToPlugin(text)
 	local msg = tostring(text)
 	if string.find(msg, "[Warning]") then
 		warn(msg)
@@ -158,7 +158,7 @@ local function setPluginGuiStatus(text)
 	logToPlugin(text)
 end
 
-local function hidePluginGui()
+function hidePluginGui()
 	if gui then
 		gui:Destroy()
 		gui = nil
@@ -167,7 +167,7 @@ local function hidePluginGui()
 	end
 end
 
-local function togglePluginGui()
+function togglePluginGui()
 	if not gui then
 		createPluginGui()
 	end

@@ -2,7 +2,7 @@
 --!nolint
 -- luacheck: ignore
 ---@diagnostic disable: undefined-global, unused-local, unused-function, lowercase-global
-local EMBEDDED_ASSET_PROPS: { [string]: boolean } = {
+local EMBEDDED_ASSET_PROPS = {
 	Text = true,
 	PlaceholderText = true,
 	Image = true,
@@ -19,23 +19,23 @@ local CollectionService = game:GetService("CollectionService")
 local HttpService = game:GetService("HttpService")
 local ScriptEditorService = game:GetService("ScriptEditorService")
 
-local PORT_START: number = 14285
-local PORT_END: number = 14289
-local SEND_CHUNK_SIZE: number = 5000
-local MAX_SCRIPT_SOURCE_BYTES: number = 8000000
-local MAX_TAGS_PER_OBJECT: number = 100
-local MAX_TAG_BYTES: number = 100
-local MAX_PATCHES_PER_BATCH: number = 10000
-local MAX_HTTP_BODY_BYTES: number = 10000000
-local MAX_HTTP_RESPONSE_BYTES: number = 1000000
-local BASE_URL: string? = nil
-local polling: boolean = false
-local scanRunning: boolean = false
-local patchRunning: boolean = false
-local autoReplaceEnabled: boolean = false
-local lastDiscovery: number = 0
+local PORT_START = 14285
+local PORT_END = 14289
+local SEND_CHUNK_SIZE = 5000
+local MAX_SCRIPT_SOURCE_BYTES = 8000000
+local MAX_TAGS_PER_OBJECT = 100
+local MAX_TAG_BYTES = 100
+local MAX_PATCHES_PER_BATCH = 10000
+local MAX_HTTP_BODY_BYTES = 10000000
+local MAX_HTTP_RESPONSE_BYTES = 1000000
+local BASE_URL = nil
+local polling = false
+local scanRunning = false
+local patchRunning = false
+local autoReplaceEnabled = false
+local lastDiscovery = 0
 
-local SERVICES_TO_SCAN: { string } = {
+local SERVICES_TO_SCAN = {
 	"Workspace",
 	"Lighting",
 	"MaterialService",

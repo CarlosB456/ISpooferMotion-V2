@@ -8,7 +8,7 @@ export type RobloxAssetType =
   | 'raw_keyframe_sequence'
   | 'unknown';
 
-// represents a single external asset reference found in a place file
+// A single external asset reference from a place file.
 export interface ParsedAssetRef {
   type: RobloxAssetType;
 
@@ -44,7 +44,7 @@ export interface PlaceParseResult {
   warnings: string[];
 }
 
-// our generic AST node that holds instance hierarchy and any found assets
+// AST node holding instance hierarchy and found assets.
 export interface RbxInstance {
   referent: string;
   className: string;

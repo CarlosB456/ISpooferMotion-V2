@@ -1,4 +1,3 @@
-import type React from 'react';
 import { createContext, useContext, useEffect, useMemo } from 'react';
 
 import { type AppConfig, useConfigStore } from '../stores/configStore';
@@ -27,7 +26,8 @@ interface ConfigContextType {
 
 const Context = createContext<ConfigContextType | undefined>(undefined);
 
-// Main provider that houses all our app configuration and spoofing state
+// Wraps the config store and initializes Tauri IPC listeners for the spoofer.
+// Sits near the root to ensure listeners are always mounted.
 export const ConfigProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const configState = useConfigStore();
 
@@ -41,7 +41,8 @@ export const ConfigProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     let isMounted = true;
     const unlisteners: Array<() => void> = [];
 
-    // Hook up all the Tauri event listeners so we can react to backend spoofing updates in real-time
+    // Bind global IPC listeners here.
+    // Views read directly from the spooferStore.
     const setup = async () => {
       const { listen } = await import('@tauri-apps/api/event');
       const {
@@ -52,12 +53,20 @@ export const ConfigProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         setLastAssetResults,
         setKeyframeWarningCount,
         incrementSpoofCompletionVersion,
+        setSpoofStatusText,
+        setSpoofCurrentCount,
+        setSpoofTotalCount,
+        setSpoofStartTime,
       } = useSpooferStore.getState();
 
       const p1 = listen<SpooferStartedPayload>('spoofer-started', (e) => {
         setIsSpoofing(true);
         setSpoofingLogs([]);
         setSpoofProgress(0);
+        setSpoofStatusText('Initializing...');
+        setSpoofCurrentCount(0);
+        setSpoofTotalCount(0);
+        setSpoofStartTime(Date.now());
         setActiveSpooferJobId(e.payload.job_id ?? e.payload.jobId);
       });
 
@@ -65,8 +74,8 @@ export const ConfigProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         let msg = e.payload.message ?? '';
         const rawLevel = (e.payload.level || 'info').toUpperCase();
 
-        // If the message doesn't already have a level prefix like [INFO], [SUCCESS], etc.
-        // we'll inject it so the SpoofingView can colorize it properly.
+        // Apply a level prefix to the log if missing.
+        // Brackets are required for colorizing logs in the frontend parser.
         if (!msg.startsWith('[')) {
           msg = `[${rawLevel}] ${msg}`;
         }
@@ -75,6 +84,18 @@ export const ConfigProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       });
 
       const p3 = listen<SpooferProgressPayload>('spoofer-progress', (e) => {
+        if (e.payload.message) {
+          setSpoofStatusText(e.payload.message);
+        }
+
+        if (e.payload.current !== undefined) {
+          setSpoofCurrentCount(e.payload.current);
+        }
+
+        if (e.payload.total !== undefined) {
+          setSpoofTotalCount(e.payload.total);
+        }
+
         if (e.payload.progress !== undefined) {
           setSpoofProgress(e.payload.progress);
         } else if (
@@ -89,6 +110,7 @@ export const ConfigProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       const p4 = listen<SpooferResultPayload>('spoofer-result', (e) => {
         setIsSpoofing(false);
         setActiveSpooferJobId(null);
+        setSpoofStartTime(null);
         setLastAssetResults(e.payload.assetResults ?? e.payload.results ?? []);
         setKeyframeWarningCount(e.payload.keyframe_warnings ?? 0);
         incrementSpoofCompletionVersion();
@@ -115,8 +137,8 @@ export const ConfigProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     };
   }, []);
 
-  // Memoize the context value so we don't nuke performance with massive re-renders
-  const contextValue = useMemo<ConfigContextType>(
+  // Memoized to prevent full app re-renders on minor state changes.
+    const contextValue = useMemo<ConfigContextType>(
     () => ({
       config: configState.config,
       updateConfig: configState.updateConfig,

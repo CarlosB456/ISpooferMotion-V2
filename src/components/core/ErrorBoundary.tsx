@@ -1,11 +1,13 @@
+/// <reference types="vite/client" />
 import { getVersion } from '@tauri-apps/api/app';
 import { type as getOsType, version as getOsVersion } from '@tauri-apps/plugin-os';
 import { Component, type ErrorInfo, type ReactNode } from 'react';
+import { fetchTelemetry } from '../../utils/apiClient';
 
-import { useLanguage } from '../contexts/LanguageContext';
-import { useConfigStore } from '../stores/configStore';
-import { getTranslation } from '../utils/i18n';
-import { isTauriRuntime } from '../utils/tauriRuntime';
+import { useLanguage } from '../../contexts/LanguageContext';
+import { useConfigStore } from '../../stores/configStore';
+import { getTranslation } from '../../utils/i18n';
+import { isTauriRuntime } from '../../utils/tauriRuntime';
 
 interface Props {
   children?: ReactNode;
@@ -62,20 +64,11 @@ export class ErrorBoundary extends Component<Props, State> {
           osInfo,
         };
 
-        if (isTauriRuntime()) {
-          const { fetch: tauriFetch } = await import('@tauri-apps/plugin-http');
-          await tauriFetch(`${baseUrl}/api/app-errors`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
-          });
-        } else {
-          await fetch(`${baseUrl}/api/app-errors`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
-          });
-        }
+        await fetchTelemetry(`${baseUrl}/api/app-errors`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
       } catch (e) {
         console.error('Failed to submit crash report:', e);
       }

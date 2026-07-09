@@ -60,7 +60,7 @@ use crate::utils::build_roblox_cookie_header;
 
 static REDACTION_REGEXES: OnceLock<Vec<(Regex, &'static str)>> = OnceLock::new();
 
-// basic helper to read a json file into a generic value object, returns an empty object if it fails
+// Read a JSON file into a generic value object; returns an empty object on failure.
 pub(super) async fn read_json_file(path: &PathBuf) -> Value {
     match tokio::fs::read_to_string(path).await {
         Ok(content) => {
@@ -78,7 +78,7 @@ pub(super) async fn write_json_file(path: &PathBuf, value: &Value) -> crate::err
     tokio::fs::write(path, json_str).await.map_err(crate::error::AppError::from)
 }
 
-// scrubs sensitive info like system usernames and project paths out of logs so we don't accidentally dox people
+// Redact sensitive information (usernames, paths) from logs.
 pub(super) fn redact_log_message(message: &str) -> String {
     let mut redacted = message.to_string();
     for key in ["USERPROFILE", "HOME"] {

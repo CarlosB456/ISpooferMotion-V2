@@ -21,7 +21,7 @@ const readCachedStudioPlaceId = () => {
 };
 
 export function useStudioConnection() {
-  // keeps an eye on the plugin bridge port and pulls health info to ensure studio is actually there
+  // Polls plugin bridge port to verify Studio connection.
   const [studioConnected, setStudioConnected] = useState(false);
   const [scanStatus, setScanStatus] = useState<ScanStatus | null>(null);
   const [studioPlaceId, setStudioPlaceId] = useState(readCachedStudioPlaceId);

@@ -57,13 +57,6 @@ export default function DebugSection() {
           onChange={handleCacheChange}
         />
       </Row>
-      <Row>
-        <FormToggle
-          label={t('settings.enableExperimental')}
-          checked={config.debug.enableExperimentalTab}
-          onChange={(v: boolean) => updateConfig('debug', 'enableExperimentalTab', v)}
-        />
-      </Row>
       <div className="mt-2 w-full flex gap-2">
         <Button
           label={t('settings.clearCache')}

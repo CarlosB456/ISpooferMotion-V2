@@ -1,16 +1,17 @@
 pub mod api_dump;
 pub mod commands;
+pub mod domain;
 pub mod error;
 pub mod studio_bridge;
 pub mod utils;
 
 use tauri::Manager;
 
-// This giant macro handles tossing all our backend commands over to the frontend.
-// Gotta make sure any new command gets added here otherwise the UI won't be able to invoke it.
+// Register backend commands for frontend invocation.
 macro_rules! specta_commands {
     () => {
         tauri_specta::collect_commands![
+            crate::commands::anim_parser::parse_animation_data,
             crate::commands::assets::fetch_assets,
             crate::commands::assets::fetch_roblox_thumbnail,
             crate::commands::assets::fetch_animation_xml,
@@ -27,6 +28,8 @@ macro_rules! specta_commands {
             crate::commands::auth::detect_opencloud_api_key_owner,
             crate::commands::auth::validate_opencloud_api_key,
             crate::commands::auth::get_auth_metadata,
+            crate::commands::startup::close_splashscreen,
+            crate::commands::startup::sync_roblox_plugin,
             crate::commands::fs::open_data_folder,
             crate::commands::fs::clear_app_cache,
             crate::commands::fs::play_roblox_audio,
@@ -70,6 +73,7 @@ macro_rules! specta_commands {
             crate::commands::session::save_session,
             crate::commands::session::load_session,
             crate::commands::session::clear_session,
+            crate::commands::place_parser::parse_place_file,
             crate::commands::spoofer::memory::find_studio_process,
             crate::commands::spoofer::memory::focus_and_save_studio,
             crate::commands::spoofer::memory::scan_and_replace_multiple_strings,
@@ -93,7 +97,7 @@ macro_rules! specta_commands {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // Export typescript bindings in debug mode so our frontend always has up-to-date types
+    // Export TypeScript bindings during debug builds.
     #[cfg(debug_assertions)]
     {
         log::info!("ISpooferMotion: Exporting Specta bindings in a high-stack thread...");
@@ -104,7 +108,7 @@ pub fn run() {
                 let builder =
                     tauri_specta::Builder::<tauri::Wry>::new().commands(specta_commands!());
                 builder
-                    .export(specta_typescript::Typescript::default(), "../src/bindings.ts")
+                    .export(specta_typescript::Typescript::default(), "../src/types/bindings.ts")
                     .expect("Failed to export typescript bindings");
             })
             .expect("Failed to spawn specta thread")
@@ -113,7 +117,7 @@ pub fn run() {
         log::info!("ISpooferMotion: Finished Exporting Specta bindings!");
     }
 
-    // Set up native OS panic dialogs and logging
+    // Initialize native OS panic dialogs and logging.
     std::panic::set_hook(Box::new(|info| {
         let msg =
             format!("ISpooferMotion encountered a fatal error. Please check the logs.\n\n{}", info);
@@ -129,6 +133,7 @@ pub fn run() {
     let builder = tauri_specta::Builder::<tauri::Wry>::new().commands(specta_commands!());
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_process::init())
         .invoke_handler(builder.invoke_handler())
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_dialog::init())
@@ -151,10 +156,10 @@ pub fn run() {
                 tauri_plugin_log::Builder::default().level(log::LevelFilter::Info).build(),
             )?;
 
-            // Spin up the bridge server in the background
+            // Initialize the bridge server asynchronously.
             tauri::async_runtime::spawn(crate::studio_bridge::start_server(app.handle().clone()));
 
-            // Setup tray icon so people don't lose the app when they close the main window
+            // Initialize system tray icon.
             use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
             let _tray = TrayIconBuilder::new()
                 .icon(

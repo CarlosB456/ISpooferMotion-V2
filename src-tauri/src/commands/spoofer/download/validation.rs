@@ -1,4 +1,48 @@
-// sanity check the first few bytes of a download to make sure we didn't just save an html error page
+// Validate magic numbers to ensure the download is not an HTML error page.
+const MAGIC_PNG: &[u8] = b"\x89PNG\r\n\x1a\n";
+const MAGIC_JPEG: &[u8] = &[0xff, 0xd8, 0xff];
+const MAGIC_GIF87A: &[u8] = b"GIF87a";
+const MAGIC_GIF89A: &[u8] = b"GIF89a";
+const MAGIC_OGG: &[u8] = b"OggS";
+const MAGIC_ID3: &[u8] = b"ID3";
+const MAGIC_RIFF: &[u8] = b"RIFF";
+const MAGIC_FLAC: &[u8] = b"fLaC";
+const MAGIC_MAC: &[u8] = b"MAC ";
+const MAGIC_FORM: &[u8] = b"FORM";
+const MAGIC_WEBM_MKV: &[u8] = b"\x1A\x45\xDF\xA3";
+
+fn is_valid_audio(head: &[u8]) -> bool {
+    head.starts_with(MAGIC_OGG)
+        || head.starts_with(MAGIC_ID3)
+        || (head.len() >= 2 && head[0] == 0xff && (head[1] & 0xe0) == 0xe0)
+        || head.starts_with(MAGIC_RIFF)
+        || head.starts_with(MAGIC_FLAC)
+        || head.windows(4).any(|w| w == b"ftyp")
+        || head.starts_with(MAGIC_MAC)
+        || head.starts_with(MAGIC_FORM)
+}
+
+fn is_valid_image(head: &[u8]) -> bool {
+    head.starts_with(MAGIC_PNG)
+        || head.starts_with(MAGIC_JPEG)
+        || head.starts_with(MAGIC_GIF87A)
+        || head.starts_with(MAGIC_GIF89A)
+}
+
+fn is_valid_video(head: &[u8]) -> bool {
+    head.windows(4).any(|w| {
+        w == b"ftyp" || w == b"moov" || w == b"mdat" || w == b"free" || w == b"webm"
+    }) || head.starts_with(MAGIC_WEBM_MKV)
+}
+
+fn is_valid_model(head: &[u8], head_text: &str) -> bool {
+    head_text.contains("<roblox")
+        || head.starts_with(b"version ")
+        || head.starts_with(b"v ")
+        || head.starts_with(b"CSGPHS")
+        || (head_text.starts_with('{') && !head_text.contains("\"error"))
+}
+
 pub async fn validate_downloaded_payload(
     file_path: &str,
     asset_type: Option<&str>,
@@ -7,7 +51,7 @@ pub async fn validate_downloaded_payload(
     let mut file = tokio::fs::File::open(file_path)
         .await
         .map_err(|error| format!("Could not open downloaded asset for validation: {error}"))?;
-    let mut bytes = [0u8; 256];
+    let mut bytes = [0u8; 4096];
     let n = file.read(&mut bytes).await.unwrap_or(0);
     if n == 0 {
         return Err("Downloaded asset was empty.".into());
@@ -30,48 +74,28 @@ pub async fn validate_downloaded_payload(
 
     match asset_type.unwrap_or_default().to_ascii_lowercase().as_str() {
         "audio" => {
-            if head.starts_with(b"OggS")
-                || head.starts_with(b"ID3")
-                || (head.len() >= 2 && head[0] == 0xff && (head[1] & 0xe0) == 0xe0)
-                || head.starts_with(b"RIFF")
-                || head.starts_with(b"fLaC")
-                || head.windows(4).any(|w| w == b"ftyp") // M4A/MP4
-                || head.starts_with(b"MAC ") // monkey's audio
-                || head.starts_with(b"FORM")
-            // AIFF
-            {
+            if is_valid_audio(head) {
                 Ok(())
             } else {
                 Err("Downloaded audio was not a recognized audio file.".into())
             }
         }
         "image" => {
-            if head.starts_with(b"\x89PNG\r\n\x1a\n")
-                || head.starts_with(&[0xff, 0xd8, 0xff])
-                || head.starts_with(b"GIF87a")
-                || head.starts_with(b"GIF89a")
-            {
+            if is_valid_image(head) {
                 Ok(())
             } else {
                 Err("Downloaded image was not a recognized image file.".into())
             }
         }
         "video" => {
-            if head.windows(4).any(|w| {
-                w == b"ftyp" || w == b"moov" || w == b"mdat" || w == b"free" || w == b"webm"
-            }) || head.starts_with(b"\x1A\x45\xDF\xA3")
-            // WEBM/MKV
-            {
+            if is_valid_video(head) {
                 Ok(())
             } else {
                 Err("Downloaded video was not a recognized video format.".into())
             }
         }
         "mesh" | "animation" | "plugin" | "model" => {
-            if head_text.contains("<roblox")
-                || head.starts_with(b"version ")
-                || head.starts_with(b"v ")
-            {
+            if is_valid_model(head, &head_text) {
                 Ok(())
             } else {
                 Err("Downloaded asset was not a recognized Roblox model format.".into())

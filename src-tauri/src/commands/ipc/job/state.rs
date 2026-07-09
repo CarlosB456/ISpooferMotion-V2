@@ -3,7 +3,7 @@ use std::time::Duration;
 use tokio::time::sleep;
 
 #[derive(Default)]
-// global state to manage the currently running spoof job, so we can pause/cancel it from the ui
+// Global state managing the active spoofing job, enabling UI pause/cancel controls.
 pub struct SpooferControl {
     pub active_job_id: Option<String>,
     pub paused: bool,
@@ -16,7 +16,7 @@ pub fn spoofer_control() -> &'static Mutex<SpooferControl> {
     SPOOFER_CONTROL.get_or_init(|| Mutex::new(SpooferControl::default()))
 }
 
-// lock the spoofer so only one job can run at a time
+// Apply a lock to ensure only one spoofing job runs concurrently.
 pub fn begin_spoofer_job(job_id: &str) -> crate::error::Result<()> {
     let mut control =
         spoofer_control().lock().map_err(|_| "Spoofer control state is unavailable.")?;
@@ -37,7 +37,7 @@ pub fn finish_spoofer_job(job_id: &str) {
 }
 
 pub async fn wait_if_paused(job_id: &str) -> crate::error::Result<()> {
-    // loop here if the user hit the pause button, checking every half second until they resume
+    // Poll state when paused until resumption.
     loop {
         let paused = {
             let control =

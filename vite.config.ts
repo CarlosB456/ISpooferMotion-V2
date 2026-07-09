@@ -38,7 +38,8 @@ export default defineConfig(() => {
           defaultHandler(warning);
         },
         input: {
-          main: resolve(__dirname, 'index.html'),
+          main: resolve(__dirname, './index.html'),
+          splash: resolve(__dirname, './splash.html'),
         },
         output: {
           manualChunks(id) {
@@ -53,6 +54,8 @@ export default defineConfig(() => {
       },
     },
     server: {
+      port: 5173,
+      strictPort: true,
       proxy: {
         '/api': {
           target: 'https://ispoofermotion.com',

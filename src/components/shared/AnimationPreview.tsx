@@ -9,15 +9,15 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
 
-import { useConfig } from '../contexts/ConfigContext';
-import { useLanguage } from '../contexts/LanguageContext';
-import { cn } from '../utils/cn';
+import { useConfig } from '../../contexts/ConfigContext';
+import { useLanguage } from '../../contexts/LanguageContext';
+import { cn } from '../../utils/cn';
 import {
   parseAnimationXml,
   type RobloxAnimationClip,
   type RobloxPose,
-} from '../utils/robloxAnimParser';
-import { detectRigType, getBones, type RigBone, type RigType } from '../utils/robloxRig';
+} from '../../utils/robloxAnimParser';
+import { detectRigType, getBones, type RigBone, type RigType } from '../../utils/robloxRig';
 
 interface AnimationPreviewProps {
   assetId: string;
@@ -26,7 +26,7 @@ interface AnimationPreviewProps {
 }
 
 function disposeMaterial(material: THREE.Material) {
-  // make sure we don't leak memory when the preview modal closes
+  // Prevent memory leaks when the preview modal closes.
   for (const value of Object.values(material)) {
     if (value instanceof THREE.Texture) {
       value.dispose();
@@ -52,8 +52,7 @@ function lerp(a: number, b: number, t: number) {
   return a + (b - a) * t;
 }
 
-// trying to accurately mimic roblox's internal easing styles
-// not perfect but gets the job done for the previewer
+// Mimic Roblox's internal easing styles.
 function applyEasing(t: number, style: number, dir: number): number {
   t = Math.max(0, Math.min(1, t));
   const ease = (fn: (x: number) => number) => {
@@ -74,9 +73,8 @@ function applyEasing(t: number, style: number, dir: number): number {
 }
 
 function flattenPoses(poses: RobloxPose[]): Map<string, RobloxPose> {
-  // flattens the nested pose tree into a map so we can look up bones instantly by name
-  // much faster than traversing the tree every single frame
-  const map = new Map<string, RobloxPose>();
+  // Flatten the pose tree into a map for fast bone lookups.
+    const map = new Map<string, RobloxPose>();
   const walk = (list: RobloxPose[]) => {
     for (const p of list) {
       map.set(p.name, p);
@@ -87,7 +85,7 @@ function flattenPoses(poses: RobloxPose[]): Map<string, RobloxPose> {
   return map;
 }
 
-// hoist three.js math objects to prevent garbage collection thrashing in the hot render loop
+// Hoist three.js math objects to reduce garbage collection in the render loop.
 const _tempMat1 = new THREE.Matrix4();
 const _tempMat2 = new THREE.Matrix4();
 const _transformMat = new THREE.Matrix4();
@@ -169,8 +167,8 @@ export default function AnimationPreview({ assetId, assetName, onClose }: Animat
     (async () => {
       try {
         let activeCookie = cookie;
-        // if they don't have a cookie set in config, try to auto-detect one as a fallback
-        // we need this to view private animations
+        // Auto-detect cookie if not set in config.
+        // Required to view private animations.
         if (!activeCookie) {
           try {
             const detected = await invoke('get_cookie_from_auto_detect', {
@@ -196,7 +194,7 @@ export default function AnimationPreview({ assetId, assetName, onClose }: Animat
           return;
         }
 
-        const parsed = parseAnimationXml(xml);
+        const parsed = await parseAnimationXml(xml);
         if (cancelled) return;
 
         if (!parsed || parsed.keyframes.length === 0) {
@@ -220,7 +218,7 @@ export default function AnimationPreview({ assetId, assetName, onClose }: Animat
         for (const kf of parsed.keyframes) uniqueTimes.add(kf.time);
         setKeyframeTimes(Array.from(uniqueTimes).sort((a, b) => a - b));
 
-        // try to figure out if this is R6 or R15 based on the bone names present
+        // Guess R6 or R15 based on present bone names.
         const rig = detectRigType(allPoseNames);
         setDetectedRig(rig);
 
@@ -266,7 +264,7 @@ export default function AnimationPreview({ assetId, assetName, onClose }: Animat
       let kfA = kfs[0],
         kfB = kfs[0];
 
-      // find which two keyframes we are currently sitting between
+      // Identify the two keyframes the current time sits between.
       for (let i = 0; i < kfs.length - 1; i++) {
         if (kfs[i].time <= wt && kfs[i + 1].time >= wt) {
           kfA = kfs[i];
@@ -289,7 +287,7 @@ export default function AnimationPreview({ assetId, assetName, onClose }: Animat
         _transformMat.identity();
 
         if (pa && pb) {
-          // both keyframes have this bone, so we interpolate between them
+          // Interpolate between the two keyframes for this bone.
           const pose = pa || pb!;
           const alpha = applyEasing(raw, pose.easingStyle, pose.easingDirection);
           _tempPos.set(
@@ -331,8 +329,7 @@ export default function AnimationPreview({ assetId, assetName, onClose }: Animat
     const W = container.clientWidth || 560;
     const H = container.clientHeight || 340;
 
-    // basic three.js setup
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setSize(W, H);
     renderer.setClearColor(0x000000, 0);
@@ -441,7 +438,7 @@ export default function AnimationPreview({ assetId, assetName, onClose }: Animat
         const mat = getMaterialForBone(bone.name);
 
         if (bone.name === 'Head') {
-          // load the actual head obj model so it doesn't just look like a generic block
+          // Load the head obj model.
           const headFile = rigType === 'R6' ? '/headr6.obj' : '/headr15.obj';
           const loader = new OBJLoader();
           loader.load(headFile, (loadedObj) => {
@@ -492,7 +489,7 @@ export default function AnimationPreview({ assetId, assetName, onClose }: Animat
             obj.add(faceMesh);
           });
         } else {
-          // fallback for other body parts, just use a nice rounded box
+          // Use a rounded box for other body parts.
           const boxGeo = new RoundedBoxGeometry(bone.size[0], bone.size[1], bone.size[2], 2, 0.1);
           const mesh = new THREE.Mesh(boxGeo, mat);
           mesh.castShadow = true;
@@ -579,13 +576,7 @@ export default function AnimationPreview({ assetId, assetName, onClose }: Animat
         exit={{ scale: 0.95, y: 12, opacity: 0 }}
         transition={{ type: 'spring', damping: 30, stiffness: 350 }}
         onClick={(e) => e.stopPropagation()}
-        className="relative flex flex-col bg-bg-surface border border-border-subtle rounded-lg shadow-floating overflow-hidden"
-        style={{
-          width: 600,
-          maxWidth: 'calc(100vw - 48px)',
-          height: 500,
-          maxHeight: 'calc(100vh - 48px)',
-        }}
+        className="relative flex flex-col bg-bg-surface border border-border-subtle rounded-lg shadow-floating overflow-hidden w-150 max-w-[calc(100vw-48px)] h-125 max-h-[calc(100vh-48px)]"
       >
         {}
         <div className="flex items-center gap-3 px-4 py-3 border-b border-border-subtle bg-bg-elevated shrink-0">
@@ -675,7 +666,7 @@ export default function AnimationPreview({ assetId, assetName, onClose }: Animat
               className="relative w-full h-1.5 bg-bg-base rounded-full cursor-pointer select-none"
               ref={scrubBarRef}
               onPointerDown={(e) => {
-                // drag timeline to scrub through animation manually
+                // Scrub through animation manually via timeline drag.
                 isScrubbing.current = true;
                 e.currentTarget.setPointerCapture(e.pointerId);
                 const rect = e.currentTarget.getBoundingClientRect();

@@ -1,195 +1,34 @@
 import { IsmProvider } from '@codycon/ism-library';
-import { invoke } from '@tauri-apps/api/core';
-import { getCurrentWindow } from '@tauri-apps/api/window';
-import { isRegistered, register, unregister } from '@tauri-apps/plugin-global-shortcut';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ChevronLeft } from 'lucide-react';
-import { lazy, Suspense, useEffect, useState } from 'react';
+import { lazy, Suspense } from 'react';
 
 import Sidebar from './components/layout/Sidebar';
 import StatusBar from './components/layout/StatusBar';
 import Titlebar from './components/layout/Titlebar';
-import { RobloxStatusBanner } from './components/RobloxStatusBanner';
+import { RobloxStatusBanner } from './components/shared/RobloxStatusBanner';
+
 import { useConfig } from './contexts/ConfigContext';
 import { useLanguage } from './contexts/LanguageContext';
-import { isTauriRuntime } from './utils/tauriRuntime';
+import { useAppInitialization } from './hooks/useAppInitialization';
 
 const ActivityView = lazy(() => import('./components/views/ActivityView'));
 const AssetExplorer = lazy(() => import('./components/views/AssetExplorer'));
 const DebugConsole = lazy(() => import('./components/views/DebugConsole'));
-const ExperimentalView = lazy(() => import('./components/views/ExperimentalView'));
+
 const SettingsView = lazy(() => import('./components/views/SettingsView'));
 const SpoofingView = lazy(() => import('./components/views/SpoofingView'));
 
 export default function App() {
   const { t } = useLanguage();
-
   const { config, updateConfig } = useConfig();
   const activeTab = config.ui.activeTab;
   const isExplorerOpen = config.ui.assetExplorerOpen;
 
-  const [isRobloxApiDown, setIsRobloxApiDown] = useState(false);
-  const [maintenance, setMaintenance] = useState<{
-    mode: boolean;
-    message: string;
-  }>({
-    mode: false,
-    message: '',
-  });
-
-  useEffect(() => {
-    // Check if we need to lock the app via live config
-    const fetchConfig = async () => {
-      try {
-        const baseUrl =
-          import.meta.env.VITE_API_BASE_URL === undefined
-            ? 'https://ispoofermotion.com'
-            : import.meta.env.VITE_API_BASE_URL;
-        let res;
-        if (isTauriRuntime()) {
-          const { fetch: tauriFetch } = await import('@tauri-apps/plugin-http');
-          res = await tauriFetch(`${baseUrl}/api/config`);
-        } else {
-          res = await fetch(`${baseUrl}/api/config`);
-        }
-        if (res.ok) {
-          const data = await res.json();
-          if (data.maintenanceMode) {
-            setMaintenance({ mode: true, message: data.maintenanceMessage });
-          }
-        }
-      } catch (e) {
-        // use warn instead of error so it doesn't look like a critical bug during local dev
-        console.warn('Could not connect to app config server:', e);
-      }
-    };
-    fetchConfig();
-  }, []);
-
-  useEffect(() => {
-    if (!isTauriRuntime()) return;
-
-    // Check if the Roblox API is throwing a fit so we can warn the user
-    const checkStatus = async () => {
-      try {
-        const isUp: boolean = await invoke('check_roblox_api_status');
-        setIsRobloxApiDown(!isUp);
-      } catch (e) {
-        setIsRobloxApiDown(true);
-      }
-    };
-    checkStatus();
-    const interval = setInterval(checkStatus, 60000);
-    return () => clearInterval(interval);
-  }, []);
-
-  useEffect(() => {
-    if (!isTauriRuntime()) return;
-    // Send a heartbeat every 60 seconds to track active spoofer users
-    const sendHeartbeat = async () => {
-      try {
-        const baseUrl =
-          import.meta.env.VITE_API_BASE_URL === undefined
-            ? 'https://ispoofermotion.com'
-            : import.meta.env.VITE_API_BASE_URL;
-        if (isTauriRuntime()) {
-          const { fetch: tauriFetch } = await import('@tauri-apps/plugin-http');
-          await tauriFetch(`${baseUrl}/api/dev/heartbeat`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ source: 'spoofer' }),
-          });
-        } else {
-          await fetch(`${baseUrl}/api/dev/heartbeat`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ source: 'spoofer' }),
-          });
-        }
-      } catch (e) {
-        // ignore network errors for heartbeat
-      }
-    };
-
-    sendHeartbeat();
-    const interval = setInterval(sendHeartbeat, 60000);
-    return () => clearInterval(interval);
-  }, []);
+  const { maintenance, isRobloxApiDown } = useAppInitialization();
 
   const setActiveTab = (tabId: string) => updateConfig('ui', 'activeTab', tabId);
   const setIsExplorerOpen = (isOpen: boolean) => updateConfig('ui', 'assetExplorerOpen', isOpen);
-
-  useEffect(() => {
-    const allowedTabs = ['spoofing', 'activity', 'settings'];
-    // only show the experimental tab if they've explicitly enabled it in debug settings
-    if (config.debug?.enableExperimentalTab) {
-      allowedTabs.push('experimental');
-    }
-
-    if (!allowedTabs.includes(activeTab)) {
-      updateConfig('ui', 'activeTab', 'spoofing');
-    }
-  }, [activeTab, config.debug?.enableExperimentalTab, updateConfig]);
-
-  useEffect(() => {
-    const preventDrag = (e: Event) => e.preventDefault();
-    window.addEventListener('dragover', preventDrag);
-    window.addEventListener('drop', preventDrag);
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'F12' || (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'i')) {
-        invoke('open_frontend_devtools').catch(console.error);
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-
-    const shortcut = 'Alt+I';
-    let isCancelled = false;
-    let didRegisterShortcut = false;
-    const registerShortcut = async () => {
-      if (!isTauriRuntime()) return;
-      try {
-        if (await isRegistered(shortcut)) return;
-        await register(shortcut, async (event) => {
-          if (event.state === 'Pressed') {
-            const win = getCurrentWindow();
-            await win.show();
-            await win.setFocus();
-          }
-        });
-        didRegisterShortcut = true;
-        if (isCancelled) {
-          await unregister(shortcut);
-          didRegisterShortcut = false;
-        }
-      } catch (error) {
-        if (!String(error).includes('already registered')) {
-          console.error(error);
-        }
-      }
-    };
-
-    void registerShortcut();
-
-    return () => {
-      isCancelled = true;
-      window.removeEventListener('dragover', preventDrag);
-      window.removeEventListener('drop', preventDrag);
-      window.removeEventListener('keydown', handleKeyDown);
-      if (!didRegisterShortcut) return;
-      unregister(shortcut).catch((error) => {
-        if (!String(error).toLowerCase().includes('not registered')) {
-          console.error(error);
-        }
-      });
-    };
-  }, []);
-
-  useEffect(() => {
-    if (config.spoofing.cookie) {
-      invoke('get_economy_metadata', { cookie: config.spoofing.cookie }).catch(() => {});
-    }
-  }, [config.spoofing.cookie]);
 
   if (maintenance.mode) {
     return (
@@ -243,7 +82,7 @@ export default function App() {
                     {activeTab === 'spoofing' && <SpoofingView key="spoofing" />}
                     {activeTab === 'activity' && <ActivityView key="activity" />}
                     {activeTab === 'settings' && <SettingsView key="settings" />}
-                    {activeTab === 'experimental' && <ExperimentalView key="experimental" />}
+
                   </AnimatePresence>
                 </Suspense>
               </div>

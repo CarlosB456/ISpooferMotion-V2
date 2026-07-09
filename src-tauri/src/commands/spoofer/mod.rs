@@ -26,7 +26,7 @@ static ADAPTIVE_LIMITER: std::sync::OnceLock<AdaptiveLimiter> = std::sync::OnceL
 static ROBLOX_GAME_IDS: std::sync::OnceLock<dashmap::DashMap<String, String>> =
     std::sync::OnceLock::new();
 
-// different buckets so we can independently throttle uploads, downloads, and scrapes
+// Independent buckets for throttling uploads, downloads, and scrapes.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub(crate) enum RateLimitBucket {
     Upload,
@@ -34,6 +34,7 @@ pub(crate) enum RateLimitBucket {
     DownloadResolution,
     AssetDownload,
     PlaceLookup,
+    AssetResolve,
 }
 
 impl RateLimitBucket {
@@ -44,6 +45,7 @@ impl RateLimitBucket {
             Self::DownloadResolution => "download_resolution",
             Self::AssetDownload => "asset_download",
             Self::PlaceLookup => "place_lookup",
+            Self::AssetResolve => "asset_resolve",
         }
     }
 }
@@ -60,7 +62,7 @@ fn is_valid_numeric_id(value: &str) -> bool {
     !value.is_empty() && value.chars().all(|character| character.is_ascii_digit())
 }
 
-// a smart concurrency limiter that backs off when roblox starts rejecting requests, and ramps up when things are going well
+// Adaptive concurrency limiter that adjusts based on API rejection rates.
 struct AdaptiveLimiter {
     max: AtomicUsize,
     current: AtomicUsize,
@@ -102,7 +104,11 @@ pub fn configure_adaptive_concurrency(max_concurrency: usize) {
     let max = max_concurrency.clamp(1, 100);
     let limiter = adaptive_limiter();
     limiter.max.store(max, Ordering::Release);
-    limiter.current.store(max, Ordering::Release);
+
+    // Start with a conservative baseline to prevent initial rate limiting.
+    let start = max.min(3);
+    limiter.current.store(start, Ordering::Release);
+
     limiter.success_streak.store(0, Ordering::Release);
     if let Ok(mut guard) = limiter.blocked_until.lock() {
         *guard = None;
@@ -211,7 +217,7 @@ fn game_ids_by_place() -> &'static dashmap::DashMap<String, String> {
     ROBLOX_GAME_IDS.get_or_init(dashmap::DashMap::new)
 }
 
-// fakes a studio session for a specific game so we can download 'copylocked' assets that belong to that game
+// Emulate a Studio session for a specific game to access copylocked assets.
 fn roblox_game_context(place_id: Option<&str>) -> Option<RobloxGameContext> {
     let place_id =
         place_id.map(str::trim).filter(|value| is_valid_numeric_id(value) && *value != "0")?;
@@ -269,7 +275,7 @@ fn apply_upload_auth(
     }
 }
 
-// pauses the current task if we've hit a rate limit, optionally obeying a global circuit breaker if the api is totally down
+// Pause task execution upon rate limits; respect global circuit breakers.
 pub(crate) async fn wait_rate_limit(bucket: RateLimitBucket) {
     let wait_dur = {
         let mut max_until: Option<Instant> = None;

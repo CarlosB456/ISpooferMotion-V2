@@ -1,7 +1,7 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { AlertCircle } from 'lucide-react';
 
-import { useLanguage } from '../contexts/LanguageContext';
+import { useLanguage } from '../../contexts/LanguageContext';
 
 interface RobloxStatusBannerProps {
   isVisible: boolean;
@@ -9,9 +9,8 @@ interface RobloxStatusBannerProps {
 
 export function RobloxStatusBanner({ isVisible }: RobloxStatusBannerProps) {
   const { t } = useLanguage();
-  // simple banner that drops down when roblox APIs are having a bad time
-  // helps prevent users from thinking the app is broken when it's actually roblox's fault
-  return (
+  // Dropdown banner for Roblox API outages.
+    return (
     <AnimatePresence>
       {isVisible && (
         <motion.div

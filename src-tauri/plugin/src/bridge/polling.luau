@@ -2,6 +2,11 @@
 --!nolint
 -- luacheck: ignore
 ---@diagnostic disable: undefined-global, unused-local, unused-function, lowercase-global
+--# selene: allow(unused_variable, global_usage, undefined_variable, empty_if)
+
+-- These variables are globals provided by the environment or other concatenated files
+-- HttpService, decodeJsonResponseBody, logToPlugin, discoverServer, setPluginGuiStatus,
+-- scanRunning, patchRunning, scan, applyPatches, BASE_URL
 local function requestPollEndpoint(baseUrl: string, endpoint: string): (boolean, any, number?)
 	local ok, response = pcall(function()
 		return HttpService:RequestAsync({
@@ -114,11 +119,7 @@ local function fetchApiDumpProperties()
 				local valType = member.ValueType and member.ValueType.Name or ""
 				local name = member.Name
 				local isAsset = valType == "Content" or valType == "ContentId"
-				if
-					not isAsset
-					and (valType == "string" or valType == "int64")
-					and isAssetLike(name)
-				then
+				if not isAsset and (valType == "string" or valType == "int64") and isAssetLike(name) then
 					isAsset = true
 				end
 				if not isAsset and isHumanoidDescriptionAsset(className, name, valType) then
@@ -155,14 +156,14 @@ local function fetchApiDumpProperties()
 			end
 
 			for _, class in ipairs(decoded.Classes) do
-				local assets = getProperties(class.Name, function(c, m)
-					return isAssetProperty(c, m)
+				local assets = getProperties(class.Name, function(_c, m)
+					return isAssetProperty(class.Name, m)
 				end)
 				if #assets > 0 then
 					newAssetProps[class.Name] = assets
 				end
 
-				local strings = getProperties(class.Name, function(c, m)
+				local strings = getProperties(class.Name, function(_c, m)
 					local v = m.ValueType and m.ValueType.Name or ""
 					return v == "string" or v == "Content" or v == "ContentId"
 				end)
@@ -182,7 +183,7 @@ local function fetchApiDumpProperties()
 	end
 end
 
-local function startPolling(): ()
+function startPolling(): ()
 	if polling then
 		return
 	end
@@ -236,8 +237,7 @@ local function startPolling(): ()
 		while polling do
 			local baseUrl = BASE_URL
 			if baseUrl and autoReplaceEnabled then
-				local patchOk, decoded, statusCode =
-					requestPollEndpoint(baseUrl, "/poll-replacements")
+				local patchOk, decoded, statusCode = requestPollEndpoint(baseUrl, "/poll-replacements")
 
 				if not patchOk then
 					logToPlugin("[Warning] " .. "[ISpooferMotion] Lost connection to " .. baseUrl)
@@ -254,13 +254,12 @@ local function startPolling(): ()
 						else
 							logToPlugin("Received " .. #patches .. " replacements from Desktop App")
 							autoReplaceEnabled = false
-							setPluginGuiStatus(
-								"Applying " .. #patches .. " targeted replacements..."
-							)
+							setPluginGuiStatus("Applying " .. #patches .. " targeted replacements...")
 							task.spawn(applyPatches, patches)
 						end
 					elseif type(mappings) == "table" and #mappings > 0 then
 						-- Do nothing, wait for patches to arrive on next poll cycle.
+						local _wait = true
 					end
 				end
 			end

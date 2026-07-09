@@ -1,10 +1,11 @@
 import { invoke } from '@tauri-apps/api/core';
 
+import { addDebugLog } from './debugLogger';
 import { DEFAULT_PLUGIN_PORT, findPluginBridgePort } from './pluginBridge';
 
 export async function queueStudioReplacements(replacements: Record<string, string>) {
   if (Object.keys(replacements).length === 0) {
-    console.log('No new spoofed assets found to apply to Studio.');
+    addDebugLog('info', ['No new spoofed assets found to apply to Studio.']);
     return;
   }
   const pluginPort = (await findPluginBridgePort()) || DEFAULT_PLUGIN_PORT;
@@ -12,8 +13,8 @@ export async function queueStudioReplacements(replacements: Record<string, strin
     replacementsMap: replacements,
     pluginPort,
   });
-  // The Rust command returns machine-readable strings on failure rather than Err().
-  // Translate them into thrown errors so callers get accurate feedback.
+  // The Rust command returns machine-readable strings on failure.
+  // Translate them into thrown errors for accurate caller feedback.
   if (result === 'plugin_not_connected' || result === 'bridge_unavailable') {
     throw new Error(
       'Could not reach the ISpooferMotion Studio plugin. Make sure Studio is open and the plugin is connected, then try again.',

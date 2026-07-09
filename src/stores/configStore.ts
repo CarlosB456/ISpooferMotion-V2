@@ -27,7 +27,6 @@ export const AppConfigSchema = z.object({
   debug: z.object({
     debugMode: z.boolean().default(false),
     enableCache: z.boolean().default(true),
-    enableExperimentalTab: z.boolean().default(false),
   }),
   spoofing: z.object({
     selectedUser: z.string().default('none'),
@@ -84,7 +83,6 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
   debug: {
     debugMode: false,
     enableCache: true,
-    enableExperimentalTab: false,
   },
   spoofing: {
     selectedUser: 'none',
@@ -113,22 +111,22 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
   },
 };
 
-// helper to safely merge saved config with defaults
-// so we don't crash the app if a new setting gets added in an update
+// Merge saved config with defaults.
+// Prevents crashes if new settings are added in an update.
 const mergeKnownKeys = <T extends Record<string, unknown>>(
   defaults: T,
   saved: Partial<T> | undefined,
 ): T => {
   const next = { ...defaults };
   Object.keys(defaults).forEach((key) => {
-    if (saved && Object.hasOwn(saved, key)) {
+    if (saved && Object.prototype.hasOwnProperty.call(saved, key)) {
       next[key as keyof T] = saved[key as keyof T] as T[keyof T];
     }
   });
   return next;
 };
 
-// makes sure they don't get stuck with invalid UI sections if we remove or rename one
+// Prevents invalid UI sections if settings are removed or renamed.
 const mergeSections = (savedSections: unknown, defaultSections: string[]) => {
   if (!Array.isArray(savedSections)) return defaultSections;
   const next = savedSections.filter((section: string) => defaultSections.includes(section));
@@ -149,7 +147,7 @@ interface ConfigState {
 }
 
 export const useConfigStore = create<ConfigState>((set, get) => {
-  // rip config from localstorage and fallback to defaults if they haven't run the app yet
+  // Load config from localstorage or fallback to defaults.
   const saved = localStorage.getItem('ISpooferMotion_Config');
   let initConfig = DEFAULT_APP_CONFIG;
   if (saved) {
@@ -179,7 +177,7 @@ export const useConfigStore = create<ConfigState>((set, get) => {
   }
 
   const saveToStorage = (c: AppConfig) => {
-    // don't ever save cookies or api keys directly to standard config storage, those belong in the rust keyring
+    // Cookies and API keys must be saved in the Rust keyring, not standard config storage.
     localStorage.setItem(
       'ISpooferMotion_Config',
       JSON.stringify({

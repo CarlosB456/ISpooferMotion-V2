@@ -1,7 +1,6 @@
 #[tauri::command]
 #[specta::specta]
-// sends the final asset mappings over to the roblox studio plugin so it can actually swap the ids in their game
-// returns "ok" on success, or a machine-readable reason string the frontend can translate into a useful message
+// Send finalized asset mappings to the Roblox Studio plugin. Returns "ok" or an error string.
 pub async fn push_to_studio(
     replacements_map: crate::commands::AnyValue,
     plugin_port: Option<String>,

@@ -1,11 +1,10 @@
-import { Button, MultiSelectDropdown, Spinner } from '@codycon/ism-library';
-import { convertFileSrc, invoke } from '@tauri-apps/api/core';
+import { Button, Spinner } from '@codycon/ism-library';
+import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { open as openFilePicker } from '@tauri-apps/plugin-dialog';
-import { readFile } from '@tauri-apps/plugin-fs';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ChevronLeft, ChevronRight, FileUp, Filter, FolderOpen, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, FileUp, FolderOpen, X } from 'lucide-react';
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
@@ -17,11 +16,11 @@ import { useSpooferStore } from '../../stores/spooferStore';
 import type { ScriptRefProgressPayload, TauriEventPayload } from '../../types/tauriEvents';
 import type { PluginAsset, PluginAssetStore } from '../../utils/pluginBridge';
 import { stopRobloxAudio } from '../../utils/robloxAudio';
-import type { ParsedAssetRef, ParseProgress, RbxInstance } from '../../utils/robloxPlaceParser';
-import { parsePlaceBytesInWorker, parsePlaceUrlInWorker } from '../../utils/robloxPlaceParser';
+import type { ParsedAssetRef, ParseProgress, RbxInstance } from '../../utils/robloxPlaceParser/types';
 import { logIsm } from '../../utils/robloxProfiles';
 import { isTauriRuntime } from '../../utils/tauriRuntime';
 import { ExplorerTreeNode, getAssetId } from './asset-explorer/ExplorerTree';
+import { ExplorerToolbar } from './asset-explorer/ExplorerToolbar';
 
 interface AssetExplorerProps {
   isOpen: boolean;
@@ -29,18 +28,11 @@ interface AssetExplorerProps {
   onScanReceived?: () => void;
 }
 
-const ASSET_TYPE_OPTIONS = [
-  { value: 'audio', label: 'Audio' },
-  { value: 'image', label: 'Images' },
-  { value: 'animation', label: 'Animations' },
-  { value: 'mesh', label: 'Meshes' },
-];
-
 const ASSET_EXPLORER_WIDTH = 280;
-const AnimationPreview = lazy(() => import('../AnimationPreview'));
+const AnimationPreview = lazy(() => import('../shared/AnimationPreview'));
 
 function dedupePluginAssets(assets: PluginAsset[]): PluginAsset[] {
-  // filter out exact duplicates so we don't spam the tree view
+  // Filter out exact duplicates to keep the tree view clean.
   const seen = new Set<string>();
   const deduped: PluginAsset[] = [];
 
@@ -92,7 +84,7 @@ function pluginAssetsToNode(
   assets: PluginAsset[],
   assetType: ParsedAssetRef['type'],
 ): RbxInstance {
-  // turn flat plugin asset lists into the same nested tree structure we use for rbxl files
+  // Convert flat asset lists into a nested tree structure.
   return {
     referent: `studio-${folderName}`,
     className,
@@ -164,6 +156,7 @@ export default function AssetExplorer({ isOpen, setIsOpen, onScanReceived }: Ass
   const setRootInstances = useSpooferStore((s) => s.setRootInstances);
   const loadedFileName = useSpooferStore((s) => s.loadedFileName);
   const setLoadedFileName = useSpooferStore((s) => s.setLoadedFileName);
+  const setLoadedFilePath = useSpooferStore((s) => s.setLoadedFilePath);
   const setParsingFileName = useSpooferStore((s) => s.setParsingFileName);
   const selectedAssetIds = useSpooferStore((s) => s.selectedAssetIds);
   const setSelectedAssetIds = useSpooferStore((s) => s.setSelectedAssetIds);
@@ -227,7 +220,7 @@ export default function AssetExplorer({ isOpen, setIsOpen, onScanReceived }: Ass
         ['script_ref', scriptRefAssets],
       ];
 
-      // quickly check if anything actually changed before we rebuild the entire tree
+      // Check for changes before rebuilding the tree.
       const snapshot =
         snapshotEntries
           .flatMap(([type, assets]) =>
@@ -319,7 +312,7 @@ export default function AssetExplorer({ isOpen, setIsOpen, onScanReceived }: Ass
       setLoadedFileName((prev) => prev ?? 'Studio Session');
 
       if (scriptRefAssets.length > 0) {
-        // if we got script refs, try to resolve their actual asset type on the rust backend
+        // Attempt to resolve script ref asset types on the Rust backend.
         setResolvingScriptRefs(true);
         const uniqueIds = Array.from(
           new Set<string>(
@@ -406,42 +399,29 @@ export default function AssetExplorer({ isOpen, setIsOpen, onScanReceived }: Ass
 
   const loadFromPath = async (filePath: string) => {
     const fileName = filePath.replace(/\\/g, '/').split('/').pop() || filePath;
-    if (!fileName.endsWith('.rbxl') && !fileName.endsWith('.rbxlx')) {
-      logIsm('warn', `Only .rbxl and .rbxlx files are supported. Got: "${fileName}"`);
+    if (!fileName.endsWith('.rbxl') && !fileName.endsWith('.rbxlx') && !fileName.endsWith('.rbxm') && !fileName.endsWith('.rbxmx')) {
+      logIsm('warn', `Only .rbxl, .rbxlx, .rbxm, and .rbxmx files are supported. Got: "${fileName}"`);
       return;
     }
     setParsingFileName(fileName);
-    setParseState({ phase: 'Reading file', current: 0, total: 1 });
+    setParseState({ phase: 'Parsing file', current: 0, total: 1 });
     try {
-      let result;
-      // use the rust worker to parse the file quickly without blocking the UI thread
-      if (isTauriRuntime()) {
-        try {
-          const bytes = await readFile(filePath);
-          setParseState({
-            phase: 'Reading file',
-            current: bytes.byteLength,
-            total: bytes.byteLength,
-          });
-          result = await parsePlaceBytesInWorker(bytes, fileName, setParseState);
-        } catch (readError) {
-          logIsm(
-            'warn',
-            `Direct file read failed, falling back to local URL parser: ${String(readError)}`,
-          );
-        }
+      if (!isTauriRuntime()) {
+        throw new Error('File parsing is only supported in the desktop app.');
       }
 
-      if (!result) {
-        const fileUrl = convertFileSrc(filePath);
-        result = await parsePlaceUrlInWorker(fileUrl, fileName, setParseState);
-      }
+      const result = await invoke<{
+        fileType: string;
+        rootInstances: RbxInstance[];
+        warnings: string[];
+      }>('parse_place_file', { filePath });
 
       for (const w of result.warnings) {
         logIsm('warn', w);
       }
 
       setLoadedFileName(fileName);
+      setLoadedFilePath(filePath);
 
       const autoSelected = new Set<string>();
 
@@ -500,11 +480,11 @@ export default function AssetExplorer({ isOpen, setIsOpen, onScanReceived }: Ass
         } else if (type === 'drop') {
           setIsDragOver(false);
           const paths: string[] = (event.payload as { paths?: string[] }).paths ?? [];
-          const placeFile = paths.find((p) => p.endsWith('.rbxl') || p.endsWith('.rbxlx'));
+          const placeFile = paths.find((p) => p.endsWith('.rbxl') || p.endsWith('.rbxlx') || p.endsWith('.rbxm') || p.endsWith('.rbxmx'));
           if (placeFile) {
             loadFromPath(placeFile);
           } else if (paths.length > 0) {
-            logIsm('warn', `Only .rbxl and .rbxlx files are supported.`);
+            logIsm('warn', `Only .rbxl, .rbxlx, .rbxm, and .rbxmx files are supported.`);
           }
         }
       })
@@ -527,7 +507,7 @@ export default function AssetExplorer({ isOpen, setIsOpen, onScanReceived }: Ass
     try {
       const selected = await openFilePicker({
         multiple: false,
-        filters: [{ name: 'Roblox Place', extensions: ['rbxl', 'rbxlx'] }],
+        filters: [{ name: 'Roblox Files', extensions: ['rbxl', 'rbxlx', 'rbxm', 'rbxmx'] }],
       });
       if (!selected) return;
       const filePath =
@@ -685,37 +665,11 @@ export default function AssetExplorer({ isOpen, setIsOpen, onScanReceived }: Ass
               </motion.div>
             ) : (
               <div className="flex flex-col h-full">
-                {loadedFileName && (
-                  <div className="px-3 pt-3 pb-2 flex flex-col gap-2 border-b border-border-subtle">
-                    <div className="flex items-center gap-2 text-[10px] text-text-muted">
-                      <FolderOpen size={11} />
-                      <span className="truncate font-medium">{loadedFileName}</span>
-                    </div>
-                    <div className="flex min-w-0 items-center gap-2">
-                      <Filter size={13} className="shrink-0 text-text-muted" />
-                      <div className="min-w-0 flex-1">
-                        <MultiSelectDropdown
-                          options={ASSET_TYPE_OPTIONS.map((a) => ({
-                            ...a,
-                            label: t(
-                              'explorer.' +
-                                (a.value === 'image'
-                                  ? 'images'
-                                  : a.value === 'animation'
-                                    ? 'animations'
-                                    : a.value === 'mesh'
-                                      ? 'meshes'
-                                      : a.value),
-                            ),
-                          }))}
-                          values={activeAssetFilters}
-                          onChange={setActiveAssetFilters}
-                          placeholder={t('explorer.allAssetTypes')}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                )}
+                <ExplorerToolbar
+                  loadedFileName={loadedFileName}
+                  activeAssetFilters={activeAssetFilters}
+                  setActiveAssetFilters={setActiveAssetFilters}
+                />
 
                 <div className="flex flex-col flex-1 p-2">
                   {displayedInstances.map((node) => (

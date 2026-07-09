@@ -5,13 +5,13 @@ use std::sync::OnceLock;
 use tauri::{AppHandle, Emitter};
 
 static HTTP_CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
-// We keep a proxy client cached so we aren't spinning up new clients and killing connection pooling
+// Cache the proxy client to maintain connection pooling.
 static PROXY_CLIENT: OnceLock<std::sync::RwLock<(Option<String>, reqwest::Client)>> =
     OnceLock::new();
 
 fn build_client(proxy_url: Option<&str>) -> reqwest::Client {
     let mut builder = reqwest::Client::builder()
-        // 15 seconds seems to be the sweet spot for timeout without being too aggressive
+        // Use a 15-second timeout.
         .timeout(std::time::Duration::from_secs(15))
         .pool_idle_timeout(std::time::Duration::from_secs(90))
         .pool_max_idle_per_host(32);
@@ -53,17 +53,16 @@ pub fn get_http_client_with_proxy(proxy_url: Option<&str>) -> reqwest::Client {
     build_client(proxy_url)
 }
 
-// Checks for explicitly exhausted rate limits and standard retry-after.
-// Returns Some(milliseconds_to_wait) if we need to back off.
+// Check for exhausted rate limits or Retry-After headers. Returns backoff duration if necessary.
 #[must_use]
 pub fn extract_retry_after(response: &reqwest::Response, attempt: Option<u32>) -> Option<u64> {
     let mut needs_wait = false;
 
-    // Explicit rate limit exhaustion or approaching exhaustion
+    // Back off when rate limit is nearly empty (< 2 remaining).
     if let Some(remaining) = response.headers().get("x-ratelimit-remaining") {
         if let Ok(rem_str) = remaining.to_str() {
             if let Ok(rem_num) = rem_str.parse::<i64>() {
-                if rem_num < 5 {
+                if rem_num < 2 {
                     needs_wait = true;
                 }
             } else if rem_str == "0" {
@@ -93,7 +92,7 @@ pub fn extract_retry_after(response: &reqwest::Response, attempt: Option<u32>) -
             }
         }
 
-        // Fallback to standard retry-after if the fancy one isn't there
+        // Fallback to standard Retry-After header.
         if let Some(retry) = response.headers().get("retry-after") {
             if let Ok(retry_str) = retry.to_str() {
                 if let Ok(retry_secs) = retry_str.parse::<u64>() {
@@ -102,7 +101,7 @@ pub fn extract_retry_after(response: &reqwest::Response, attempt: Option<u32>) -
             }
         }
 
-        // Fallback to exponential backoff if no headers provided
+        // Fallback to exponential backoff.
         let attempt = attempt.unwrap_or(1);
         let base_ms = 30_000.0;
         let exp_ms = base_ms * (1.5_f64).powi(attempt.saturating_sub(1) as i32);
@@ -124,15 +123,14 @@ pub fn build_roblox_cookie_header(cookie_value: &str) -> String {
     }
 }
 
-// Cleans up a raw roblox cookie string.
-// Some users paste in the whole header or include quotes, so we strip all that junk out.
+// Sanitize raw Roblox cookie strings by stripping headers and quotes.
 #[must_use]
 pub fn normalize_roblox_cookie(cookie_value: &str) -> String {
     let trimmed = cookie_value.trim().trim_matches(|c| c == '\'' || c == '"');
 
     let prefix = ".ROBLOSECURITY=";
     let normalized = if let Some(idx) = trimmed.find(prefix) {
-        // Drop the prefix and stop at the first semicolon if there's extra stuff attached
+        // Remove prefix and truncate at the first semicolon.
         let rest = &trimmed[idx + prefix.len()..];
         if let Some(end_idx) = rest.find(';') {
             &rest[..end_idx]
@@ -146,8 +144,7 @@ pub fn normalize_roblox_cookie(cookie_value: &str) -> String {
     normalized.trim().to_string()
 }
 
-// Need to make sure file names don't blow up the OS.
-// Replaces invalid characters with underscores.
+// Sanitize file names by replacing invalid characters with underscores.
 #[must_use]
 pub fn sanitize_filename(filename: &str) -> String {
     let mut safe = String::new();
@@ -159,12 +156,12 @@ pub fn sanitize_filename(filename: &str) -> String {
         }
     }
 
-    // prevent trailing dots or whitespace because windows hates that
+    // Remove trailing dots or whitespace to satisfy Windows path rules.
     let trimmed = safe.trim_end_matches(|c: char| c == '.' || c.is_whitespace());
     if trimmed.is_empty() {
         "untitled".to_string()
     } else {
-        // truncate to a reasonable length
+        // Truncate file name.
         trimmed.chars().take(180).collect()
     }
 }
@@ -196,8 +193,7 @@ pub async fn clear_downloads_directory(dir_path: &Path) -> Result<bool, String> 
     }
 }
 
-// Sometimes Roblox gives us a new cookie mid-request.
-// We want to catch that and tell the frontend so it doesn't log the user out.
+// Detect updated cookies provided mid-request and synchronize them with the frontend.
 pub fn check_for_roblosecurity_update(app: &AppHandle, resp: &Response, original_cookie: &str) {
     for val in &resp.headers().get_all(reqwest::header::SET_COOKIE) {
         if let Ok(cookie_str) = val.to_str() {

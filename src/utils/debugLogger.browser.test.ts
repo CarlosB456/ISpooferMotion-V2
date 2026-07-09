@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Provide a minimal window stub so debugLogger can run in node
+// Minimal window stub for debugLogger node testing.
 const createWindow = () => {
   const listeners: Record<string, EventListener[]> = {};
   return {
@@ -95,7 +95,7 @@ describe('subscribeDebugLogs', () => {
   it('immediately calls the listener with current logs on subscribe', async () => {
     const { addDebugLog, subscribeDebugLogs } = await getLogger();
     addDebugLog('info', ['existing']);
-    const received: any[] = [];
+    const received: unknown[] = [];
     const unsub = subscribeDebugLogs((logs) => received.push(logs));
     expect(received).toHaveLength(1);
     unsub();
@@ -106,7 +106,9 @@ describe('subscribeDebugLogs', () => {
     const calls: number[] = [];
     const unsub = subscribeDebugLogs((logs) => calls.push(logs.length));
     addDebugLog('info', ['one']);
+    await new Promise((resolve) => setTimeout(resolve, 10));
     addDebugLog('warn', ['two']);
+    await new Promise((resolve) => setTimeout(resolve, 10));
     expect(calls).toContain(1);
     expect(calls).toContain(2);
     unsub();
@@ -135,7 +137,7 @@ describe('clearDebugLogs', () => {
   it('notifies listeners with an empty array', async () => {
     const { addDebugLog, clearDebugLogs, subscribeDebugLogs } = await getLogger();
     addDebugLog('info', ['x']);
-    const received: any[][] = [];
+    const received: unknown[][] = [];
     const unsub = subscribeDebugLogs((logs) => received.push(logs));
     clearDebugLogs();
     expect(received[received.length - 1]).toHaveLength(0);

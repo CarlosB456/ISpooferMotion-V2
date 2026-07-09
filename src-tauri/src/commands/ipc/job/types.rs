@@ -2,7 +2,7 @@ use crate::commands::AnyValue;
 use validator::Validate;
 
 #[derive(serde::Deserialize, specta::Type, Validate)]
-// this struct defines all the settings you can pass into a spoofer job from the frontend ui
+// Configurable settings for a spoofing job.
 pub struct SpooferActionRequest {
     #[validate(length(min = 1))]
     pub assets: Option<String>,

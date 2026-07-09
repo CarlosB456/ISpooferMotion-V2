@@ -1,12 +1,11 @@
-// This file is responsible for fetching and parsing the Roblox API dump.
-// We mainly use this to figure out which properties are actually assets or strings we need to scan.
+// Fetch and parse the Roblox API dump to identify asset and string properties.
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::SystemTime;
 use tokio::sync::RwLock;
 
-// Pulling straight from MaximumADHD's tracker, bless that repo.
+// Retrieve dump from the community tracker.
 const API_DUMP_URL: &str =
     "https://raw.githubusercontent.com/MaximumADHD/Roblox-Client-Tracker/roblox/API-Dump.json";
 
@@ -46,7 +45,7 @@ pub struct ApiDumpProperties {
     pub string_scan_properties: HashMap<String, Vec<String>>,
 }
 
-// Filters out read-only properties since we obviously can't spoof what we can't write to.
+// Filter out read-only properties.
 fn is_writable(member: &Member) -> bool {
     if let Some(tags) = &member.Tags {
         for tag in tags {
@@ -58,8 +57,7 @@ fn is_writable(member: &Member) -> bool {
     true
 }
 
-// Gross heuristic but it works. We check property names to see if they sound like they hold an asset.
-// Kept all lowercase to make the string matching easier.
+// Check property names for asset indicators (lowercase matching).
 fn is_asset_like_property_name(name: &str) -> bool {
     let lower_name = name.to_lowercase();
     lower_name.ends_with("id")
@@ -90,12 +88,12 @@ fn is_asset_like_property_name(name: &str) -> bool {
         || lower_name.contains("accessory")
 }
 
-// HumanoidDescription is a bit of a special snowflake, handle it specifically here.
+// Specialized handling for HumanoidDescription.
 fn is_humanoid_description_asset(class_name: &str, name: &str, val_type: &str) -> bool {
     if class_name != "HumanoidDescription" {
         return false;
     }
-    // These body parts / clothing items are stored as raw int64 asset IDs
+    // Body parts and clothing items are stored as int64 asset IDs.
     if val_type == "int64"
         && (name.contains("Animation")
             || name == "Face"
@@ -111,7 +109,7 @@ fn is_humanoid_description_asset(class_name: &str, name: &str, val_type: &str) -
     {
         return true;
     }
-    // And accessories are just string arrays of IDs separated by commas, or arrays/ints
+    // Accessories are string arrays of IDs, or arrays of ints.
     (val_type == "string" || val_type == "int64" || val_type.contains("Array"))
         && name.contains("Accessory")
 }
@@ -164,7 +162,7 @@ where
             return props;
         };
 
-        // if the class inherits from something, grab those properties too
+        // Inherit properties from parent classes.
         if cls.Superclass != "<<<ROOT>>>" && !cls.Superclass.is_empty() {
             let super_props =
                 get_properties(&cls.Superclass, class_map, resolved_properties, pick_property);
@@ -211,8 +209,7 @@ async fn get_cached_dump_cell() -> &'static Arc<RwLock<Option<ApiDumpProperties>
 pub async fn get_api_dump_properties() -> ApiDumpProperties {
     let cell = get_cached_dump_cell().await;
 
-    // Acquire a write lock immediately to prevent cache stampede.
-    // If multiple threads hit this simultaneously, only one will perform the fetch.
+    // Acquire a write lock to prevent cache stampedes during concurrent fetches.
     let mut guard = cell.write().await;
     if let Some(cached) = &*guard {
         return cached.clone();
@@ -221,7 +218,7 @@ pub async fn get_api_dump_properties() -> ApiDumpProperties {
     let mut properties = ApiDumpProperties::default();
     let cache_file = std::env::temp_dir().join("ispoofer_api_dump_v2.json");
 
-    // we cache the dump to a temp file for 24 hours so we aren't spamming the api dump url
+    // Cache the API dump to a temporary file for 24 hours.
     let mut should_fetch = true;
     if let Ok(metadata) = tokio::fs::metadata(&cache_file).await {
         if let Ok(modified) = metadata.modified() {
@@ -268,7 +265,7 @@ pub async fn get_api_dump_properties() -> ApiDumpProperties {
     }
 
     if parsed_dump.is_none() {
-        let fallback_text = include_str!("api_dump_fallback.json");
+        let fallback_text = include_str!("../assets/api_dump_fallback.json");
         if let Ok(dump) = serde_json::from_str::<ApiDump>(fallback_text) {
             parsed_dump = Some(dump);
         }

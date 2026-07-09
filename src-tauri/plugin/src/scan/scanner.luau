@@ -310,7 +310,7 @@ local function scanAssets(): ()
 			lastProgressTime = now
 		end
 
-		if now - lastYieldTime >= 0.08 then
+		if now - lastYieldTime >= 0.012 then
 			task.wait(0)
 			lastYieldTime = os.clock()
 		end

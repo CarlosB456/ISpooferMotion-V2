@@ -9,11 +9,11 @@ interface LanguageState {
 }
 
 const getInitialLang = () => {
-  // if they saved a language previously, just use that
+  // Use previously saved language if available.
   const savedLang = localStorage.getItem('language');
   if (savedLang) return savedLang;
 
-  // try to guess their language from the browser, fallback to english if we don't support it yet
+  // Guess language from browser, fallback to English if unsupported.
   const systemLang = navigator.language.split('-')[0];
   const supported = ['en', 'es', 'ru', 'fr'];
   if (supported.includes(systemLang)) {
@@ -23,7 +23,7 @@ const getInitialLang = () => {
   return 'en';
 };
 
-// simple zustand store to keep track of the current language across the app
+// Zustand store for tracking current app language.
 export const useLanguage = create<LanguageState>((set, get) => ({
   lang: getInitialLang(),
   setLang: (newLang: string) => {

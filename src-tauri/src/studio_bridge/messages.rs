@@ -1,5 +1,4 @@
-// This is the big one. Handles parsing asset references out of everything Studio throws at us.
-// Warning: Lots of messy regex in here because Roblox strings are chaotic.
+// Handle parsing asset references from Studio inputs using regex.
 #![allow(clippy::unwrap_used)]
 use base64::{engine::general_purpose::STANDARD as B64, Engine as _};
 use regex::{Captures, Regex};
@@ -9,7 +8,7 @@ use std::collections::{HashMap, HashSet};
 
 use std::time::Instant;
 
-// Basic container for parsed assets we send back to the UI
+// Container for parsed assets sent to the UI.
 #[derive(Clone, Default, Serialize, Debug, specta::Type)]
 pub struct AssetStore {
     #[specta(type = Vec<String>)]
@@ -27,9 +26,8 @@ impl AssetStore {
     }
 }
 
-// Holds all the active state for the Studio bridge.
-// Keeps track of the current scan status and what we've found so far.
-#[derive(Default, Debug)]
+// Active state for the Studio bridge, tracking scan progress.
+#[derive(Debug)]
 pub struct AssetServerStateData {
     pub request_sounds: bool,
     pub request_animations: bool,
@@ -44,13 +42,42 @@ pub struct AssetServerStateData {
     pub stored_mappings: Vec<Value>,
     pub stored_patches: Vec<Value>,
     pub studio_records: std::sync::Arc<Vec<StudioRecord>>,
-    pub pending_studio_records: std::sync::Arc<Vec<StudioRecord>>,
+    pub pending_studio_records: std::sync::Arc<std::sync::Mutex<Vec<StudioRecord>>>,
     pub last_plugin_poll_time: Option<Instant>,
     pub skip_owned_check: bool,
     pub scan_status: Option<Value>,
     pub studio_place_id: Option<String>,
     pub keyframe_warning_count: usize,
     pub scan_records_truncated: bool,
+    pub notify: std::sync::Arc<tokio::sync::Notify>,
+}
+
+impl Default for AssetServerStateData {
+    fn default() -> Self {
+        Self {
+            request_sounds: false,
+            request_animations: false,
+            request_images: false,
+            request_meshes: false,
+            request_script_refs: false,
+            last_sounds: Default::default(),
+            last_animations: Default::default(),
+            last_images: Default::default(),
+            last_meshes: Default::default(),
+            last_script_refs: Default::default(),
+            stored_mappings: Default::default(),
+            stored_patches: Default::default(),
+            studio_records: Default::default(),
+            pending_studio_records: Default::default(),
+            last_plugin_poll_time: None,
+            skip_owned_check: false,
+            scan_status: None,
+            studio_place_id: None,
+            keyframe_warning_count: 0,
+            scan_records_truncated: false,
+            notify: std::sync::Arc::new(tokio::sync::Notify::new()),
+        }
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, specta::Type)]
@@ -64,7 +91,7 @@ pub struct StudioRecord {
     pub value: String,
 }
 
-// Tries to match any valid Roblox asset URL or just a raw ID.
+// Match valid Roblox asset URLs or raw IDs.
 fn asset_id_pattern() -> &'static Regex {
     static RE: std::sync::OnceLock<Regex> = std::sync::OnceLock::new();
     RE.get_or_init(|| {
@@ -105,7 +132,7 @@ fn rich_text_pattern() -> &'static Regex {
     })
 }
 
-// Looks for require() or InsertService calls that pull assets dynamically
+// Parse require() or InsertService calls for dynamic asset loading.
 fn runtime_load_pattern() -> &'static Regex {
     static RE: std::sync::OnceLock<Regex> = std::sync::OnceLock::new();
     RE.get_or_init(|| {
@@ -367,12 +394,15 @@ fn extract_table_block_ids_with_context(source: &str) -> Vec<(String, Option<&'s
         }
 
         if depth == 0 {
-            let block_text = &source[match_whole.end()..(block_end - 1)];
+            let end_idx = block_end - 1;
+            if source.is_char_boundary(end_idx) {
+                let block_text = &source[match_whole.end()..end_idx];
 
-            for id_cap in script_ref_pattern().captures_iter(block_text) {
-                if let Some(asset_id) = id_cap.get(1) {
-                    if asset_id.as_str() != "0" && seen.insert(asset_id.as_str().to_string()) {
-                        results.push((asset_id.as_str().to_string(), hint));
+                for id_cap in script_ref_pattern().captures_iter(block_text) {
+                    if let Some(asset_id) = id_cap.get(1) {
+                        if asset_id.as_str() != "0" && seen.insert(asset_id.as_str().to_string()) {
+                            results.push((asset_id.as_str().to_string(), hint));
+                        }
                     }
                 }
             }
@@ -1011,7 +1041,7 @@ fn extract_script_asset_ids(source: &str) -> Vec<String> {
         return extractor.ids.into_iter().collect();
     }
 
-    // Fallback to regex if parsing fails
+    // Fallback to regex if AST parsing fails.
     let pattern = script_ref_pattern();
     let mut ids = HashSet::new();
     for captures in pattern.captures_iter(source) {
@@ -1028,9 +1058,7 @@ fn replace_script_asset_ids<'a>(
     source: &'a str,
     mappings: &HashMap<&str, &str>,
 ) -> std::borrow::Cow<'a, str> {
-    // We removed full_moon AST parsing because deeply nested or obfuscated scripts
-    // cause a stack overflow in Rust which silently crashes the entire desktop app.
-    // Fallback to regex is sufficient and much faster.
+    // Regex fallback is preferred over full_moon AST parsing to avoid stack overflows from deeply nested scripts.
     script_rewrite_pattern().replace_all(source, |captures: &Captures<'_>| {
         let prefix = captures.get(1).map_or("", |item| item.as_str());
         let asset_id = captures.get(2).map_or("", |item| item.as_str());

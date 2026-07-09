@@ -1,10 +1,13 @@
 import { Button, Modal, ModalBody, ModalContent, ModalHeader } from '@codycon/ism-library';
+import { save } from '@tauri-apps/plugin-dialog';
+import { readTextFile, writeTextFile } from '@tauri-apps/plugin-fs';
 import { motion, type Variants } from 'framer-motion';
 import { ArrowRight, Check, Copy, ListChecks, X } from 'lucide-react';
 import { useState } from 'react';
 
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useSpooferStore } from '../../stores/spooferStore';
+import { appendSpoofingLog } from '../../utils/spoofingLogs';
 
 export default function ResultsModal({
   isOpen,
@@ -15,7 +18,11 @@ export default function ResultsModal({
 }) {
   const { t } = useLanguage();
   const lastReplacements = useSpooferStore((s) => s.lastReplacements);
+  const assetMetadataMap = useSpooferStore((s) => s.assetMetadataMap);
+  const loadedFilePath = useSpooferStore((s) => s.loadedFilePath);
+  const setSpoofingLogs = useSpooferStore((s) => s.setSpoofingLogs);
   const [copied, setCopied] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   const replacementsArray = Object.entries(lastReplacements);
 
@@ -24,6 +31,49 @@ export default function ResultsModal({
     navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleSaveRbxlx = async () => {
+    if (!loadedFilePath || !loadedFilePath.endsWith('.rbxlx')) return;
+    setIsSaving(true);
+    try {
+      const savePath = await save({
+        filters: [{ name: 'Roblox Place XML', extensions: ['rbxlx'] }],
+        defaultPath: loadedFilePath.replace('.rbxlx', '_Spoofed.rbxlx'),
+      });
+      if (!savePath) {
+        setIsSaving(false);
+        return; // user cancelled
+      }
+
+      setSpoofingLogs((prev) =>
+        appendSpoofingLog(prev, `\n[INFO] Saving spoofed place file to ${savePath}...\n`),
+      );
+      let content = await readTextFile(loadedFilePath);
+      let count = 0;
+      for (const [oldId, newId] of Object.entries(lastReplacements)) {
+        // Avoid replacing substring matches (e.g., 123 inside 12345).
+        const regex = new RegExp(`(?<!\\d)${oldId}(?!\\d)`, 'g');
+        const matchCount = (content.match(regex) || []).length;
+        if (matchCount > 0) {
+          content = content.replace(regex, newId);
+          count += matchCount;
+        }
+      }
+      await writeTextFile(savePath, content);
+      setSpoofingLogs((prev) =>
+        appendSpoofingLog(
+          prev,
+          `[SUCCESS] Saved spoofed file! Replaced ${count} ID occurrences.\n`,
+        ),
+      );
+      onClose(); // auto close modal so they can see logs
+    } catch (err) {
+      setSpoofingLogs((prev) =>
+        appendSpoofingLog(prev, `[ERROR] Failed to save .rbxlx: ${String(err)}\n`),
+      );
+    }
+    setIsSaving(false);
   };
 
   const stagger: Variants = {
@@ -81,27 +131,37 @@ export default function ResultsModal({
                 animate="show"
                 className="flex flex-col gap-2 max-h-100 overflow-y-auto pr-2"
               >
-                {replacementsArray.slice(0, 100).map(([oldId, newId]) => (
-                  <motion.div
-                    key={oldId}
-                    variants={item}
-                    className="flex items-center justify-between p-3 rounded-md bg-bg-surface border border-border-strong"
-                  >
-                    <div className="flex flex-col">
-                      <span className="text-xs text-text-secondary font-medium">
-                        {t('misc.originalId')}
-                      </span>
-                      <span className="text-sm font-mono font-semibold text-danger">{oldId}</span>
-                    </div>
-                    <ArrowRight size={16} className="text-text-secondary opacity-50" />
-                    <div className="flex flex-col text-right">
-                      <span className="text-xs text-text-secondary font-medium">
-                        {t('misc.spoofedId')}
-                      </span>
-                      <span className="text-sm font-mono font-semibold text-success">{newId}</span>
-                    </div>
-                  </motion.div>
-                ))}
+                {replacementsArray.slice(0, 100).map(([oldId, newId]) => {
+                  const meta = assetMetadataMap[oldId];
+                  return (
+                    <motion.div
+                      key={oldId}
+                      variants={item}
+                      className="flex items-center justify-between p-3 rounded-md bg-bg-surface border border-border-strong gap-4"
+                    >
+                      <div className="flex flex-col flex-1 min-w-0">
+                        <span
+                          className="text-xs text-text-secondary font-medium truncate"
+                          title={meta?.name}
+                        >
+                          {meta
+                            ? `${meta.type.toUpperCase()} • ${meta.name}`
+                            : t('misc.originalId')}
+                        </span>
+                        <span className="text-sm font-mono font-semibold text-danger">{oldId}</span>
+                      </div>
+                      <ArrowRight size={16} className="text-text-secondary opacity-50 shrink-0" />
+                      <div className="flex flex-col text-right flex-1 min-w-0">
+                        <span className="text-xs text-text-secondary font-medium truncate">
+                          {t('misc.spoofedId')}
+                        </span>
+                        <span className="text-sm font-mono font-semibold text-success">
+                          {newId}
+                        </span>
+                      </div>
+                    </motion.div>
+                  );
+                })}
                 {replacementsArray.length > 100 && (
                   <div className="p-3 text-center text-xs font-medium text-text-secondary bg-bg-surface border border-border-strong rounded-md">
                     {t('results.moreReplacements').replace(
@@ -124,6 +184,13 @@ export default function ResultsModal({
             </div>
           </div>
         </ModalBody>
+        <div className="flex justify-end gap-3 px-6 pb-6 pt-2">
+          {loadedFilePath && loadedFilePath.endsWith('.rbxlx') && replacementsArray.length > 0 && (
+            <Button color="primary" variant="solid" onClick={handleSaveRbxlx} isLoading={isSaving}>
+              Save Spoofed .rbxlx
+            </Button>
+          )}
+        </div>
       </ModalContent>
     </Modal>
   );

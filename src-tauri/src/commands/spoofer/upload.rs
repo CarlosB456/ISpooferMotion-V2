@@ -57,7 +57,7 @@ struct UploadMetadata {
     pub asset_id: Option<String>,
 }
 
-// repeatedly pings the operation endpoint until roblox finishes processing the uploaded asset and gives us the final id
+// Poll the operation endpoint until the uploaded asset completes processing to retrieve the final AssetId.
 async fn poll_roblox_operation(
     app: &AppHandle,
     client: &reqwest::Client,
@@ -71,7 +71,7 @@ async fn poll_roblox_operation(
     let path =
         if path.starts_with("assets/v1/") { path.to_string() } else { format!("assets/v1/{path}") };
     let url = format!("https://apis.roblox.com/{path}");
-    for attempt in 0..80 {
+    for attempt in 0..150 {
         if attempt > 0 {
             tokio::time::sleep(std::time::Duration::from_millis(750)).await;
         }
@@ -135,7 +135,7 @@ async fn poll_roblox_operation(
             }
         }
     }
-    Err("Operation timed out after 60 seconds.".into())
+    Err("Operation timed out after 120 seconds.".into())
 }
 
 struct UploadKind {
@@ -192,7 +192,7 @@ fn upload_kind_for_type(asset_type_name: Option<&str>) -> UploadKind {
     }
 }
 
-// security check to make sure they aren't trying to upload sensitive files from completely random directories on their pc
+// Validate the upload file resides within the managed downloads folder to prevent path traversal.
 async fn upload_path_allowed(
     app: &AppHandle,
     file_path: &std::path::Path,
@@ -219,7 +219,7 @@ async fn upload_path_allowed(
 
 #[tauri::command]
 #[specta::specta]
-// the main upload loop. sends the file to the open cloud api, handling retries, random failures, and chunk injection
+// Main upload loop: handles Open Cloud API requests, rate limits, retries, and 409 conflicts.
 pub async fn publish_asset_with_progress(
     app: AppHandle,
     file_path: String,
@@ -309,7 +309,8 @@ pub async fn publish_asset_with_progress(
     let file_name = format!("{}.{}", sanitize_filename(&name), upload_kind.extension);
     let _is_plugin = asset_type_name.as_deref() == Some("Plugin");
 
-    let mut fallback_buffer: Option<Vec<u8>> = None;
+    // Use Arc to make multipart body cloning O(1).
+    let mut fallback_buffer: Option<std::sync::Arc<Vec<u8>>> = None;
     let mut final_asset_id = None;
 
     {
@@ -387,16 +388,21 @@ pub async fn publish_asset_with_progress(
         let mut upload_success = false;
         let mut upload_error = None;
         let mut operation_path = None;
+        // Track 400 errors independently to prevent state-ordering bugs.
+        let mut tried_type_fallback = false;
+        let mut tried_name_fallback = false;
 
-        for attempt in 0..100 {
+        for attempt in 0..300 {
             wait_rate_limit(RateLimitBucket::Upload).await;
 
             if attempt == 0 && fallback_buffer.is_none() {
-                fallback_buffer = tokio::fs::read(&canonical_file_path).await.ok();
+                fallback_buffer =
+                    tokio::fs::read(&canonical_file_path).await.ok().map(std::sync::Arc::new);
             }
 
             let file_part = if let Some(buf) = &fallback_buffer {
-                reqwest::multipart::Part::bytes(buf.clone())
+                // Arc clone provides O(1) references during retries.
+                reqwest::multipart::Part::bytes(buf.as_ref().clone())
                     .file_name(file_name.clone())
                     .mime_str(&file_type)?
             } else {
@@ -446,13 +452,18 @@ pub async fn publish_asset_with_progress(
                 continue;
             }
 
-            if status_code == 400 && request_metadata.asset_type.as_deref() == Some("Plugin") {
+            if status_code == 400
+                && !tried_type_fallback
+                && request_metadata.asset_type.as_deref() == Some("Plugin")
+            {
+                tried_type_fallback = true;
                 request_metadata.asset_type = Some("Model".to_string());
                 meta_json = serde_json::to_string(&request_metadata).unwrap_or(meta_json);
                 continue;
             }
 
-            if status_code == 400 && request_metadata.display_name != "Spoofed Asset" {
+            if status_code == 400 && !tried_name_fallback {
+                tried_name_fallback = true;
                 request_metadata.display_name = "Spoofed Asset".to_string();
                 request_metadata.description = "Uploaded by ISpooferMotion.".to_string();
                 meta_json = serde_json::to_string(&request_metadata).unwrap_or(meta_json);
@@ -461,9 +472,13 @@ pub async fn publish_asset_with_progress(
 
             if status_code == 409 {
                 if fallback_buffer.is_none() {
-                    fallback_buffer = tokio::fs::read(&canonical_file_path).await.ok();
+                    fallback_buffer =
+                        tokio::fs::read(&canonical_file_path).await.ok().map(std::sync::Arc::new);
                 }
-                if let Some(mut mutable_buffer) = fallback_buffer.take() {
+                if let Some(arc_buf) = fallback_buffer.take() {
+                    // Get a mutable copy
+                    let mut mutable_buffer =
+                        std::sync::Arc::try_unwrap(arc_buf).unwrap_or_else(|a| a.as_ref().clone());
                     if file_type == "image/png" {
                         let scan_start = mutable_buffer.len().saturating_sub(64);
                         if let Some(iend_offset) = mutable_buffer[scan_start..]
@@ -522,6 +537,8 @@ pub async fn publish_asset_with_progress(
                             }
                         } else if mutable_buffer.starts_with(b"<roblox xmlns:xmime=")
                             || mutable_buffer.starts_with(b"<roblox xmlns=")
+                            || (mutable_buffer.starts_with(b"<?xml")
+                                && mutable_buffer.windows(7).take(256).any(|w| w == b"<roblox"))
                         {
                             let mut random_bytes = [0u8; 4];
                             random_bytes.copy_from_slice(&rand::random::<[u8; 4]>());
@@ -551,7 +568,8 @@ pub async fn publish_asset_with_progress(
                         upload_error = Some("Cannot bypass 409 Conflict: File type does not support hash modification".to_string());
                         break;
                     }
-                    fallback_buffer = Some(mutable_buffer);
+                    // Store the mutated buffer back so the next retry uses the modified bytes
+                    fallback_buffer = Some(std::sync::Arc::new(mutable_buffer));
                 }
                 continue;
             }

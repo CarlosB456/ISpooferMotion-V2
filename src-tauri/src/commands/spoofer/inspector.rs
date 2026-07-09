@@ -27,7 +27,7 @@ pub fn inspect_payload(path: &Path) -> crate::error::Result<PayloadMeta> {
         return Err("Roblox returned a JSON error response instead of an asset file.".into());
     }
 
-    // Check magic numbers
+    // Validate magic numbers.
     if sample.starts_with(b"OggS") {
         return Ok(PayloadMeta { file_type: "audio/ogg".into(), extension: "ogg".into() });
     }

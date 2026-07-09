@@ -24,7 +24,7 @@ fn get_remote_cache() -> &'static DashMap<String, CachedContext> {
     REMOTE_CACHE.get_or_init(DashMap::new)
 }
 
-// check our local cache to see if we already found a valid place id for this asset recently
+// Query local cache for recently discovered Place IDs.
 pub fn get_context(asset_id: &str) -> Option<String> {
     let cache = get_remote_cache();
     if let Some(entry) = cache.get(asset_id) {
@@ -77,7 +77,7 @@ fn validate_cache_url(url: &str) -> Result<(), String> {
     }
 }
 
-// store a newly discovered place id locally, and broadcast it to the remote backend so other users benefit from it
+// Persist discovered Place ID locally and broadcast to the remote backend.
 pub fn push_discovery(asset_id: String, place_id: String) {
     let cache = get_remote_cache();
     cache.insert(
@@ -108,7 +108,7 @@ pub fn push_discovery(asset_id: String, place_id: String) {
 
 #[tauri::command]
 #[specta::specta]
-// fetch the initial dump of known asset-to-place mappings from the community backend on startup
+// Fetch initial asset-to-place mappings from the community backend.
 pub async fn initialize_remote_cache(
     _url: String,
     push_url: Option<String>,

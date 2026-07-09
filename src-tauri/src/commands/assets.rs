@@ -42,7 +42,7 @@ pub struct FetchAssetsResponse {
     pub items: Vec<AssetExplorerItem>,
 }
 
-// normalize legacy or weird asset type names so the roblox api actually understands them
+// Normalize legacy asset type names for API compatibility.
 fn map_asset_types(types: Option<Vec<String>>) -> String {
     let mut mapped = Vec::new();
     let default_types = vec![
@@ -117,7 +117,7 @@ pub async fn fetch_assets(
             let status = resp.status();
             let text = resp.text().await.unwrap_or_default();
 
-            // 403 means private inventory or no access. this is pretty common now since roblox made inventories private by default
+            // 403 indicates a private inventory or lacking access.
             if status.as_u16() == 403 {
                 return Err("Inventory access denied (403). The target user's inventory is private or this account does not have permission to view it. This is expected behavior per Roblox's January 2026 inventory privacy changes.".into());
             }
@@ -161,7 +161,7 @@ pub async fn fetch_assets(
 
     let mut thumbnails = std::collections::HashMap::new();
     if !asset_ids.is_empty() {
-        // the thumbnail api yells at us if we ask for too many at once, so chunk it to 100 max
+        // Chunk thumbnail API requests to a maximum of 100.
         let chunks: Vec<Vec<u64>> = asset_ids.chunks(100).map(<[u64]>::to_vec).collect();
         let futures = chunks.into_iter().map(|chunk| {
             async move {
@@ -325,7 +325,7 @@ pub async fn fetch_animation_xml(
 
     let bytes = resp.bytes().await?;
 
-    // the api sometimes returns binary xml instead of plain text, so we gotta parse it and serialize it back to string
+    // Parse binary XML API responses and serialize to string format.
     if bytes.starts_with(b"<roblox!") {
         let dom = match rbx_binary::from_reader(bytes.as_ref()) {
             Ok(d) => d,

@@ -1,4 +1,4 @@
-// export the correct memory patching implementation depending on the os
+// Export platform-specific memory patching implementation.
 #[cfg(not(target_os = "windows"))]
 pub mod stub;
 #[cfg(target_os = "windows")]

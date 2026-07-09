@@ -14,7 +14,7 @@ export interface LogEntry {
   timestamp: string;
 }
 
-// Lazy loaded so we don't cause circular dependencies on boot
+// Lazy loaded to prevent circular dependencies.
 let cachedConfigStore: typeof import('../stores/configStore') | null = null;
 
 const MAX_LOGS = 1000;
@@ -50,7 +50,7 @@ declare global {
   }
 }
 
-// grab or initialize the global logger state so we don't lose logs across hot reloads
+// Initialize or retrieve global logger state across hot reloads.
 function getState(): DebugLoggerState {
   if (!window.__ismDebugLogger) {
     window.__ismDebugLogger = {
@@ -77,7 +77,7 @@ function formatArg(arg: unknown): string {
   }
 }
 
-// pipe the log to our internal state, the console, and optionally the rust backend
+// Pipe log to internal state, console, and optional Rust backend.
 export function addDebugLog(
   level: LogLevel,
   args: unknown[],
@@ -97,13 +97,15 @@ export function addDebugLog(
     timestamp: timeFormatter.format(new Date()),
   };
 
-  // If there's no string message but there is a payload, set a default message
+  // Set a default message if only a payload is provided.
   if (!entry.message && entry.payload) {
     entry.message = 'Object logged';
   }
 
   state.logs = [...state.logs, entry].slice(-MAX_LOGS);
-  state.listeners.forEach((listener) => listener(state.logs));
+  setTimeout(() => {
+    state.listeners.forEach((listener) => listener(state.logs));
+  }, 0);
 
   if (isTauriRuntime()) {
     try {
@@ -111,8 +113,12 @@ export function addDebugLog(
         level: entry.level,
         source: entry.source,
         message: entry.message,
-      }).catch(() => {});
-    } catch (e) {}
+      }).catch((err) => {
+        console.error('Failed to emit active debug logs update:', err);
+      });
+    } catch (e) {
+      console.error('Synchronous emit failure:', e);
+    }
   }
 
   if (notify && (level === 'success' || level === 'error') && isTauriRuntime()) {
@@ -131,10 +137,14 @@ export function addDebugLog(
               title: level === 'success' ? `ISpooferMotion - Success` : `ISpooferMotion - Error`,
               body: entry.message,
             },
-          }).catch(() => {});
+          }).catch((err) => {
+            console.error('Failed to emit batch active debug logs update:', err);
+          });
         }
       }
-    } catch (e) {}
+    } catch (e) {
+      console.error('Synchronous batch emit failure:', e);
+    }
   }
 }
 
@@ -161,7 +171,7 @@ function installDebugLogger() {
   const state = getState();
   if (state.patched) return;
 
-  // monkey-patch the native console so we can intercept and record everything
+  // Intercept and record console output.
   const originals = {
     log: Reflect.get(console, 'log').bind(console),
     info: Reflect.get(console, 'info').bind(console),

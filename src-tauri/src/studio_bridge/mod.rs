@@ -1,5 +1,4 @@
-// Sets up the HTTP server that talks locally to the Roblox Studio plugin.
-// This acts as the "bridge" between the Tauri app and Studio.
+// Initialize the HTTP server interfacing locally with the Roblox Studio plugin.
 pub mod messages;
 pub mod middleware;
 pub mod server;
@@ -38,7 +37,7 @@ use server::{
 
 const PLUGIN_PORT_START: u16 = 14285;
 const PLUGIN_PORT_END: u16 = 14289;
-const STUDIO_PROTOCOL_VERSION: u8 = 2;
+const STUDIO_PROTOCOL_VERSION: u8 = 3;
 const MAX_STUDIO_RECORDS: usize = 2_000_000;
 const MAX_SCRIPT_SOURCE_BYTES: usize = 8_000_000;
 
@@ -73,8 +72,7 @@ pub async fn queue_replace_mappings_internal(mappings: Vec<Value>) -> bool {
         return false;
     }
     let records = std::sync::Arc::clone(&data.read().await.studio_records);
-    // Generate patches from scan records if available; otherwise Studio will fall back
-    // to raw ID mapping substitution on its own side.
+    // Generate patches from scan records if available; otherwise rely on Studio ID mapping substitution.
     let patches = if records.is_empty() { Vec::new() } else { plan_patches(&records, &mappings) };
     let mut guard = data.write().await;
     guard.stored_mappings = mappings;
@@ -107,13 +105,12 @@ pub async fn start_server(_app_handle: AppHandle) {
     };
     *active_bridge_port().write().await = Some(addr.port());
 
-    // We allow localhost/tauri origins so the web frontend can actually hit this API.
-    // Pretty permissive because it's only running on localhost anyway.
+    // Allow localhost/tauri origins to enable web frontend access.
     let cors = CorsLayer::new()
         .allow_origin(AllowOrigin::predicate(
             |origin: &HeaderValue, _req_parts: &axum::http::request::Parts| {
                 let bytes = origin.as_bytes();
-                // Permit null/empty origins (chrome-error://, local IPC, etc.)
+                // Allow null/empty origins.
                 if bytes.is_empty() || bytes == b"null" {
                     return true;
                 }
@@ -203,8 +200,7 @@ pub async fn get_plugin_bridge_port() -> Option<u16> {
     *active_bridge_port().read().await
 }
 
-// Try a few ports in sequence. People run multiple studio instances sometimes
-// or have weird port bindings so we try a small range.
+// Iterate over a small port range to accommodate multiple Studio instances.
 async fn bind_available_listener() -> Option<(tokio::net::TcpListener, SocketAddr)> {
     for port in PLUGIN_PORT_START..=PLUGIN_PORT_END {
         let addr = SocketAddr::from(([127, 0, 0, 1], port));

@@ -5,7 +5,7 @@ import { fetchPluginBridge } from './pluginBridge';
 const SCAN_WAIT_MS = 300_000;
 const SCAN_POLL_MS = 1500;
 
-// polls the backend repeatedly until the studio plugin finishes its active scan
+// Poll backend until the studio plugin finishes active scan.
 async function waitForStudioScanComplete(): Promise<void> {
   const startedAt = Date.now();
   while (Date.now() - startedAt < SCAN_WAIT_MS) {

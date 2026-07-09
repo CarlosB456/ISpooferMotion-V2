@@ -9,7 +9,7 @@ use reqwest::header::{COOKIE, USER_AGENT};
 use std::collections::HashMap;
 use tauri::AppHandle;
 
-// hits the asset delivery api to actually pull the raw bytes, spoofing the user agent if needed
+// Request raw bytes from the asset delivery API, applying User-Agent spoofing when required.
 pub async fn get_scraped_asset_cdn_url(client: &reqwest::Client, asset_id: &str) -> Option<String> {
     let url = format!("https://www.roblox.com/library/{}/", asset_id);
     if let Ok(resp) = client
@@ -30,6 +30,33 @@ pub async fn get_scraped_asset_cdn_url(client: &reqwest::Client, asset_id: &str)
             }
         }
     }
+
+    // Fallback: hit the assetdelivery v1 endpoint with redirect disabled and read the Location
+    // header directly. This avoids downloading any bytes and works even when the library page
+    // no longer embeds a mediathumb URL (increasingly common since 2024).
+    let redirect_url = format!(
+        "https://assetdelivery.roblox.com/v1/asset/?id={}&expectedAssetType=Audio",
+        asset_id
+    );
+    if let Ok(no_redirect_client) = reqwest::Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .timeout(Duration::from_secs(10))
+        .build()
+    {
+        if let Ok(resp) =
+            no_redirect_client.get(&redirect_url).header(USER_AGENT, "Roblox/WinInet").send().await
+        {
+            let location = resp
+                .headers()
+                .get(reqwest::header::LOCATION)
+                .and_then(|v| v.to_str().ok())
+                .map(str::to_string);
+            if let Some(cdn_url) = location.filter(|u| u.contains("rbxcdn.com")) {
+                return Some(cdn_url);
+            }
+        }
+    }
+
     None
 }
 
@@ -58,7 +85,7 @@ pub async fn send_asset_download_request_ua(
     req.send().await
 }
 
-// streams the download response directly to disk so we don't hold the entire file in ram, emitting progress events along the way
+// Stream download response directly to disk to minimize memory usage, emitting progress events.
 pub async fn write_download_response(
     app: &AppHandle,
     download_resp: reqwest::Response,
@@ -205,7 +232,7 @@ pub async fn write_download_response(
     Ok(DownloadResult { success: true, file_path: Some(file_path), error: None })
 }
 
-// automatically buys free assets (like audio or meshes) so we can bypass 'copylocked' errors
+// Automatically acquire free assets to bypass copylock restrictions.
 pub async fn auto_claim_free_asset(
     app: &AppHandle,
     client: &reqwest::Client,
@@ -278,7 +305,7 @@ pub async fn batch_get_download_urls(
     batch_get_download_urls_for_assets(app, assets, cookie, place_id).await
 }
 
-// mass resolves a bunch of asset download links using the batch endpoint to save on api calls
+// Resolve multiple asset download links via batch request to reduce API calls.
 pub async fn batch_get_download_urls_for_assets(
     app: AppHandle,
     assets: Vec<(String, String)>,
@@ -330,21 +357,50 @@ pub async fn batch_get_download_urls_for_assets(
 
     struct BatchChunkResult {
         urls: HashMap<String, String>,
-        has_errors: bool,
+        // asset IDs that came back with 403/access-denied errors — these need a different place ID
+        access_denied_ids: std::collections::HashSet<String>,
+        has_transient_error: bool,
     }
 
     fn parse_batch_response(data: &serde_json::Value) -> BatchChunkResult {
         let mut urls = HashMap::new();
-        let mut has_errors = false;
+        let mut access_denied_ids = std::collections::HashSet::new();
+        let mut has_transient_error = false;
+
         if let Some(locations) = data.as_array() {
             for loc in locations {
+                let req_id = loc.get("requestId").and_then(|v| v.as_str()).map(str::to_string);
+
                 if let Some(errors) = loc.get("errors").and_then(|e| e.as_array()) {
                     if !errors.is_empty() {
-                        has_errors = true;
+                        let is_access_denied = errors.iter().any(|e| {
+                            let code = e
+                                .get("code")
+                                .or_else(|| e.get("Code"))
+                                .and_then(serde_json::Value::as_i64)
+                                .unwrap_or(0);
+                            let msg = e
+                                .get("message")
+                                .or_else(|| e.get("Message"))
+                                .and_then(|m| m.as_str())
+                                .unwrap_or("");
+                            code == 403
+                                || msg.contains("403")
+                                || msg.to_lowercase().contains("not authorized")
+                                || msg.to_lowercase().contains("unauthorized")
+                                || msg.to_lowercase().contains("forbidden")
+                        });
+
+                        if is_access_denied {
+                            if let Some(id) = &req_id {
+                                access_denied_ids.insert(id.clone());
+                            }
+                        } else {
+                            has_transient_error = true;
+                        }
                     }
                 }
 
-                let req_id = loc.get("requestId").and_then(|v| v.as_str());
                 let download_url = loc
                     .get("locations")
                     .and_then(|l| l.as_array())
@@ -352,11 +408,11 @@ pub async fn batch_get_download_urls_for_assets(
                     .and_then(|l| l.get("location"))
                     .and_then(|l| l.as_str());
                 if let (Some(req_id), Some(url)) = (req_id, download_url) {
-                    urls.insert(req_id.to_string(), url.to_string());
+                    urls.insert(req_id, url.to_string());
                 }
             }
         }
-        BatchChunkResult { urls, has_errors }
+        BatchChunkResult { urls, access_denied_ids, has_transient_error }
     }
 
     let mut urls = HashMap::new();
@@ -366,143 +422,122 @@ pub async fn batch_get_download_urls_for_assets(
         if place_ids.is_empty() { vec![None] } else { place_ids.into_iter().map(Some).collect() };
 
     for chunk in body.chunks(50) {
-        let mut chunk_vec = chunk.to_vec();
-        let mut best_chunk_urls = HashMap::new();
+        let chunk_vec = chunk.to_vec();
+        // resolved_this_chunk holds URLs we've already found; we won't re-request these
+        let mut resolved_this_chunk: HashMap<String, String> = HashMap::new();
 
         for current_place_id_opt in &fallback_place_ids {
-            let mut chunk_urls = HashMap::new();
-            let mut has_errors = false;
+            // Build a sub-chunk of only the asset IDs still unresolved
+            let pending: Vec<BatchAssetRequest> = chunk_vec
+                .iter()
+                .filter(|item| !resolved_this_chunk.contains_key(&item.request_id))
+                .cloned()
+                .collect();
+            if pending.is_empty() {
+                break; // all resolved — no need to try more place IDs
+            }
+
             let current_place_id_num = current_place_id_opt
                 .as_deref()
                 .filter(|id| is_valid_numeric_id(id))
                 .and_then(|id| id.parse::<i64>().ok());
 
-            for item in &mut chunk_vec {
-                if let Some(pid) = current_place_id_num {
-                    item.place_id = Some(pid);
-                    item.server_place_id = Some(pid);
-                }
-            }
+            let pending_with_place: Vec<BatchAssetRequest> = pending
+                .into_iter()
+                .map(|mut item| {
+                    if let Some(pid) = current_place_id_num {
+                        item.place_id = Some(pid);
+                        item.server_place_id = Some(pid);
+                    }
+                    item
+                })
+                .collect();
 
-            let mut req = client
-                .post("https://assetdelivery.roblox.com/v2/assets/batch")
-                .header(COOKIE, &cookie_header)
-                .header(USER_AGENT, "RobloxStudio/WinInet")
-                .header("Content-Type", "application/json");
-            if let Some(ref pid) = current_place_id_opt {
-                req = crate::commands::spoofer::apply_roblox_game_context(req, Some(pid), None);
-            }
+            let send_with_ua = |ua: &'static str| {
+                let client = client.clone();
+                let cookie_header = cookie_header.clone();
+                let current_place_id_opt = current_place_id_opt.clone();
+                let pending_with_place = pending_with_place.clone();
+                async move {
+                    let mut req = client
+                        .post("https://assetdelivery.roblox.com/v2/assets/batch")
+                        .header(COOKIE, &cookie_header)
+                        .header(USER_AGENT, ua)
+                        .header("Content-Type", "application/json");
+                    if let Some(ref pid) = current_place_id_opt {
+                        req = crate::commands::spoofer::apply_roblox_game_context(
+                            req,
+                            Some(pid),
+                            None,
+                        );
+                    }
+                    tokio::time::timeout(
+                        Duration::from_secs(15),
+                        req.json(&pending_with_place).send(),
+                    )
+                    .await
+                }
+            };
+
+            let mut chunk_urls = HashMap::new();
+            let mut chunk_access_denied = std::collections::HashSet::new();
+            let mut has_transient = false;
+
             wait_rate_limit(RateLimitBucket::DownloadResolution).await;
-
-            let send_future = req.json(&chunk_vec).send();
-            if let Ok(Ok(resp)) = tokio::time::timeout(Duration::from_secs(15), send_future).await {
-                crate::utils::check_for_roblosecurity_update(&app, &resp, &cookie_header);
-                if resp.status().is_success() {
-                    crate::commands::spoofer::record_adaptive_success();
-                    if let Ok(data) = resp.json::<serde_json::Value>().await {
-                        let res = parse_batch_response(&data);
-                        chunk_urls = res.urls;
-                        has_errors = res.has_errors;
-                    }
-                } else if resp.status() == reqwest::StatusCode::UNAUTHORIZED {
-                    return Err("Your ROBLOSECURITY cookie is missing, invalid, or expired. Please update it in settings.".into());
-                } else if resp.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
-                    let retry_after_ms = crate::utils::extract_retry_after(&resp, None);
-                    crate::commands::spoofer::record_adaptive_rate_limit(retry_after_ms);
-                    let wait_ms = retry_after_ms.unwrap_or(2_000);
-                    set_rate_limit(
-                        RateLimitBucket::DownloadResolution,
-                        Duration::from_millis(wait_ms),
-                    );
-                    emit_spoofer_log(
-                        &app,
-                        "warn",
-                        &format!(
-                            "Roblox rate limited batch asset resolution; slowing requests for about {:.1}s.",
-                            wait_ms as f64 / 1000.0
-                        ),
-                    );
-                    has_errors = true; // force retry if rate limited
-                } else if resp.status().is_server_error() {
-                    crate::commands::spoofer::record_adaptive_server_error();
-                    has_errors = true;
-                }
-            } else {
-                has_errors = true; // timeout or network error
-            }
-
-            // Fallback UA 1
-            if chunk_urls.is_empty() && current_place_id_opt.is_some() && has_errors {
-                let req2 = client
-                    .post("https://assetdelivery.roblox.com/v2/assets/batch")
-                    .header(COOKIE, &cookie_header)
-                    .header(USER_AGENT, "RobloxStudio/WinInet")
-                    .header("Content-Type", "application/json");
-                wait_rate_limit(RateLimitBucket::DownloadResolution).await;
-                let send_future2 = req2.json(&chunk_vec).send();
-                if let Ok(Ok(resp2)) =
-                    tokio::time::timeout(Duration::from_secs(15), send_future2).await
-                {
-                    if resp2.status().is_success() {
-                        if let Ok(data2) = resp2.json::<serde_json::Value>().await {
-                            let res = parse_batch_response(&data2);
-                            chunk_urls = res.urls;
-                            has_errors = res.has_errors;
+            for ua in ["RobloxStudio/WinInet", "RobloxApp/WinInet", "Roblox/WinInet"] {
+                if let Ok(Ok(resp)) = send_with_ua(ua).await {
+                    crate::utils::check_for_roblosecurity_update(&app, &resp, &cookie_header);
+                    if resp.status().is_success() {
+                        crate::commands::spoofer::record_adaptive_success();
+                        if let Ok(data) = resp.json::<serde_json::Value>().await {
+                            let res = parse_batch_response(&data);
+                            chunk_urls.extend(res.urls);
+                            chunk_access_denied.extend(res.access_denied_ids);
+                            has_transient = res.has_transient_error;
                         }
-                    } else if resp2.status() == reqwest::StatusCode::UNAUTHORIZED {
+                        break; // got a 200 — stop UA cycling
+                    } else if resp.status() == reqwest::StatusCode::UNAUTHORIZED {
                         return Err("Your ROBLOSECURITY cookie is missing, invalid, or expired. Please update it in settings.".into());
-                    } else if resp2.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
-                        let wait_ms =
-                            crate::utils::extract_retry_after(&resp2, None).unwrap_or(2_000);
+                    } else if resp.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
+                        let retry_after_ms = crate::utils::extract_retry_after(&resp, None);
+                        crate::commands::spoofer::record_adaptive_rate_limit(retry_after_ms);
+                        let wait_ms = retry_after_ms.unwrap_or(2_000);
                         set_rate_limit(
                             RateLimitBucket::DownloadResolution,
                             Duration::from_millis(wait_ms),
                         );
-                    }
-                }
-            }
-
-            // Fallback UA 2
-            if chunk_urls.is_empty() && has_errors {
-                let req3 = client
-                    .post("https://assetdelivery.roblox.com/v2/assets/batch")
-                    .header(COOKIE, &cookie_header)
-                    .header(USER_AGENT, "RobloxApp/WinInet")
-                    .header("Content-Type", "application/json");
-                wait_rate_limit(RateLimitBucket::DownloadResolution).await;
-                let send_future3 = req3.json(&chunk_vec).send();
-                if let Ok(Ok(resp3)) =
-                    tokio::time::timeout(Duration::from_secs(15), send_future3).await
-                {
-                    if resp3.status().is_success() {
-                        if let Ok(data3) = resp3.json::<serde_json::Value>().await {
-                            let res = parse_batch_response(&data3);
-                            chunk_urls = res.urls;
-                            has_errors = res.has_errors;
-                        }
-                    } else if resp3.status() == reqwest::StatusCode::UNAUTHORIZED {
-                        return Err("Your ROBLOSECURITY cookie is missing, invalid, or expired. Please update it in settings.".into());
-                    } else if resp3.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
-                        let wait_ms =
-                            crate::utils::extract_retry_after(&resp3, None).unwrap_or(2_000);
-                        set_rate_limit(
-                            RateLimitBucket::DownloadResolution,
-                            Duration::from_millis(wait_ms),
+                        emit_spoofer_log(
+                            &app,
+                            "warn",
+                            &format!(
+                                "Roblox rate limited batch asset resolution; slowing requests for about {:.1}s.",
+                                wait_ms as f64 / 1000.0
+                            ),
                         );
+                        has_transient = true;
+                    } else if resp.status().is_server_error() {
+                        crate::commands::spoofer::record_adaptive_server_error();
+                        has_transient = true;
                     }
+                } else {
+                    has_transient = true; // timeout or network error
                 }
+                if !chunk_urls.is_empty() {
+                    break; // partial success is good enough — stop UA cycling
+                }
+                wait_rate_limit(RateLimitBucket::DownloadResolution).await;
             }
 
-            if chunk_urls.len() > best_chunk_urls.len() {
-                best_chunk_urls = chunk_urls.clone();
-            }
+            // Absorb newly resolved URLs into the running total
+            resolved_this_chunk.extend(chunk_urls);
 
-            if !has_errors && !chunk_urls.is_empty() {
-                break; // entire chunk succeeded with this place ID
-            }
+            // Prepare next pending_with_place to only retry access-denied IDs (not transient errors —
+            // those might succeed with the same place ID on retry, which the outer loop already handles)
+            let _ = chunk_access_denied; // consumed — next iteration will re-filter from resolved_this_chunk
+            let _ = has_transient;
         }
 
-        urls.extend(best_chunk_urls);
+        urls.extend(resolved_this_chunk);
     }
 
     Ok(urls)
@@ -522,7 +557,7 @@ pub async fn batch_download_assets_concurrent(
         .map(|task| {
             let app = app.clone();
             let cookie = cookie.clone();
-            let _place_id = _place_id.clone();
+            let place_id_for_task = _place_id.clone();
             async move {
                 match download_animation_asset_with_progress(
                     app,
@@ -533,7 +568,7 @@ pub async fn batch_download_assets_concurrent(
                     task.name,
                     task.asset_id,
                     task.asset_type,
-                    None,
+                    place_id_for_task, // was incorrectly None
                     false,
                     None,
                 )

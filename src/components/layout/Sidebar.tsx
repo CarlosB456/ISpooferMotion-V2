@@ -1,7 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion';
-import { Beaker, History, ScanLine, Settings } from 'lucide-react';
+import { History, ScanLine, Settings } from 'lucide-react';
 
-import { useConfig } from '../../contexts/ConfigContext';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { cn } from '../../utils/cn';
 
@@ -19,16 +18,6 @@ export default function Sidebar({
     { id: 'activity', label: t('nav.activity'), icon: <History size={18} /> },
     { id: 'settings', label: t('nav.settings'), icon: <Settings size={18} /> },
   ];
-
-  const { config } = useConfig();
-  // only show the experimental tab if they actually enabled it in their debug config
-  if (config.debug?.enableExperimentalTab) {
-    tabs.push({
-      id: 'experimental',
-      label: t('nav.experimental'),
-      icon: <Beaker size={18} />,
-    });
-  }
 
   return (
     <motion.div

@@ -5,28 +5,28 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 
 import App from './App.tsx';
-import { ErrorBoundary } from './components/ErrorBoundary';
+import { ErrorBoundary } from './components/core/ErrorBoundary';
 import { ConfigProvider } from './contexts/ConfigContext';
 import { LanguageProvider } from './contexts/LanguageContext';
 import { StudioConnectionProvider } from './contexts/StudioConnectionContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 
 const savedTheme = localStorage.getItem('theme') || 'dark';
-// force the theme early on so we don't flashbang the user with light mode on load
+// Force theme early to prevent light mode flash on load.
 if (savedTheme === 'dark') {
   document.documentElement.classList.add('dark');
 } else {
   document.documentElement.classList.remove('dark');
 }
 
-// This prevents native tooltips from showing up and overlapping our custom UI tooltips
+// Prevents native tooltips from overlapping custom UI tooltips.
 function TitleAttributeGuard({ children }: { children: React.ReactNode }) {
   React.useEffect(() => {
     const clearTitles = (root: ParentNode) => {
       root.querySelectorAll?.('[title]').forEach((el) => el.removeAttribute('title'));
     };
     clearTitles(document);
-    // kinda hacky, but this observer catches any new elements that get added dynamically and strips their titles too
+    // Observer removes titles from dynamically added elements.
     const observer = new MutationObserver((mutations) => {
       mutations.forEach((mutation) => {
         if (mutation.type === 'attributes' && mutation.target instanceof Element) {

@@ -1,13 +1,16 @@
-// main commands module root. registers all the submodules for tauri ipc endpoints
+// Commands module root. Registers Tauri IPC endpoints.
+pub mod anim_parser;
 pub mod assets;
 pub mod auth;
 pub mod fs;
 pub mod ipc;
 pub mod jobs;
+pub mod place_parser;
 pub mod resolver;
 pub mod roblox_status;
 pub mod session;
 pub mod spoofer;
+pub mod startup;
 pub mod studio;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]

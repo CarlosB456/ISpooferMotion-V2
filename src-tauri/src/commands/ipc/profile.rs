@@ -4,7 +4,7 @@ use serde_json::Value;
 
 #[tauri::command]
 #[specta::specta]
-// grabs the user's basic roblox profile info (name, id, avatar) using their cookie
+// Retrieve user profile information using the provided cookie.
 pub async fn get_roblox_profile(
     app: AppHandle,
     context: ProfileRequest,
@@ -113,7 +113,7 @@ pub async fn get_roblox_profile(
 
 #[tauri::command]
 #[specta::specta]
-// checks the publish api to see how many free audio uploads the user has left this month
+// Check remaining free audio uploads via the publish API.
 pub async fn fetch_audio_quota(
     app: AppHandle,
     cookie: Option<String>,

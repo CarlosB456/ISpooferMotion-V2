@@ -14,7 +14,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 const ThemeSync = () => {
   const { themeMode } = useThemeAccent();
 
-  // syncs the tailwind dark mode class to our current theme state so styles apply correctly
+  // Sync tailwind dark mode class with current theme state.
   useEffect(() => {
     if (themeMode === 'light') {
       document.documentElement.classList.remove('dark');

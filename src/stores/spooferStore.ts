@@ -2,7 +2,7 @@ import { create } from 'zustand';
 
 import type { SpooferAssetResult } from '../types/tauriEvents';
 import { notifyError } from '../utils/notifyError';
-import type { RbxInstance } from '../utils/robloxPlaceParser';
+import type { RbxInstance } from '../utils/robloxPlaceParser/types';
 import { appendSpoofingLog } from '../utils/spoofingLogs';
 import { queueStudioReplacements } from '../utils/studioBridge';
 import { isTauriRuntime } from '../utils/tauriRuntime';
@@ -14,6 +14,9 @@ interface SpooferState {
 
   loadedFileName: string | null;
   setLoadedFileName: (val: string | null | ((prev: string | null) => string | null)) => void;
+
+  loadedFilePath: string | null;
+  setLoadedFilePath: (val: string | null) => void;
 
   parsingFileName: string | null;
   setParsingFileName: (name: string | null) => void;
@@ -29,6 +32,18 @@ interface SpooferState {
 
   spoofProgress: number;
   setSpoofProgress: (val: number) => void;
+
+  spoofStatusText: string;
+  setSpoofStatusText: (val: string) => void;
+
+  spoofCurrentCount: number;
+  setSpoofCurrentCount: (val: number | ((prev: number) => number)) => void;
+
+  spoofTotalCount: number;
+  setSpoofTotalCount: (val: number) => void;
+
+  spoofStartTime: number | null;
+  setSpoofStartTime: (val: number | null) => void;
 
   lastReplacements: Record<string, string>;
   setLastReplacements: (
@@ -58,9 +73,14 @@ interface SpooferState {
 
   keyframeWarningCount: number;
   setKeyframeWarningCount: (val: number | ((prev: number) => number)) => void;
+
+  assetMetadataMap: Record<string, { name: string; type: string }>;
+  setAssetMetadataMap: (val: Record<string, { name: string; type: string }>) => void;
 }
 
-// holds all the active ephemeral state for the spoofing jobs, asset explorer, and studio integration
+// Ephemeral state for the active spoofing job, asset explorer, and studio integration.
+// Kept separate from config store as it doesn't need to be persisted to localStorage.
+// Wiped on app restart.
 export const useSpooferStore = create<SpooferState>((set) => ({
   rootInstances: [],
   setRootInstances: (val) =>
@@ -73,6 +93,9 @@ export const useSpooferStore = create<SpooferState>((set) => ({
     set((state) => ({
       loadedFileName: typeof val === 'function' ? val(state.loadedFileName) : val,
     })),
+
+  loadedFilePath: null,
+  setLoadedFilePath: (val) => set({ loadedFilePath: val }),
 
   parsingFileName: null,
   setParsingFileName: (name) => set({ parsingFileName: name }),
@@ -98,6 +121,21 @@ export const useSpooferStore = create<SpooferState>((set) => ({
 
   spoofProgress: 0,
   setSpoofProgress: (val) => set({ spoofProgress: val }),
+
+  spoofStatusText: '',
+  setSpoofStatusText: (val) => set({ spoofStatusText: val }),
+
+  spoofCurrentCount: 0,
+  setSpoofCurrentCount: (val) =>
+    set((state) => ({
+      spoofCurrentCount: typeof val === 'function' ? val(state.spoofCurrentCount) : val,
+    })),
+
+  spoofTotalCount: 0,
+  setSpoofTotalCount: (val) => set({ spoofTotalCount: val }),
+
+  spoofStartTime: null,
+  setSpoofStartTime: (val) => set({ spoofStartTime: val }),
 
   lastReplacements: {},
   setLastReplacements: (val) =>
@@ -137,6 +175,9 @@ export const useSpooferStore = create<SpooferState>((set) => ({
     set((state) => ({
       keyframeWarningCount: typeof val === 'function' ? val(state.keyframeWarningCount) : val,
     })),
+
+  assetMetadataMap: {},
+  setAssetMetadataMap: (val) => set({ assetMetadataMap: val }),
 }));
 
 export const applyReplacements = async (replacements: Record<string, string>) => {
@@ -200,7 +241,7 @@ export const applyReplacements = async (replacements: Record<string, string>) =>
       setSpoofingLogs((prev) =>
         appendSpoofingLog(
           prev,
-          'Queued replacements to plugin bridge. The Studio plugin will auto-replace them automatically! (Note: ensure you have run a Scan in Studio first)',
+          'Queued replacements to plugin bridge. The Studio plugin will auto-replace them automatically!',
         ),
       );
     }

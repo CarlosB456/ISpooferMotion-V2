@@ -1,4 +1,3 @@
-import type React from 'react';
 import { createContext, useContext } from 'react';
 
 import { type ScanStatus, useStudioConnection } from '../hooks/useStudioConnection';
@@ -11,7 +10,7 @@ type StudioConnectionContextValue = {
 
 const StudioConnectionContext = createContext<StudioConnectionContextValue | undefined>(undefined);
 
-// Provides a global view of whether we are successfully talking to the Roblox Studio plugin
+// Global state indicating successful connection to the Roblox Studio plugin.
 export const StudioConnectionProvider: React.FC<{
   children: React.ReactNode;
 }> = ({ children }) => {

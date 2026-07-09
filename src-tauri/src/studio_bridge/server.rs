@@ -1,5 +1,4 @@
-// This file contains all the Axum route handlers for the bridge server.
-// We keep the state locked down so we don't accidentally race between the UI and Studio requests.
+// Axum route handlers for the bridge server. Mutex constraints prevent race conditions.
 use axum::extract::{Json, State};
 use serde_json::Value;
 use std::time::{Duration, Instant};
@@ -21,15 +20,14 @@ pub async fn handle_studio_health(State(state): State<AppState>) -> Json<Value> 
     }))
 }
 
-// Fired when Studio starts dumping the entire workspace to us.
-// We reset all the old state so we're working with fresh data.
+// Handle Studio workspace dumps; resets bridge state.
 pub async fn handle_scan_start(
     State(state): State<AppState>,
     Json(payload): Json<Value>,
-) -> &'static str {
+) -> Json<Value> {
     let mut guard = state.data.write().await;
     guard.last_plugin_poll_time = Some(Instant::now());
-    guard.pending_studio_records = std::sync::Arc::new(Vec::new());
+    guard.pending_studio_records = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
     let incoming_place_id = payload
         .get("placeId")
         .and_then(|value| {
@@ -54,47 +52,62 @@ pub async fn handle_scan_start(
         "scanned": 0,
         "total": 0
     }));
-    "ok"
+    Json(serde_json::json!({"success": true}))
 }
 
 pub async fn handle_scan_progress(
     State(state): State<AppState>,
     Json(mut payload): Json<Value>,
-) -> &'static str {
+) -> Json<Value> {
     let mut guard = state.data.write().await;
     guard.last_plugin_poll_time = Some(Instant::now());
     if let Some(obj) = payload.as_object_mut() {
         obj.insert("scanning".to_string(), Value::Bool(true));
     }
     guard.scan_status = Some(payload);
-    "ok"
+    Json(serde_json::json!({"success": true}))
 }
 
 pub async fn handle_scan_records(
     State(state): State<AppState>,
     Json(payload): Json<Value>,
-) -> &'static str {
-    let Some(records) = payload.get("records").and_then(Value::as_array) else {
-        return "ok";
+) -> Json<Value> {
+    let Some(records_value) = payload.get("records").and_then(Value::as_array) else {
+        return Json(serde_json::json!({"success": true}));
     };
-    let mut guard = state.data.write().await;
-    guard.last_plugin_poll_time = Some(Instant::now());
-    let mut truncated = false;
-    for record in records {
-        if guard.pending_studio_records.len() >= super::MAX_STUDIO_RECORDS {
-            truncated = true;
-            break;
-        }
-        if let Ok(record) = serde_json::from_value::<StudioRecord>(record.clone()) {
-            if record.property != "Source" || record.value.len() <= super::MAX_SCRIPT_SOURCE_BYTES {
-                std::sync::Arc::make_mut(&mut guard.pending_studio_records).push(record);
+
+    let mut parsed_records = Vec::with_capacity(records_value.len());
+    for record in records_value {
+        if let Ok(parsed) = serde_json::from_value::<StudioRecord>(record.clone()) {
+            if parsed.property != "Source" || parsed.value.len() <= super::MAX_SCRIPT_SOURCE_BYTES {
+                parsed_records.push(parsed);
             }
         }
     }
+
+    let mut truncated = false;
+    {
+        let pending_mutex = std::sync::Arc::clone(&state.data.read().await.pending_studio_records);
+        let mut pending = pending_mutex.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let current_len = pending.len();
+        if current_len < super::MAX_STUDIO_RECORDS {
+            let available = super::MAX_STUDIO_RECORDS - current_len;
+            if parsed_records.len() > available {
+                parsed_records.truncate(available);
+                truncated = true;
+            }
+            pending.extend(parsed_records);
+        } else {
+            truncated = true;
+        }
+    }
+
+    let mut guard = state.data.write().await;
+    guard.last_plugin_poll_time = Some(Instant::now());
     if truncated {
         guard.scan_records_truncated = true;
     }
-    "ok"
+    Json(serde_json::json!({"success": true}))
 }
 
 pub async fn handle_scan_complete(State(state): State<AppState>) -> Json<Value> {
@@ -102,7 +115,13 @@ pub async fn handle_scan_complete(State(state): State<AppState>) -> Json<Value> 
         let mut guard = state.data.write().await;
         guard.last_plugin_poll_time = Some(Instant::now());
         guard.scan_status = None;
-        guard.studio_records = std::sync::Arc::clone(&guard.pending_studio_records);
+        let extracted_records = std::mem::take(
+            &mut *guard
+                .pending_studio_records
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner),
+        );
+        guard.studio_records = std::sync::Arc::new(extracted_records);
         (std::sync::Arc::clone(&guard.studio_records), guard.stored_mappings.clone())
     };
     let records_for_patches = std::sync::Arc::clone(&records);
@@ -140,6 +159,7 @@ pub async fn handle_scan_complete(State(state): State<AppState>) -> Json<Value> 
     ) = stores;
     if !mappings.is_empty() {
         guard.stored_patches = patches;
+        guard.notify.notify_waiters();
     }
     let kf_warnings = count_keyframe_warnings(&guard.last_script_refs);
     guard.keyframe_warning_count = kf_warnings;
@@ -157,23 +177,24 @@ pub async fn handle_scan_complete(State(state): State<AppState>) -> Json<Value> 
     }))
 }
 
-pub async fn handle_scan_abort(State(state): State<AppState>) -> &'static str {
+pub async fn handle_scan_abort(State(state): State<AppState>) -> Json<Value> {
     let mut guard = state.data.write().await;
     guard.scan_status = None;
-    guard.pending_studio_records = std::sync::Arc::new(Vec::new());
+    guard.pending_studio_records = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
     guard.last_sounds.scanning = false;
     guard.last_animations.scanning = false;
     guard.last_images.scanning = false;
     guard.last_meshes.scanning = false;
     guard.last_script_refs.scanning = false;
-    "ok"
+    Json(serde_json::json!({"success": true}))
 }
 
-// Studio long-polls this endpoint waiting for us to tell it to do something.
-// If we have nothing to do for 25 seconds we just return empty so it can loop again.
+// Long-poll endpoint for Studio tasks. Times out after 25 seconds.
 pub async fn handle_poll(State(state): State<AppState>) -> Json<Value> {
     let timeout = tokio::time::Duration::from_secs(25);
     let start = Instant::now();
+    let notify = std::sync::Arc::clone(&state.data.read().await.notify);
+
     loop {
         {
             let mut guard = state.data.write().await;
@@ -195,13 +216,16 @@ pub async fn handle_poll(State(state): State<AppState>) -> Json<Value> {
         if start.elapsed() > timeout {
             return Json(serde_json::json!({ "requestAssets": false }));
         }
-        tokio::time::sleep(tokio::time::Duration::from_millis(250)).await;
+        let remaining = timeout.saturating_sub(start.elapsed());
+        let _ = tokio::time::timeout(remaining, notify.notified()).await;
     }
 }
 
 pub async fn handle_poll_replacements(State(state): State<AppState>) -> Json<Value> {
     let timeout = tokio::time::Duration::from_secs(25);
     let start = Instant::now();
+    let notify = std::sync::Arc::clone(&state.data.read().await.notify);
+
     loop {
         {
             let mut guard = state.data.write().await;
@@ -221,12 +245,12 @@ pub async fn handle_poll_replacements(State(state): State<AppState>) -> Json<Val
         if start.elapsed() > timeout {
             return Json(serde_json::json!({ "mappings": [], "patches": [] }));
         }
-        tokio::time::sleep(tokio::time::Duration::from_millis(250)).await;
+        let remaining = timeout.saturating_sub(start.elapsed());
+        let _ = tokio::time::timeout(remaining, notify.notified()).await;
     }
 }
 
-// When the UI is done spoofing and wants to swap out old IDs for new ones,
-// we queue up the patches here for Studio to grab on its next poll.
+// Queue ID replacement patches for Studio retrieval.
 pub async fn handle_replace_ids(
     State(state): State<AppState>,
     Json(payload): Json<Value>,
@@ -254,6 +278,7 @@ pub async fn handle_replace_ids(
         guard.request_meshes = true;
         guard.request_script_refs = true;
     }
+    guard.notify.notify_waiters();
     Json(serde_json::json!({ "ok": true, "truncated": over_limit }))
 }
 
@@ -291,7 +316,7 @@ snapshot_handler!(get_last_script_refs, last_script_refs);
 
 macro_rules! request_handler {
     ($name:ident, $flag:ident, $store:ident) => {
-        pub async fn $name(State(state): State<AppState>) -> &'static str {
+        pub async fn $name(State(state): State<AppState>) -> Json<Value> {
             let mut guard = state.data.write().await;
             guard.$flag = true;
             if !guard.$store.scanning {
@@ -305,7 +330,8 @@ macro_rules! request_handler {
                     "total": 0
                 }));
             }
-            "ok"
+            guard.notify.notify_waiters();
+            Json(serde_json::json!({"success": true}))
         }
     };
 }
@@ -319,6 +345,8 @@ request_handler!(request_script_refs, request_script_refs, last_script_refs);
 async fn legacy_poll(State(state): State<AppState>, kind: &'static str) -> Json<Value> {
     let timeout = tokio::time::Duration::from_secs(25);
     let start = Instant::now();
+    let notify = std::sync::Arc::clone(&state.data.read().await.notify);
+
     loop {
         {
             let mut guard = state.data.write().await;
@@ -341,7 +369,8 @@ async fn legacy_poll(State(state): State<AppState>, kind: &'static str) -> Json<
                 serde_json::json!({ "requestAssets": false, "skipOwnedCheck": skip_owned }),
             );
         }
-        tokio::time::sleep(tokio::time::Duration::from_millis(250)).await;
+        let remaining = timeout.saturating_sub(start.elapsed());
+        let _ = tokio::time::timeout(remaining, notify.notified()).await;
     }
 }
 
@@ -368,9 +397,9 @@ macro_rules! legacy_assets_handler {
         pub async fn $name(
             State(state): State<AppState>,
             Json(payload): Json<Value>,
-        ) -> &'static str {
+        ) -> Json<Value> {
             append_legacy_assets(&mut state.data.write().await.$field, &payload);
-            "ok"
+            Json(serde_json::json!({"success": true}))
         }
     };
 }
@@ -383,12 +412,12 @@ legacy_assets_handler!(handle_assets_script_refs, last_script_refs);
 
 macro_rules! legacy_complete_handler {
     ($name:ident, $field:ident) => {
-        pub async fn $name(State(state): State<AppState>) -> &'static str {
+        pub async fn $name(State(state): State<AppState>) -> Json<Value> {
             let mut guard = state.data.write().await;
             guard.$field.scanning = false;
             guard.$field.complete = true;
             guard.$field.timestamp = Some(Instant::now());
-            "ok"
+            Json(serde_json::json!({"success": true}))
         }
     };
 }

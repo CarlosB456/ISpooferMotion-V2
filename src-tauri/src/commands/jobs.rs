@@ -18,7 +18,7 @@ fn get_jobs_path(app: &AppHandle) -> crate::error::Result<PathBuf> {
     Ok(dir.join("job-history.json"))
 }
 
-// strip out cookies and api keys before saving the job history so we don't leak creds to disk
+// Redact cookies and API keys prior to saving job history.
 fn sanitize_job(job: &mut Value) {
     if let Some(config) = job.get_mut("config").and_then(Value::as_object_mut) {
         config.remove("cookie");
@@ -69,7 +69,7 @@ pub async fn delete_job(app: AppHandle, job_id: String) -> crate::error::Result<
     Ok(true)
 }
 
-// shove a new job into the history file, capping it at 250 entries so it doesn't get huge
+// Append job to history file, capping at 250 entries.
 pub(super) async fn persist_job(app: &AppHandle, job: Value) -> crate::error::Result<bool> {
     let _guard = job_mutex().lock().await;
     let path = get_jobs_path(app)?;
@@ -94,7 +94,7 @@ pub async fn open_job_log(app: AppHandle, log_path: String) -> crate::error::Res
     let canonical_logs_dir = tokio::fs::canonicalize(logs_dir).await?;
     let canonical_log_path = tokio::fs::canonicalize(log_path).await?;
 
-    // sanity check the path to make sure they aren't trying to open an arbitrary file on the system
+    // Validate the path to prevent arbitrary file access.
     if !canonical_log_path.starts_with(canonical_logs_dir) {
         return Err("Job log path is outside the logs directory.".into());
     }

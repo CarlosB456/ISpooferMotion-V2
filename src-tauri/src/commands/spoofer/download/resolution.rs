@@ -4,7 +4,11 @@ use reqwest::header::{COOKIE, USER_AGENT};
 use std::collections::HashSet;
 use tauri::AppHandle;
 
-// checks the standard v1 asset delivery api to see if roblox will just give us the direct url
+const MAX_GROUP_CRAWL_LIMIT: usize = 5;
+const MAX_GROUP_FRIEND_CRAWL_LIMIT: usize = 8;
+const MAX_FRIEND_CRAWL_LIMIT: usize = 15;
+
+// Request direct URL from standard v1 asset delivery API.
 pub async fn resolve_asset_id_location(
     app: &AppHandle,
     _client: &reqwest::Client,
@@ -40,7 +44,7 @@ pub async fn resolve_asset_id_location(
         }))
 }
 
-// scrapes the economy api to find alternate cdn links or asset version ids
+// Extract alternate CDN links or asset version IDs from the economy API.
 pub async fn resolve_asset_economy_urls(asset_id: &str, cookie_header: &str) -> Vec<String> {
     let mut urls = Vec::new();
     let client = crate::utils::get_http_client();
@@ -243,7 +247,7 @@ pub async fn build_saved_versions_urls(asset_id: &str, cookie_header: &str) -> V
     urls
 }
 
-// tries to find what games this asset is used in, so we can pretend to be a server for that game and bypass copylocks
+// Discover games utilizing the asset to emulate a server context and bypass copylocks.
 pub async fn attempt_asset_usage_place_id_discovery(
     asset_id: &str,
     cookie_header: &str,
@@ -464,7 +468,7 @@ pub async fn get_games_for_creator(
     results
 }
 
-// desperate attempt to find a place id by crawling the asset creator's social graph (groups, friends, games)
+// Discover Place IDs by crawling the asset creator's social graph.
 pub async fn attempt_social_graph_place_id_discovery(
     asset_id: &str,
     cookie_header: &str,
@@ -519,23 +523,19 @@ pub async fn attempt_social_graph_place_id_discovery(
 
     let mut futures = vec![];
 
-    let ct = creator_type.clone();
-    let cid = creator_id;
-    let ch = cookie_header.to_string();
-    futures.push(tokio::spawn(async move { get_games_for_creator(&ct, cid, &ch).await }));
+    let mut spawn_games_fetch = |c_type: &str, c_id: u64| {
+        let ct = c_type.to_string();
+        let ch = cookie_header.to_string();
+        futures.push(tokio::spawn(async move { get_games_for_creator(&ct, c_id, &ch).await }));
+    };
+
+    spawn_games_fetch(&creator_type, creator_id);
 
     if let Some(uid) = auth_user_id {
-        let ch = cookie_header.to_string();
-        futures.push(tokio::spawn(async move { get_games_for_creator("User", uid, &ch).await }));
-    }
-
-    if let Some(uid) = auth_user_id {
-        let ch = cookie_header.to_string();
+        spawn_games_fetch("User", uid);
         let groups = get_groups_for_user(uid, cookie_header).await;
-        for (gid, _) in groups.into_iter().take(5) {
-            let ch = ch.clone();
-            futures
-                .push(tokio::spawn(async move { get_games_for_creator("Group", gid, &ch).await }));
+        for (gid, _) in groups.into_iter().take(MAX_GROUP_CRAWL_LIMIT) {
+            spawn_games_fetch("Group", gid);
         }
     }
 
@@ -547,30 +547,20 @@ pub async fn attempt_social_graph_place_id_discovery(
         }
         seen_owners.insert(creator_id);
 
-        for (gid, owner_id) in groups.into_iter().take(8) {
-            let ch = cookie_header.to_string();
-            futures
-                .push(tokio::spawn(async move { get_games_for_creator("Group", gid, &ch).await }));
+        for (gid, owner_id) in groups.into_iter().take(MAX_GROUP_FRIEND_CRAWL_LIMIT) {
+            spawn_games_fetch("Group", gid);
 
             if let Some(oid) = owner_id {
-                if !seen_owners.contains(&oid) {
-                    seen_owners.insert(oid);
-                    let ch = cookie_header.to_string();
-                    futures.push(tokio::spawn(async move {
-                        get_games_for_creator("User", oid, &ch).await
-                    }));
+                if seen_owners.insert(oid) {
+                    spawn_games_fetch("User", oid);
                 }
             }
         }
 
         let friends = get_friends_for_user(creator_id, cookie_header).await;
-        for fid in friends.into_iter().take(15) {
-            if !seen_owners.contains(&fid) {
-                seen_owners.insert(fid);
-                let ch = cookie_header.to_string();
-                futures.push(tokio::spawn(
-                    async move { get_games_for_creator("User", fid, &ch).await },
-                ));
+        for fid in friends.into_iter().take(MAX_FRIEND_CRAWL_LIMIT) {
+            if seen_owners.insert(fid) {
+                spawn_games_fetch("User", fid);
             }
         }
     }
@@ -589,7 +579,7 @@ pub async fn attempt_social_graph_place_id_discovery(
     discovered_place_ids.into_iter().collect()
 }
 
-// queries the internet archive's wayback machine to see if someone else saved a valid download url for this asset years ago
+// Query the Internet Archive Wayback Machine for historical download URLs.
 pub async fn attempt_deep_place_id_discovery(
     app: &AppHandle,
     asset_id: &str,

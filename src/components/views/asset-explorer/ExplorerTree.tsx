@@ -6,7 +6,7 @@ import type { AppConfig } from '../../../contexts/ConfigContext';
 import { useLanguage } from '../../../contexts/LanguageContext';
 import { cn } from '../../../utils/cn';
 import { playRobloxAudio, stopRobloxAudio } from '../../../utils/robloxAudio';
-import type { ParsedAssetRef, RbxInstance } from '../../../utils/robloxPlaceParser';
+import type { ParsedAssetRef, RbxInstance } from '../../../utils/robloxPlaceParser/types';
 import { logIsm } from '../../../utils/robloxProfiles';
 
 export const getAssetId = (asset: ParsedAssetRef | { id: string; name: string }) => {
@@ -42,6 +42,7 @@ export const ExplorerTreeNode = memo(function ExplorerTreeNode({
   const { t } = useLanguage();
   const [expanded, setExpanded] = useState(false);
   const [expandedAssetKey, setExpandedAssetKey] = useState<string | null>(null);
+
   const matchesFilter = (type: string) =>
     activeAssetFilters.length === 0 || activeAssetFilters.includes(type);
   const filteredAssets = useMemo(() => {
@@ -57,7 +58,7 @@ export const ExplorerTreeNode = memo(function ExplorerTreeNode({
   const isIndeterminate = selectedCount > 0 && selectedCount < allIds.length;
 
   const copyAssetId = async (asset: ParsedAssetRef) => {
-    // copy to clipboard so they can paste it manually if needed
+    // Copy to clipboard for manual pasting.
     const assetId = getAssetId(asset);
     if (!assetId) return;
     await navigator.clipboard.writeText(assetId);
@@ -65,7 +66,7 @@ export const ExplorerTreeNode = memo(function ExplorerTreeNode({
   };
 
   const playAsset = async (asset: ParsedAssetRef) => {
-    // try to play the selected audio file using tauri's media apis
+    // Attempt to play the audio file using Tauri media APIs.
     const assetId = getAssetId(asset);
     if (!assetId) {
       logIsm('warn', 'Cannot play Roblox audio without an asset id.');
@@ -95,7 +96,7 @@ export const ExplorerTreeNode = memo(function ExplorerTreeNode({
   };
 
   const renderAssetRow = (asset: ParsedAssetRef) => {
-    // render each individual asset inside the explorer tree, kinda matches studio's look
+    // Render each asset in the tree structure.
     const assetId = getAssetId(asset);
     const isSound = asset.type === 'audio';
     const isAnimation = asset.type === 'animation';
@@ -301,7 +302,7 @@ export const ExplorerTreeNode = memo(function ExplorerTreeNode({
             </div>
           )}
 
-          {node.children.map((child) => (
+          {node.children.map((child: RbxInstance) => (
             <ExplorerTreeNode
               key={child.referent}
               node={child}

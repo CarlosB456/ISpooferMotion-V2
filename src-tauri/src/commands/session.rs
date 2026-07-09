@@ -4,7 +4,7 @@ use tauri::AppHandle;
 use tauri::Manager;
 
 pub fn get_session_path(app_handle: &AppHandle) -> crate::error::Result<PathBuf> {
-    // basic session state persistence so the user doesn't lose their inputs if they restart the app
+    // Persist basic session state to retain user inputs across restarts.
     app_handle
         .path()
         .app_data_dir()

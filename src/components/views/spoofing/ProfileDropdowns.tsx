@@ -13,8 +13,8 @@ export type AudioQuotaDisplay =
   | { status: 'ready'; remaining: number; capacity: number };
 
 export function parseAudioQuota(payload: unknown): AudioQuotaDisplay | null {
-  // roblox returns a weird nested array for quota limits depending on the endpoint version
-  // parse it safely to display remaining uploads to the user
+  // Quota limits are returned as nested arrays depending on the endpoint version.
+  // Parse safely to display remaining uploads.
   if (!payload || typeof payload !== 'object') return null;
 
   const response = payload as Record<string, unknown>;
@@ -69,7 +69,7 @@ function DropdownPortal({
   coords: { top: number; left: number; width: number };
   children: ReactNode;
 }) {
-  // render dropdowns outside the current dom node so they don't get clipped by overflow:hidden
+  // Render dropdowns outside the DOM node to prevent clipping from overflow:hidden.
   return createPortal(
     <AnimatePresence>
       {open && (

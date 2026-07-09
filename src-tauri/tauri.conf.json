@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "ISpooferMotion",
-  "version": "2.1.1",
+  "version": "2.2.0",
   "identifier": "ISpooferMotion-V2",
   "build": {
     "frontendDist": "../dist",
@@ -12,16 +12,19 @@
   "app": {
     "windows": [
       {
-        "title": "ISpooferMotion",
-        "label": "main",
-        "width": 1100,
-        "height": 620,
-        "resizable": true,
+        "title": "Updater",
+        "label": "splashscreen",
+        "url": "splash.html",
+        "width": 400,
+        "height": 300,
+        "resizable": false,
         "fullscreen": false,
         "decorations": false,
-        "transparent": false,
+        "transparent": true,
+        "shadow": false,
         "center": true,
-        "visible": true
+        "visible": true,
+        "skipTaskbar": false
       }
     ],
     "security": {
@@ -44,6 +47,9 @@
   },
   "bundle": {
     "active": true,
+    "resources": [
+      "../dist-plugin/ISpooferMotion.rbxmx"
+    ],
     "windows": {
       "nsis": {
         "installerIcon": "assets/app_icon.ico",
@@ -61,12 +67,16 @@
   "plugins": {
     "deep-link": {
       "desktop": {
-        "schemes": ["ispoofermotion"]
+        "schemes": [
+          "ispoofermotion"
+        ]
       }
     },
     "updater": {
-      "endpoints": ["https://api.ispoofermotion.com/update/{{target}}/{{current_version}}"],
-      "pubkey": "YOUR_UPDATER_PUBLIC_KEY_HERE"
+      "endpoints": [
+        "https://github.com/codycon/ISpooferMotion-V2/releases/latest/download/latest.json"
+      ],
+      "pubkey": ""
     }
   }
 }

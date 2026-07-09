@@ -14,14 +14,13 @@ import { isTauriRuntime } from '../../utils/tauriRuntime';
 
 export default function Titlebar() {
   const { t } = useLanguage();
-
   const { config, updateConfig } = useConfig();
   const showAdvanced = useSpooferStore((s) => s.showAdvanced);
   const setShowAdvanced = useSpooferStore((s) => s.setShowAdvanced);
   const [appVersion, setAppVersion] = useState<string>('');
 
   useEffect(() => {
-    // grab the current version from tauri to display under the app name
+    // Display the current Tauri version under the app name.
     invoke<string>('get_app_version')
       .then((v) => setAppVersion(v))
       .catch(() => setAppVersion(''));
@@ -32,7 +31,7 @@ export default function Titlebar() {
   };
 
   const handleClose = async () => {
-    // if they enabled hide-to-tray, just hide the window instead of fully killing the process
+    // Hide the window instead of closing the process if hide-to-tray is enabled.
     if (config.general.hideToTrayOnClose) {
       await getCurrentWindow().hide();
       return;
@@ -45,7 +44,7 @@ export default function Titlebar() {
       initial={{ opacity: 0, y: -20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, ease: 'easeOut' }}
-      // this attribute allows the user to drag the window by clicking anywhere on the titlebar
+      // Allow users to drag the window by clicking the titlebar.
       data-tauri-drag-region
       className="h-14 w-full flex items-center justify-between px-5 bg-transparent border-b border-border-subtle select-none shrink-0 z-50 relative"
     >

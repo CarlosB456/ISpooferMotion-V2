@@ -72,7 +72,7 @@ pub fn get_runtime_info() -> AnyValue {
 #[tauri::command]
 #[specta::specta]
 pub fn open_external(app: AppHandle, url: String) -> crate::error::Result<bool> {
-    // just a tiny sanity check so we don't accidentally run arbitrary schemes
+    // Validate the URL scheme before execution.
     if url.starts_with("https://") || url.starts_with("http://") {
         use tauri_plugin_opener::OpenerExt;
         let _ = app.opener().open_url(url, None::<String>);
@@ -100,7 +100,7 @@ pub async fn select_folder(app: AppHandle) -> crate::error::Result<Option<String
 #[tauri::command]
 #[specta::specta]
 pub async fn uninstall_app(app: AppHandle) -> crate::error::Result<bool> {
-    // nuke all user data and credentials before exiting
+    // Clear all user data and credentials before exiting.
     let _ = clear_profile_secrets(app.clone(), None).await;
     if let Ok(data_dir) = app.path().app_data_dir() {
         let _ = std::fs::remove_dir_all(&data_dir);

@@ -17,12 +17,13 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
+    "esModuleInterop": true,
     "paths": {
       "@/*": ["./src/*"],
       "@codycon/ism-library": ["./ISM-Library/packages/ui"],
       "framer-motion": ["./node_modules/framer-motion"]
     }
   },
-  "include": ["src"],
+  "include": ["./src"],
   "references": [{ "path": "./tsconfig.node.json" }]
 }

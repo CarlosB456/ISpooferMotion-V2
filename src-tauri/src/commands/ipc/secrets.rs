@@ -40,7 +40,7 @@ pub async fn save_renderer_settings(
 #[tauri::command]
 #[specta::specta]
 pub async fn load_profile_secrets(app: AppHandle) -> crate::error::Result<AnyValue> {
-    // load user secrets, migrating them from the old plaintext json file to the secure OS keyring if needed
+    // Load user secrets, applying migration from plaintext to the OS keyring if required.
     if let Ok(entry) = get_secrets_keyring_entry() {
         if let Ok(password) = entry.get_password() {
             if let Ok(value) = serde_json::from_str(&password) {
@@ -72,7 +72,7 @@ pub async fn save_profile_secrets(
     app: AppHandle,
     data: AnyValue,
 ) -> crate::error::Result<AnyValue> {
-    // merges the incoming secrets with whatever we already have in the store so we don't blow away anything
+    // Merge incoming secrets with existing store values.
     let data = data.0;
     let mut all_secrets = load_profile_secrets(app.clone()).await?.0;
 

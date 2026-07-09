@@ -2,7 +2,7 @@ use reqwest::Client;
 
 #[tauri::command]
 #[specta::specta]
-// just a quick ping to see if roblox is down before we try doing a bunch of api calls
+// Ping Roblox to check for availability before proceeding with API calls.
 pub async fn check_roblox_api_status() -> crate::error::Result<bool> {
     let client = Client::builder().timeout(std::time::Duration::from_secs(10)).build()?;
 

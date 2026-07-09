@@ -22,7 +22,7 @@ pub async fn open_data_folder(app: AppHandle) -> crate::error::Result<bool> {
         return Ok(false);
     };
 
-    // open the data dir in the native file explorer based on os
+    // Open the data directory in the native file explorer.
     #[cfg(target_os = "windows")]
     let cmd = Command::new("explorer").arg(data_dir).spawn();
     #[cfg(target_os = "macos")]
@@ -36,7 +36,7 @@ pub async fn open_data_folder(app: AppHandle) -> crate::error::Result<bool> {
 #[tauri::command]
 #[specta::specta]
 pub async fn clear_app_cache(app: AppHandle) -> crate::error::Result<bool> {
-    // nuke the cache directory and recreate it fresh
+    // Delete and recreate the cache directory.
     if let Ok(cache_dir) = app.path().app_cache_dir() {
         let _ = tokio::fs::remove_dir_all(&cache_dir).await;
         let _ = tokio::fs::create_dir_all(&cache_dir).await;
@@ -61,7 +61,7 @@ pub async fn play_roblox_audio(
     let audio_dir = app.path().app_cache_dir()?.join("roblox_audio");
     tokio::fs::create_dir_all(&audio_dir).await?;
 
-    // check if we already downloaded this audio file previously
+    // Check if the audio file exists locally.
     let existing_file = ["ogg", "mp3"]
         .iter()
         .map(|ext| audio_dir.join(format!("sound_{asset_id}.{ext}")))
@@ -106,7 +106,7 @@ async fn download_roblox_audio(
         return Err(format!("Roblox audio download failed with HTTP {}.", response.status()).into());
     }
 
-    // try to guess the extension from the content type header, default to ogg since that's what roblox mostly uses
+    // Infer file extension from Content-Type, defaulting to ogg.
     let extension = response
         .headers()
         .get(reqwest::header::CONTENT_TYPE)
@@ -139,7 +139,7 @@ pub async fn show_notification(
 pub async fn open_dev_console(app: AppHandle) -> crate::error::Result<bool> {
     let logs_dir = app.path().app_data_dir()?.join("ispoofer_logs");
 
-    // scan the logs folder for debug text files
+    // Scan the logs directory for text files.
     let mut entries: Vec<_> = match tokio::fs::read_dir(&logs_dir).await {
         Ok(mut dir) => {
             let mut res = Vec::new();
@@ -160,7 +160,7 @@ pub async fn open_dev_console(app: AppHandle) -> crate::error::Result<bool> {
     if let Some(latest) = entries.last() {
         let path = latest.path();
 
-        // pop open a native terminal window tailing the log file so the user can see realtime debug output
+        // Open a native terminal window tailing the log file.
         #[cfg(target_os = "windows")]
         {
             let mut cmd = Command::new("powershell.exe");

@@ -18,7 +18,7 @@ pub use validation::{
 pub async fn get_cookie_from_roblox_studio(
     user_id: Option<String>,
 ) -> crate::error::Result<Option<String>> {
-    // try to pull the cookie directly out of the studio credentials
+    // Attempt to extract the cookie from Studio credentials.
     tokio::task::spawn_blocking(move || get_cookie_from_roblox_studio_inner(user_id))
         .await
         .map_err(|e| crate::error::AppError::Custom(format!("Task failed: {e}")))?
@@ -29,7 +29,7 @@ pub async fn get_cookie_from_roblox_studio(
 pub async fn get_cookie_from_auto_detect(
     user_id: Option<String>,
 ) -> crate::error::Result<Option<String>> {
-    // fallback chain: check studio first since it's the most reliable, then scan browsers
+    // Priority: Studio credentials, followed by browser profiles.
     tokio::task::spawn_blocking(move || {
         if let Some(cookie) = get_cookie_from_roblox_studio_inner(user_id)? {
             return Ok(Some(cookie));
@@ -64,7 +64,7 @@ pub async fn get_authenticated_user_id(
     app: AppHandle,
     cookie: String,
 ) -> crate::error::Result<String> {
-    // hit the users endpoint to verify the cookie is actually valid and get the user id
+    // Verify cookie validity via the users endpoint and fetch the user ID.
     let url = "https://users.roblox.com/v1/users/authenticated";
     let cookie_header_str = if cookie.starts_with(".ROBLOSECURITY=") {
         cookie.clone()
@@ -321,8 +321,7 @@ pub async fn detect_opencloud_api_key_owner(
 
     let client = crate::utils::get_http_client();
 
-    // kinda hacky way to detect the owner: we intentionally fail an upload and parse the error message
-    // since the error usually leaks the user id lol
+    // Determine the asset owner by triggering an upload error that exposes the user ID.
     let payload = serde_json::json!({
         "assetType": "Decal",
         "displayName": "ownership-probe",
@@ -361,7 +360,7 @@ pub async fn detect_opencloud_api_key_owner(
         });
     }
 
-    // grab the user id right out of the error message string
+    // Extract the user ID from the error message.
     let re = Regex::new(r"(?i)User\s+(\d+)\s+is\s+unauthorized")
         .map_err(|e| crate::error::AppError::Custom(format!("Regex error: {e}")))?;
     if let Some(caps) = re.captures(&text) {

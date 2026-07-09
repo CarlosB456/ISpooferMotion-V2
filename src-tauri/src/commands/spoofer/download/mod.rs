@@ -35,7 +35,7 @@ fn emit_spoofer_log(app: &AppHandle, level: &str, message: &str) {
     );
 }
 
-// the main download orchestration function. handles discovery, resolution, fallback urls, and retries
+// Download orchestration: manages discovery, resolution, fallbacks, and retries.
 pub async fn download_animation_asset_with_progress(
     app: AppHandle,
     direct_url: Option<String>,
@@ -133,49 +133,48 @@ pub async fn download_animation_asset_with_progress(
         }
     }
 
-    if place_ids.is_empty() {
-        let usage_place_ids =
-            attempt_asset_usage_place_id_discovery(&asset_id, &cookie_header).await;
-        if !usage_place_ids.is_empty() {
-            emit_spoofer_log(
-                &app,
-                "info",
-                &format!(
-                    "Asset usage discovery found {} candidate Place ID(s) for asset {asset_id}.",
-                    usage_place_ids.len()
-                ),
-            );
+    // Always run usage and social-graph discovery regardless of whether a place_id was already
+    // supplied. The user may have provided a stale/wrong place ID, and supplementary discovery
+    let usage_place_ids = attempt_asset_usage_place_id_discovery(&asset_id, &cookie_header).await;
+    if !usage_place_ids.is_empty() {
+        emit_spoofer_log(
+            &app,
+            "info",
+            &format!(
+                "Asset usage discovery found {} candidate Place ID(s) for asset {asset_id}.",
+                usage_place_ids.len()
+            ),
+        );
+    }
+    for place_id in &usage_place_ids {
+        for url in build_direct_asset_download_urls(
+            &asset_id,
+            asset_type.as_deref(),
+            std::slice::from_ref(place_id),
+        ) {
+            push_unique_url(&mut candidate_urls, url);
         }
-        for place_id in &usage_place_ids {
-            for url in build_direct_asset_download_urls(
-                &asset_id,
-                asset_type.as_deref(),
-                std::slice::from_ref(place_id),
-            ) {
-                push_unique_url(&mut candidate_urls, url);
-            }
-        }
+    }
 
-        let creator_place_ids =
-            attempt_social_graph_place_id_discovery(&asset_id, &cookie_header).await;
-        if !creator_place_ids.is_empty() {
-            emit_spoofer_log(
-                &app,
-                "info",
-                &format!(
-                    "Creator graph discovery found {} candidate Place ID(s) for asset {asset_id}.",
-                    creator_place_ids.len()
-                ),
-            );
-        }
-        for place_id in &creator_place_ids {
-            for url in build_direct_asset_download_urls(
-                &asset_id,
-                asset_type.as_deref(),
-                std::slice::from_ref(place_id),
-            ) {
-                push_unique_url(&mut candidate_urls, url);
-            }
+    let creator_place_ids =
+        attempt_social_graph_place_id_discovery(&asset_id, &cookie_header).await;
+    if !creator_place_ids.is_empty() {
+        emit_spoofer_log(
+            &app,
+            "info",
+            &format!(
+                "Creator graph discovery found {} candidate Place ID(s) for asset {asset_id}.",
+                creator_place_ids.len()
+            ),
+        );
+    }
+    for place_id in &creator_place_ids {
+        for url in build_direct_asset_download_urls(
+            &asset_id,
+            asset_type.as_deref(),
+            std::slice::from_ref(place_id),
+        ) {
+            push_unique_url(&mut candidate_urls, url);
         }
     }
 
@@ -193,7 +192,7 @@ pub async fn download_animation_asset_with_progress(
     let user_agents =
         ["RobloxStudio/WinInet", "RobloxApp/WinInet", "Roblox/WinInet", "roblox/9.0.0.0 (WinInet)"];
 
-    // try every candidate url we found until one actually gives us the file
+    // Iterate through candidate URLs until the file is successfully retrieved.
     let mut is_first_url = true;
     for download_url in &candidate_urls {
         let is_cdn_url = download_url.contains("rbxcdn.com");
@@ -209,14 +208,14 @@ pub async fn download_animation_asset_with_progress(
         };
         is_first_url = false;
 
-        for attempt in 0..3u64 {
+        for attempt in 0..10u64 {
             let ua = user_agents[attempt as usize % user_agents.len()];
             let request_place_id =
                 extract_place_id_from_url(download_url).or_else(|| place_ids.first().cloned());
             let cookie_for_req = if is_cdn_url { None } else { Some(cookie_header.as_str()) };
             wait_rate_limit(RateLimitBucket::AssetDownload).await;
             let send_result = tokio::time::timeout(
-                Duration::from_secs(30),
+                Duration::from_secs(45),
                 send_asset_download_request_ua(
                     &client,
                     download_url,
@@ -232,7 +231,7 @@ pub async fn download_animation_asset_with_progress(
                 Ok(Ok(resp)) => resp,
                 Ok(Err(error)) => {
                     last_error = format!("Download request failed: {error}");
-                    if attempt < 2 {
+                    if attempt < 9 {
                         tokio::time::sleep(Duration::from_millis(1000 * (attempt + 1))).await;
                         continue;
                     }
@@ -240,7 +239,7 @@ pub async fn download_animation_asset_with_progress(
                 }
                 Err(_elapsed) => {
                     last_error = "Download request timed out.".to_string();
-                    if attempt < 2 {
+                    if attempt < 9 {
                         tokio::time::sleep(Duration::from_millis(1000 * (attempt + 1))).await;
                         continue;
                     }
@@ -320,7 +319,8 @@ pub async fn download_animation_asset_with_progress(
                 }
             }
 
-            if is_retryable_download_status(status) && attempt < 2 {
+            if is_retryable_download_status(status) && attempt < 9 {
+                // 429 and 5xx are transient — worth retrying on the same URL.
                 let retry_after_ms = crate::utils::extract_retry_after(&download_resp, None)
                     .unwrap_or_else(|| 800 * (attempt + 1));
                 if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
@@ -344,19 +344,14 @@ pub async fn download_animation_asset_with_progress(
                 continue;
             }
 
-            if (status == reqwest::StatusCode::FORBIDDEN || status == reqwest::StatusCode::CONFLICT)
-                && attempt < 2
-            {
-                let backoff_ms = 500 * 2u64.pow(attempt as u32);
-                tokio::time::sleep(Duration::from_millis(backoff_ms)).await;
-                continue;
-            }
-
+            // 403, 404, 409 on a specific URL are permanent for that URL.
+            // Breaking immediately lets us try the next candidate without burning
+            // 10 × backoff iterations on a URL that will never succeed (V1 behavior).
             break;
         }
     }
 
-    // if we still failed and don't have a place id, try falling back to the wayback machine as a last resort
+    // Fall back to the Wayback Machine if all other resolution methods fail.
     if place_ids.is_empty()
         && (last_error.contains("Permission Denied") || last_error.contains("Conflict"))
     {

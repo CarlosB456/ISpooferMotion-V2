@@ -19,7 +19,7 @@ pub async fn fetch_csrf_token_internal(
     app: Option<AppHandle>,
     cookie: String,
 ) -> crate::error::Result<String> {
-    // we hit the logout endpoint (which obviously fails without a valid token) just to grab a fresh csrf token from the response headers
+    // Retrieve a fresh CSRF token from the logout endpoint response headers.
     let url = "https://auth.roblox.com/v2/logout";
     let cookie_header_str = if cookie.starts_with(".ROBLOSECURITY=") {
         cookie.clone()

@@ -1,7 +1,10 @@
 import { Copy, ListChecks, Trash2 } from 'lucide-react';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
+
+import { useShallow } from 'zustand/react/shallow';
 
 import { useLanguage } from '../../../contexts/LanguageContext';
+import { useSpooferStore } from '../../../stores/spooferStore';
 import { cn } from '../../../utils/cn';
 
 interface ExecutionLogsProps {
@@ -20,6 +23,48 @@ export default function ExecutionLogs({
   const { t } = useLanguage();
   const outputRef = useRef<HTMLDivElement>(null);
 
+  const { spoofCurrentCount, spoofTotalCount, spoofStartTime, isSpoofing } = useSpooferStore(
+    useShallow((s) => ({
+      spoofCurrentCount: s.spoofCurrentCount,
+      spoofTotalCount: s.spoofTotalCount,
+      spoofStartTime: s.spoofStartTime,
+      isSpoofing: s.isSpoofing,
+    })),
+  );
+
+  const [eta, setEta] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isSpoofing || !spoofStartTime || spoofCurrentCount === 0 || spoofTotalCount === 0) {
+      setEta(null);
+      return;
+    }
+
+    const interval = setInterval(() => {
+      const elapsedMs = Date.now() - spoofStartTime;
+      const msPerItem = elapsedMs / spoofCurrentCount;
+      const remainingItems = spoofTotalCount - spoofCurrentCount;
+
+      if (remainingItems <= 0) {
+        setEta(null);
+        return;
+      }
+
+      const remainingMs = msPerItem * remainingItems;
+      const remainingSec = Math.floor(remainingMs / 1000);
+
+      if (remainingSec < 60) {
+        setEta(`~${remainingSec}s remaining`);
+      } else {
+        const mins = Math.floor(remainingSec / 60);
+        const secs = remainingSec % 60;
+        setEta(`~${mins}m ${secs}s remaining`);
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [isSpoofing, spoofStartTime, spoofCurrentCount, spoofTotalCount]);
+
   useEffect(() => {
     if (outputRef.current) {
       outputRef.current.scrollTop = outputRef.current.scrollHeight;
@@ -29,7 +74,15 @@ export default function ExecutionLogs({
   return (
     <div className="flex flex-col gap-2 h-full min-h-0">
       <div className="flex items-center justify-between shrink-0">
-        <span className="text-sm font-semibold text-text-primary">{t('spoof.output')}</span>
+        <span className="text-sm font-semibold text-text-primary flex items-center gap-2">
+          {t('spoof.output')}
+          {isSpoofing && spoofTotalCount > 0 && (
+            <span className="text-xs font-medium text-text-secondary opacity-80">
+              ({spoofCurrentCount}/{spoofTotalCount}
+              {eta ? ` - ${eta}` : ''})
+            </span>
+          )}
+        </span>
         <div className="flex items-center gap-3">
           {Object.keys(lastReplacements).length > 0 && (
             <button

@@ -5,8 +5,7 @@ use axum::{
     response::Response,
 };
 
-// We strictly enforce JSON for POST requests.
-// Have had weird bugs when the client sends unexpected content types.
+// Enforce JSON for POST requests to ensure content-type consistency.
 pub async fn require_json_for_post(req: Request, next: Next) -> Result<Response, StatusCode> {
     if req.method() == Method::POST {
         let has_body = req

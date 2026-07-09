@@ -10,7 +10,7 @@ use std::fs::OpenOptions;
 use std::io::Write;
 use tauri::{AppHandle, Emitter, Manager};
 
-// parse a comma-separated list of place ids and just grab the first valid numeric one
+// Parse comma-separated Place IDs and select the first valid numeric ID.
 fn first_valid_place_id(raw: Option<&str>) -> Option<String> {
     raw.unwrap_or_default()
         .split(|character: char| character == ',' || character.is_whitespace())
@@ -19,7 +19,7 @@ fn first_valid_place_id(raw: Option<&str>) -> Option<String> {
         .map(std::string::ToString::to_string)
 }
 
-// grab all the numeric place ids from a comma-separated string, ignoring junk
+// Extract all numeric Place IDs from a comma-separated string.
 fn valid_place_ids(raw: Option<&str>) -> Vec<String> {
     let mut ids = Vec::new();
     for candidate in raw
@@ -136,7 +136,7 @@ pub async fn process_spoofer_action(
     app: AppHandle,
     data: SpooferActionRequest,
 ) -> crate::error::Result<()> {
-    // setup all the basic job state tracking and logging directories
+    // Initialize job state tracking and logging directories.
     let start_time = chrono::Utc::now();
     let job_id = format!("{}", chrono::Utc::now().timestamp_millis());
     let app_data_dir = app.path().app_data_dir()?;
@@ -203,7 +203,7 @@ pub async fn process_spoofer_action(
         vec!["animation".into(), "audio".into(), "image".into(), "mesh".into(), "script_ref".into()]
     });
     let concurrent_enabled = data.concurrent.unwrap_or(false);
-    // clamp concurrency so we don't accidentally ddos roblox or run out of memory
+    // Enforce concurrency limits to manage memory and API load.
     let max_concurrency =
         data.max_concurrency.unwrap_or(if concurrent_enabled { 100 } else { 5 }).clamp(1, 100)
             as usize;
@@ -238,7 +238,7 @@ pub async fn process_spoofer_action(
     let account_id = selected_account_id(&account.0);
     let group = data.group;
 
-    // sanity check to make sure they actually provided a real cookie
+    // Validate that a cookie was provided.
     if cookie.trim().len() < 50 {
         emit_job_log(&app, "A valid Roblox cookie is required before spoofing.", "error");
         let _ = app.emit(
@@ -309,7 +309,7 @@ pub async fn process_spoofer_action(
         return Ok(());
     }
 
-    // dedupe the asset list so we don't try to spoof the same thing twice in one run
+    // Deduplicate the asset list to prevent redundant spoofing operations.
     let mut deduped_assets: Vec<(String, String, Option<String>, Option<String>)> = Vec::new();
     let mut seen_asset_ids = HashSet::new();
     for (asset_id, asset_type, raw_value, name) in parsed_assets {
@@ -393,7 +393,7 @@ pub async fn process_spoofer_action(
     let creator_place_ids_cache = Arc::new(dashmap::DashMap::<String, Vec<String>>::new());
 
     let mut batch_urls = std::collections::HashMap::new();
-    // try to resolve all the download urls in one giant batch request to save a ton of time
+    // Resolve download URLs in a batch request for efficiency.
     let batch_assets =
         parsed_assets.iter().map(|(id, t, _, _)| (id.clone(), t.clone())).collect::<Vec<_>>();
     if let Ok(urls) = crate::commands::spoofer::batch_get_download_urls_for_assets(
@@ -434,7 +434,7 @@ pub async fn process_spoofer_action(
     let batch_metadata = Arc::new(batch_metadata);
 
     let stream = stream::iter(parsed_assets.into_iter().enumerate());
-    // start processing the assets concurrently using the specified concurrency limit
+    // Process assets concurrently within the specified limits.
     stream
         .for_each_concurrent(max_concurrency, |(i, (asset_id, asset_type, raw_value, asset_name))| {
             let app = app.clone();
@@ -528,7 +528,7 @@ pub async fn process_spoofer_action(
                 let _ =
                     app.emit("spoofer-log", serde_json::json!({ "message": msg, "level": "info" }));
 
-                // map our internal type names to what the open cloud api actually expects
+                // Map internal type names to Open Cloud API expected values.
                 let mapped_type_name = match asset_type.as_str() {
                     "audio" => "Audio",
                     "mesh" => "Mesh",
@@ -899,7 +899,7 @@ pub async fn process_spoofer_action(
         })
         .await;
 
-    // summarize how everything went and clean up the state
+    // Summarize job execution and clean up state.
     let success = success_count.load(Ordering::Relaxed);
     let skipped = skip_count.load(Ordering::Relaxed);
     let failed = fail_count.load(Ordering::Relaxed);

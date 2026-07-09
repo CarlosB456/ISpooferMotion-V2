@@ -48,7 +48,7 @@ export default function CredentialsSection() {
     setAuthStatus('success');
     logIsm('info', 'Cookie validated for the selected profile.');
 
-    // Auto-save the newly validated profile directly to the OS keyring
+    // Save the validated profile to the OS keyring.
     void saveSecrets();
   };
 
@@ -95,7 +95,7 @@ export default function CredentialsSection() {
     }
   };
 
-  // Fire auto-detect on mount if already configured (e.g. after app restart)
+  // Auto-detect on mount if already configured.
   useEffect(() => {
     const mode = getCookieDetectionMode();
     if (mode !== 'none') {

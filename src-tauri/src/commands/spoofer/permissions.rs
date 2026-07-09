@@ -2,7 +2,7 @@ use super::{build_roblox_cookie_header, COOKIE};
 
 #[tauri::command]
 #[specta::specta]
-// explicitly grants a universe permission to use an audio asset so it doesn't get muted in-game
+// Grant universe permission to an audio asset to prevent in-game muting.
 pub async fn patch_asset_permissions(
     asset_id: String,
     universe_id: String,
@@ -56,7 +56,7 @@ pub async fn patch_asset_permissions(
 
 #[tauri::command]
 #[specta::specta]
-// toggles whether an asset is public or private on the creator marketplace
+// Toggle asset visibility on the Creator Marketplace.
 pub async fn set_asset_privacy(
     asset_id: String,
     privacy_status: String,
