@@ -471,12 +471,8 @@ pub async fn process_spoofer_action(
                     .get(&asset_id)
                     .map(|d| d.name.clone())
                     .or_else(|| {
-                        asset_name.clone().and_then(|n| {
-                            if n != "Unknown" && n != "Animations" && !n.starts_with("Asset ") {
-                                Some(n)
-                            } else {
-                                None
-                            }
+                        asset_name.clone().filter(|n| {
+                            n != "Unknown" && n != "Animations" && !n.starts_with("Asset ")
                         })
                     })
                     .or_else(|| asset_name.clone())

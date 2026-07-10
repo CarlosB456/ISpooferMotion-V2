@@ -18,10 +18,9 @@ pub async fn push_to_studio(
                         s.to_string()
                     } else if let Some(n) = new_id.as_u64() {
                         n.to_string()
-                    } else if let Some(n) = new_id.as_i64() {
-                        n.to_string()
                     } else {
-                        return None;
+                        let n = new_id.as_i64()?;
+                        n.to_string()
                     };
                     if new_id_str.is_empty() || new_id_str == original_id {
                         return None;
