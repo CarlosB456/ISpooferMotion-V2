@@ -132,7 +132,8 @@ pub fn run() {
     log::info!("ISpooferMotion: Initializing Tauri Builder...");
     let builder = tauri_specta::Builder::<tauri::Wry>::new().commands(specta_commands!());
 
-    tauri::Builder::default()
+    #[allow(unused_mut)]
+    let mut app_builder = tauri::Builder::default()
         .plugin(tauri_plugin_process::init())
         .invoke_handler(builder.invoke_handler())
         .plugin(tauri_plugin_os::init())
@@ -144,13 +145,14 @@ pub fn run() {
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_deep_link::init())
-        .plugin(tauri_plugin_updater::Builder::new().build())
-        .plugin(
-            #[cfg(debug_assertions)]
-            tauri_plugin_playwright::init(),
-            #[cfg(not(debug_assertions))]
-            tauri_plugin_playwright::Builder::new().build(),
-        )
+        .plugin(tauri_plugin_updater::Builder::new().build());
+
+    #[cfg(debug_assertions)]
+    {
+        app_builder = app_builder.plugin(tauri_plugin_playwright::init());
+    }
+
+    app_builder
         .setup(|app| {
             #[cfg(any(windows, target_os = "linux"))]
             {
