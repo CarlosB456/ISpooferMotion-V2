@@ -69,23 +69,23 @@ fn extract_asset_id(raw: &str) -> Option<String> {
 }
 
 fn classify_property(class_name: &str, property_name: &str) -> Option<&'static str> {
-    match (class_name, property_name) {
-        ("Animation" | "AnimationTrack", "AnimationId") => Some("animation"),
-        (_, "AnimationId") => Some("animation"),
-        ("Sound", "SoundId") => Some("audio"),
-        (_, "SoundId") => Some("audio"),
-        ("Decal" | "Texture" | "ImageLabel" | "ImageButton", "Image") => Some("image"),
-        ("Decal" | "Texture" | "ImageLabel" | "ImageButton", "Texture") => Some("image"),
-        ("SpecialMesh" | "FileMesh", "TextureId") => Some("image"),
-        (_, "TextureId") => Some("image"),
-        ("Sky", "SkyboxBk" | "SkyboxDn" | "SkyboxFt" | "SkyboxLf" | "SkyboxRt" | "SkyboxUp") => {
-            Some("image")
+    let lower = property_name.to_lowercase();
+    match class_name {
+        "Animation" | "AnimationTrack" if lower.contains("animation") => Some("animation"),
+        "Sound" if lower.contains("sound") => Some("audio"),
+        "Decal" | "Texture" | "ImageLabel" | "ImageButton" if lower.contains("image") || lower.contains("texture") => Some("image"),
+        "SpecialMesh" | "FileMesh" | "MeshPart" if lower.contains("texture") => Some("image"),
+        "Sky" if lower.starts_with("skybox") => Some("image"),
+        "SpecialMesh" | "FileMesh" | "MeshPart" if lower.contains("mesh") => Some("mesh"),
+        "Script" | "LocalScript" | "ModuleScript" if lower.contains("linkedsource") => Some("script_ref"),
+        _ => {
+            if lower.contains("animationid") { return Some("animation"); }
+            if lower.contains("soundid") { return Some("audio"); }
+            if lower.contains("textureid") { return Some("image"); }
+            if lower.contains("meshid") { return Some("mesh"); }
+            if lower.contains("linkedsource") { return Some("script_ref"); }
+            None
         }
-        ("MeshPart" | "SpecialMesh" | "FileMesh", "MeshId") => Some("mesh"),
-        (_, "MeshId") => Some("mesh"),
-        ("Script" | "LocalScript" | "ModuleScript", "LinkedSource") => Some("script_ref"),
-        (_, "LinkedSource") => Some("script_ref"),
-        _ => None,
     }
 }
 
@@ -193,4 +193,15 @@ pub fn parse_place_file(file_path: String) -> Result<PlaceParseResult, String> {
     }
 
     Ok(PlaceParseResult { file_type: ext, root_instances, warnings })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_place_file() {
+        let result = parse_place_file("test_place.rbxmx".to_string());
+        println!("{:#?}", serde_json::to_string_pretty(&result.unwrap()).unwrap());
+    }
 }
