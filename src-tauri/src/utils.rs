@@ -263,3 +263,29 @@ pub fn extract_human_error(err_val: &serde_json::Value, status: Option<u16>) -> 
 
     "Unknown error occurred".to_string()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_sanitize_filename() {
+        assert_eq!(sanitize_filename("valid_name.txt"), "valid_name.txt");
+        assert_eq!(sanitize_filename("invalid<name>.txt"), "invalid_name_.txt");
+        assert_eq!(sanitize_filename("test?file*name.txt"), "test_file_name.txt");
+        assert_eq!(sanitize_filename(".."), "untitled");
+    }
+
+    #[test]
+    fn test_normalize_roblox_cookie() {
+        assert_eq!(normalize_roblox_cookie("cookie_value"), "cookie_value");
+        assert_eq!(
+            normalize_roblox_cookie(".ROBLOSECURITY=_|WARNING:-DO-NOT-SHARE-THIS|_; domain=.roblox.com"),
+            "_|WARNING:-DO-NOT-SHARE-THIS|_"
+        );
+        assert_eq!(
+            normalize_roblox_cookie("'_|WARNING:-DO-NOT-SHARE-THIS|_'"),
+            "_|WARNING:-DO-NOT-SHARE-THIS|_"
+        );
+    }
+}

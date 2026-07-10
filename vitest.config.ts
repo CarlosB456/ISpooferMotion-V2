@@ -1,8 +1,25 @@
-import { defineConfig } from 'vitest/config';
+import { defineConfig, mergeConfig } from 'vitest/config';
+import { resolve } from 'path';
+import viteConfig from './vite.config';
 
-export default defineConfig({
-  test: {
-    environment: 'node',
-    include: ['src/**/*.test.ts'],
-  },
-});
+export default mergeConfig(
+  // @ts-ignore
+  viteConfig(),
+  defineConfig({
+    test: {
+      environment: 'jsdom',
+      setupFiles: ['./src/setupTests.ts'],
+      globals: true,
+      include: ['src/**/*.test.{ts,tsx}'],
+      exclude: ['node_modules', 'e2e', 'dist', '.idea', '.git', '.cache'],
+      alias: {
+        '@codycon/ism-library': resolve(__dirname, './ISM-Library/packages/ui/index.ts'),
+      },
+      server: {
+        deps: {
+          inline: ['@codycon/ism-library', 'framer-motion'],
+        },
+      },
+    },
+  })
+);

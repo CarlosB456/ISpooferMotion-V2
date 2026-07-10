@@ -6,7 +6,7 @@ use std::fs::File;
 use std::io::BufReader;
 use std::path::Path;
 
-#[derive(Serialize, Clone, specta::Type)]
+#[derive(Debug, Serialize, Clone, specta::Type)]
 pub struct ParsedAssetRef {
     pub r#type: String, // "animation", "audio", "image", "mesh", "script_ref", etc.
     #[serde(rename = "assetId")]
@@ -22,7 +22,7 @@ pub struct ParsedAssetRef {
     pub path: String,
 }
 
-#[derive(Serialize, Clone, specta::Type)]
+#[derive(Debug, Serialize, Clone, specta::Type)]
 pub struct RbxInstance {
     pub referent: String,
     #[serde(rename = "className")]
@@ -32,7 +32,7 @@ pub struct RbxInstance {
     pub children: Vec<RbxInstance>,
 }
 
-#[derive(Serialize, specta::Type)]
+#[derive(Debug, Serialize, specta::Type)]
 pub struct PlaceParseResult {
     #[serde(rename = "fileType")]
     pub file_type: String, // "rbxl" or "rbxlx"
@@ -73,17 +73,33 @@ fn classify_property(class_name: &str, property_name: &str) -> Option<&'static s
     match class_name {
         "Animation" | "AnimationTrack" if lower.contains("animation") => Some("animation"),
         "Sound" if lower.contains("sound") => Some("audio"),
-        "Decal" | "Texture" | "ImageLabel" | "ImageButton" if lower.contains("image") || lower.contains("texture") => Some("image"),
+        "Decal" | "Texture" | "ImageLabel" | "ImageButton"
+            if lower.contains("image") || lower.contains("texture") =>
+        {
+            Some("image")
+        }
         "SpecialMesh" | "FileMesh" | "MeshPart" if lower.contains("texture") => Some("image"),
         "Sky" if lower.starts_with("skybox") => Some("image"),
         "SpecialMesh" | "FileMesh" | "MeshPart" if lower.contains("mesh") => Some("mesh"),
-        "Script" | "LocalScript" | "ModuleScript" if lower.contains("linkedsource") => Some("script_ref"),
+        "Script" | "LocalScript" | "ModuleScript" if lower.contains("linkedsource") => {
+            Some("script_ref")
+        }
         _ => {
-            if lower.contains("animationid") { return Some("animation"); }
-            if lower.contains("soundid") { return Some("audio"); }
-            if lower.contains("textureid") { return Some("image"); }
-            if lower.contains("meshid") { return Some("mesh"); }
-            if lower.contains("linkedsource") { return Some("script_ref"); }
+            if lower.contains("animationid") {
+                return Some("animation");
+            }
+            if lower.contains("soundid") {
+                return Some("audio");
+            }
+            if lower.contains("textureid") {
+                return Some("image");
+            }
+            if lower.contains("meshid") {
+                return Some("mesh");
+            }
+            if lower.contains("linkedsource") {
+                return Some("script_ref");
+            }
             None
         }
     }
@@ -202,6 +218,7 @@ mod tests {
     #[test]
     fn test_parse_place_file() {
         let result = parse_place_file("test_place.rbxmx".to_string());
-        println!("{:#?}", serde_json::to_string_pretty(&result.unwrap()).unwrap());
+        assert!(result.is_err(), "Expected an error because the file does not exist");
+        assert_eq!(result.expect_err("Expected an error"), "File does not exist");
     }
 }

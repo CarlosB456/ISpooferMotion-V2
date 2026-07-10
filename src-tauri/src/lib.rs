@@ -145,6 +145,12 @@ pub fn run() {
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(
+            #[cfg(debug_assertions)]
+            tauri_plugin_playwright::init(),
+            #[cfg(not(debug_assertions))]
+            tauri_plugin_playwright::Builder::new().build(),
+        )
         .setup(|app| {
             #[cfg(any(windows, target_os = "linux"))]
             {
