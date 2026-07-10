@@ -70,6 +70,10 @@ dist-plugin/
 # Test / coverage output
 coverage/
 *.lcov
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
 
 # Release helpers / archives
 release/

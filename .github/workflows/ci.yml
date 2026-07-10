@@ -69,6 +69,7 @@ jobs:
           cache-on-failure: true
       - run: bun install --frozen-lockfile
       - run: cd ISM-Library/packages/ui && bun install --frozen-lockfile && bun run build
+      - run: bun run build:plugin
       - run: bun run rust:check
       - run: bun run rust:lint
       - run: bun run rust:test
