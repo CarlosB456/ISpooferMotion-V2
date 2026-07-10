@@ -210,26 +210,15 @@ jobs:
       - name: Build ISM-Library
         run: cd ISM-Library/packages/ui && bun install --frozen-lockfile && bun run build
 
-      - name: Build app (macOS / Linux)
-        if: matrix.os != 'windows'
+      - name: Build app
         uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
         with:
           args: --bundles ${{ matrix.bundles }} ${{ matrix.args }}
           tagName: ${{ needs.prepare-release.outputs.RELEASE_TAG }}
-
-      - name: Build app (Windows)
-        if: matrix.os == 'windows'
-        run: bun run tauri build --bundles ${{ matrix.bundles }}
-
-      - name: Upload Windows bundle to release
-        if: matrix.os == 'windows'
-        uses: softprops/action-gh-release@v3
-        with:
-          tag_name: ${{ needs.prepare-release.outputs.RELEASE_TAG }}
-          files: src-tauri/target/release/bundle/nsis/*setup*.exe
-          fail_on_unmatched_files: true
 
   # Plugin Build (runs in parallel with platform builds)
   plugin-release:
