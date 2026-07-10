@@ -277,7 +277,7 @@ jobs:
       - uses: actions/checkout@v7
       - name: Post to Discord
         env:
-          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_RELEASE_WEBHOOK }}
+          DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           RELEASE_TAG: ${{ needs.prepare-release.outputs.RELEASE_TAG }}
@@ -291,10 +291,9 @@ jobs:
           import json
           import os
           import re
-          import time
           import urllib.request
 
-          webhook_url = os.environ.get("DISCORD_WEBHOOK_URL", "").strip()
+          bot_token = os.environ.get("DISCORD_BOT_TOKEN", "").strip()
           github_token = os.environ.get("GITHUB_TOKEN", "").strip()
           repo = os.environ.get("GITHUB_REPOSITORY", "").strip()
           release_tag = os.environ.get("RELEASE_TAG", "").strip()
@@ -304,10 +303,11 @@ jobs:
           event_action = os.environ.get("RELEASE_EVENT_ACTION", "").strip()
           is_release_edit = event_action == "edited"
           role_id = os.environ.get("DISCORD_RELEASE_ROLE_ID", "").strip()
+          channel_id = "1400781818780717056"
           release_record_cache = None
 
-          if not webhook_url:
-              print("No webhook URL configured. Skipping.")
+          if not bot_token:
+              print("No Discord bot token configured. Skipping.")
               exit(0)
 
           if not release_tag:
@@ -321,7 +321,7 @@ jobs:
                       "Accept": "application/vnd.github+json",
                       "Authorization": f"Bearer {github_token}",
                       "X-GitHub-Api-Version": "2022-11-28",
-                      "User-Agent": "ISpooferMotion-Release-Webhook",
+                      "User-Agent": "ISpooferMotion-Release-Bot",
                   },
               )
               with urllib.request.urlopen(request) as response:
@@ -338,94 +338,6 @@ jobs:
                   return release_record_cache
               except Exception:
                   return {}
-
-          def download_github_asset(asset):
-              request = urllib.request.Request(
-                  asset["url"],
-                  headers={
-                      "Accept": "application/octet-stream",
-                      "Authorization": f"Bearer {github_token}",
-                      "X-GitHub-Api-Version": "2022-11-28",
-                      "User-Agent": "ISpooferMotion-Release-Webhook",
-                  },
-              )
-              with urllib.request.urlopen(request) as response:
-                  return response.read().decode("utf-8")
-
-          def read_virustotal_links():
-              asset = None
-              release = {}
-              for attempt in range(6):
-                  release = get_release_by_tag()
-                  assets = release.get("assets") or []
-                  asset = next((item for item in assets if item.get("name") == "virustotal-links.json"), None)
-                  if asset:
-                      break
-                  if attempt < 5:
-                      time.sleep(10)
-
-              if not asset:
-                  release_body = release.get("body") or ""
-                  lines = []
-                  for line in release_body.splitlines():
-                      if "| `" not in line or "[View scan](" not in line:
-                          continue
-                      cells = [part.strip() for part in line.strip().strip("|").split("|")]
-                      if len(cells) < 3:
-                          continue
-                      name = cells[0].strip("`")
-                      sha256 = cells[1].strip("`")
-                      url_match = re.search(r"\]\(([^)]+)\)", cells[2])
-                      if url_match:
-                          short_hash = sha256[:12] if sha256 else "scan"
-                          lines.append(f"[`{name}`]({url_match.group(1)}) `{short_hash}`")
-                  if lines:
-                      value = "\n".join(lines)
-                      if len(value) > 1000:
-                          return f"Too many VirusTotal links to fit cleanly here. [Open the release notes]({release_url})"
-                      return value
-                  return "See VirusTotal results in the GitHub release notes."
-
-              try:
-                  payload = json.loads(download_github_asset(asset))
-              except Exception:
-                  return f"[Open VirusTotal report asset]({asset.get('browser_download_url', release_url)})"
-
-              if isinstance(payload, list):
-                  rows = payload
-                  skipped = False
-                  skipped_reason = ""
-              else:
-                  rows = payload.get("assets") or []
-                  skipped = bool(payload.get("skipped"))
-                  skipped_reason = payload.get("skippedReason") or ""
-
-              if skipped:
-                  return f"VirusTotal upload skipped: {skipped_reason or 'not configured'}."
-
-              lines = []
-              for row in rows:
-                  name = row.get("name", "Release asset")
-                  url = row.get("fileUrl") or row.get("file_url") or row.get("analysisUrl") or row.get("analysis_url")
-                  sha256 = row.get("sha256", "")
-
-                  pretty_name = name
-                  if "-win-" in name and name.endswith(".exe"): pretty_name = "Windows Setup (.exe)"
-                  elif "Plugin" in name and name.endswith(".rbxmx"): pretty_name = "Roblox Plugin (.rbxmx)"
-                  elif "-mac-universal.dmg" in name or name.endswith(".dmg"): pretty_name = "macOS App (Universal)"
-                  elif "AppImage" in name: pretty_name = "Linux Portable (.AppImage)"
-                  elif name.endswith(".exe"): pretty_name = "Windows Setup (.exe)"
-
-                  if url:
-                      lines.append(f"• [{pretty_name}]({url})")
-
-              if not lines:
-                  return f"[Open VirusTotal report asset]({asset.get('browser_download_url', release_url)})"
-
-              value = "\n".join(lines)
-              if len(value) > 1000:
-                  return f"Too many VirusTotal links to fit cleanly here. [Open the full report]({asset.get('browser_download_url', release_url)})"
-              return value
 
           def read_version_changelog():
               changelog_path = f"changelogs/{release_tag}.md"
@@ -498,17 +410,10 @@ jobs:
               }
 
           changelog_text = read_release_changes()
-          virustotal_links = read_virustotal_links()
           author = get_commit_author()
 
           changelog_field = fit_embed_description(changelog_text)
           color = 3447003 if is_release_edit else (16753920 if prerelease else 5763719)
-          headline = "Release notes were updated" if is_release_edit else ("New test build is ready" if prerelease else "New update is live")
-          description = (
-              "The GitHub release notes were updated. Open the release below to see the latest changes."
-              if is_release_edit
-              else "ISpooferMotion has been updated. Grab the latest release from GitHub below."
-          )
 
           embed = {
               "author": {"name": "ISpooferMotion Updates", "icon_url": "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png"},
@@ -517,14 +422,12 @@ jobs:
               "description": f"{changelog_field}",
               "color": color,
               "fields": [
-                  {"name": "🛡️ VirusTotal Scans", "value": virustotal_links, "inline": False},
                   {"name": "📥 Download", "value": f"**[Get it on GitHub]({release_url})**", "inline": False},
               ],
               "footer": {"text": f"Released by {author['name']} • The auto-updater will prompt you on next launch.", "icon_url": author["avatar"] if author["avatar"] else None},
           }
 
           payload = {
-              "username": "ISpooferMotion Updates",
               "content": (
                   f"<@&{role_id}> ISpooferMotion release notes were updated.\n\n"
                   if is_release_edit
@@ -535,14 +438,18 @@ jobs:
           }
 
           request = urllib.request.Request(
-              webhook_url,
+              f"https://discord.com/api/v10/channels/{channel_id}/messages",
               data=json.dumps(payload).encode("utf-8"),
-              headers={"Content-Type": "application/json", "User-Agent": "ISpooferMotion-Discord-Release-Webhook"},
+              headers={
+                  "Content-Type": "application/json", 
+                  "Authorization": f"Bot {bot_token}",
+                  "User-Agent": "ISpooferMotion-Discord-Release-Bot"
+              },
               method="POST",
           )
           with urllib.request.urlopen(request) as response:
               if response.status >= 300:
-                  raise RuntimeError(f"Discord webhook failed with status {response.status}")
+                  raise RuntimeError(f"Discord API failed with status {response.status}")
 
           print(f"Posted Discord release announcement for {release_tag}.")
           PY
