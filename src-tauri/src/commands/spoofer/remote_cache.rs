@@ -108,9 +108,8 @@ pub fn push_discovery(asset_id: String, place_id: String) {
 
 #[tauri::command]
 #[specta::specta]
-// Fetch initial asset-to-place mappings from the community backend.
+// Set the push URL for the community asset cache. Reading is not supported.
 pub async fn initialize_remote_cache(
-    _url: String,
     push_url: Option<String>,
 ) -> Result<usize, String> {
     if let Some(ref pu) = push_url {

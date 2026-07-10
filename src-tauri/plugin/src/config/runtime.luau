@@ -48,7 +48,4 @@ local SERVICES_TO_SCAN = {
 	"StarterPlayer",
 	"SoundService",
 	"Teams",
-	"Chat",
-	"LocalizationService",
-	"TextChatService",
 }
