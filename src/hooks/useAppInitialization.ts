@@ -3,11 +3,9 @@ import { getCurrentWindow } from '@tauri-apps/api/window';
 import { isRegistered, register, unregister } from '@tauri-apps/plugin-global-shortcut';
 import { useEffect, useState } from 'react';
 
-import { useConfig } from '../contexts/ConfigContext';
 import { isTauriRuntime } from '../utils/tauriRuntime';
 
 export function useAppInitialization() {
-  const { config } = useConfig();
   const [maintenance, setMaintenance] = useState<{ mode: boolean; message: string }>({
     mode: false,
     message: '',
@@ -146,13 +144,6 @@ export function useAppInitialization() {
       });
     };
   }, []);
-
-  // 5. Economy Metadata fetch
-  useEffect(() => {
-    if (config.spoofing.cookie) {
-      invoke('get_economy_metadata', { cookie: config.spoofing.cookie }).catch(() => {});
-    }
-  }, [config.spoofing.cookie]);
 
   return { maintenance, isRobloxApiDown };
 }

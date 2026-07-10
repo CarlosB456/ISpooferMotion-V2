@@ -55,7 +55,6 @@ import { triggerStudioScan } from '../../utils/studioScan';
 import { isTauriRuntime } from '../../utils/tauriRuntime';
 import ResultsModal from '../modals/ResultsModal';
 
-
 import CredentialsSection from './config/CredentialsSection';
 import ExclusionsSection from './config/ExclusionsSection';
 import RoutingSection from './config/RoutingSection';
@@ -88,10 +87,6 @@ type ApiKeyOwnerDetectResult = {
   ownerUserId?: string | null;
   message?: string;
 };
-
-
-
-
 
 export default function SpoofingView() {
   const { t } = useLanguage();
@@ -259,7 +254,9 @@ export default function SpoofingView() {
                     body: `Auto-queued copied asset ID: ${assetId}`,
                   });
                 })
-                .catch(() => {});
+                .catch((e) => {
+                  console.warn('Failed to send notification for clipboard asset', e);
+                });
 
               (window as any).clipboardSpoofAssetId = assetId;
               window.setTimeout(() => {

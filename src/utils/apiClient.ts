@@ -6,7 +6,9 @@ export async function getStudioPlaceIdFallback(): Promise<string> {
   try {
     const cached = window.localStorage.getItem('ISpooferMotion_LastStudioPlaceId') || '';
     if (/^\d+$/.test(cached) && cached !== '0') return cached;
-  } catch {}
+  } catch (e) {
+    addDebugLog('warn', ['Failed to read cached Studio place ID', e]);
+  }
 
   // Tauri state might not be synced immediately after clicking.
   // Fallback: ping the local Studio plugin for the PlaceId.

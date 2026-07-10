@@ -46,7 +46,7 @@ export const AppConfigSchema = z.object({
     preserveMetadata: z.boolean().default(true),
   }),
   ui: z.object({
-    activeTab: z.string().default('home'),
+    activeTab: z.string().default('spoofing'),
     assetExplorerOpen: z.boolean().default(false),
     homeUpdateSections: z.array(z.string()).default(['changelog']),
     settingsSections: z.array(z.string()).default(['account', 'general', 'quickSettings', 'debug']),
@@ -173,7 +173,9 @@ export const useConfigStore = create<ConfigState>((set, get) => {
       };
       initConfig.spoofing.cookie = '';
       initConfig.spoofing.apiKey = '';
-    } catch (e) {}
+    } catch (e) {
+      console.warn('Failed to parse saved config from localStorage', e);
+    }
   }
 
   const saveToStorage = (c: AppConfig) => {
@@ -240,7 +242,9 @@ export const useConfigStore = create<ConfigState>((set, get) => {
             };
           });
         }
-      } catch (e) {}
+      } catch (e) {
+        console.warn('Failed to load profile secrets from backend', e);
+      }
     },
     saveSecrets: async () => {
       if (!isTauriRuntime()) return;
