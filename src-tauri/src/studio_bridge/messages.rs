@@ -113,7 +113,9 @@ fn script_ref_pattern() -> &'static Regex {
 fn script_rewrite_pattern() -> &'static Regex {
     static RE: std::sync::OnceLock<Regex> = std::sync::OnceLock::new();
     RE.get_or_init(|| {
-        Regex::new(r#"(?ix)((?:(?:https?://(?:www\.)?)?roblox\.com/asset/?\?[^"'\s&]*?id=|rbxassetid://|rbxthumb://[^/]*/?)?)(\d{4,15})"#).expect("Invalid script rewrite regex")
+        // Minimum 7 digits matches script_ref_pattern - prevents 4–6 digit game constants
+        // (HP values, dates, scores) from being incorrectly swapped.
+        Regex::new(r#"(?ix)((?:(?:https?://(?:www\.)?)?roblox\.com/asset/?\?[^"'\s&]*?id=|rbxassetid://|rbxthumb://[^/]*/?)?)(\d{7,15})"#).expect("Invalid script rewrite regex")
     })
 }
 
@@ -959,7 +961,12 @@ pub fn plan_patches(records: &[StudioRecord], mappings: &[Value]) -> Vec<Value> 
 
         if record.property.starts_with("__Attribute__:") {
             let attr_name = &record.property["__Attribute__:".len()..];
-            let replaced_str = record.value.replace(asset_id, new_id);
+            // Use bounded replacement to avoid substring corruption: e.g. replacing "123" must
+            // not corrupt "123456". Match the ID only when not preceded/followed by another digit.
+            let id_pattern = format!(r"(?<![0-9]){}(?![0-9])", regex::escape(asset_id));
+            let replaced_str = Regex::new(&id_pattern)
+                .map(|re| re.replace_all(&record.value, *new_id).into_owned())
+                .unwrap_or_else(|_| record.value.replace(asset_id, new_id));
             let replaced_val = if replaced_str.chars().all(|c| c.is_ascii_digit()) {
                 Value::Number(replaced_str.parse::<u64>().unwrap_or(0).into())
             } else {
@@ -975,12 +982,18 @@ pub fn plan_patches(records: &[StudioRecord], mappings: &[Value]) -> Vec<Value> 
             continue;
         }
 
+        // Use bounded replacement to avoid substring corruption (e.g. replacing "123" inside
+        // "rbxassetid://123456" would produce a malformed URL with plain str::replace).
+        let id_pattern = format!(r"(?<![0-9]){}(?![0-9])", regex::escape(asset_id));
+        let replaced_value = Regex::new(&id_pattern)
+            .map(|re| re.replace_all(&record.value, *new_id).into_owned())
+            .unwrap_or_else(|_| record.value.replace(asset_id, new_id));
         patches.push(json!({
             "action": "setProperty",
             "token": record.token,
             "fullName": record.full_name,
             "property": record.property,
-            "value": record.value.replace(asset_id, new_id)
+            "value": replaced_value
         }));
     }
 
@@ -1262,5 +1275,56 @@ mod tests {
         let (_, _, _, _, script_refs) = analyze_records(&records);
         assert_eq!(count_keyframe_warnings(&script_refs), 1);
         assert_eq!(script_refs.assets[0]["kind"], "UnuploadedAnimation");
+    }
+
+    #[test]
+    fn set_property_replacement_does_not_corrupt_longer_ids() {
+        // "12345" is a substring of "123456789". Plain str::replace would corrupt the longer ID.
+        // The bounded-regex replace must only replace the exact ID "12345", leaving "123456789" intact.
+        let records = vec![StudioRecord {
+            token: "10".into(),
+            class_name: "Sound".into(),
+            name: "MySound".into(),
+            full_name: "Workspace.MySound".into(),
+            property: "SoundId".into(),
+            value: "rbxassetid://12345".into(),
+        }];
+        let patches = plan_patches(
+            &records,
+            &[json!({"originalId": "12345", "newId": "99999"})],
+        );
+        assert_eq!(patches.len(), 1);
+        assert_eq!(patches[0]["value"], "rbxassetid://99999");
+    }
+
+    #[test]
+    fn script_rewrite_does_not_replace_short_numbers() {
+        // 4-6 digit numbers (game constants, dates) must NOT be replaced by the script rewriter
+        // since script_rewrite_pattern now requires 7+ digits.
+        let mappings = HashMap::from([("1234", "9999")]);
+        let source = "local LEVEL_CAP = 1234\nlocal score = 9999999";
+        let rewritten = replace_script_asset_ids(source, &mappings);
+        // "1234" is only 4 digits so must NOT be rewritten; "9999999" has no mapping so unchanged.
+        assert_eq!(rewritten.into_owned(), source);
+    }
+
+    #[test]
+    fn attribute_replacement_does_not_corrupt_longer_ids() {
+        // Ensure that replacing attribute value "12345" doesn't touch "123456789".
+        let records = vec![StudioRecord {
+            token: "11".into(),
+            class_name: "Part".into(),
+            name: "Part".into(),
+            full_name: "Workspace.Part".into(),
+            property: "__Attribute__:SoundAsset".into(),
+            value: "12345".into(),
+        }];
+        let patches = plan_patches(
+            &records,
+            &[json!({"originalId": "12345", "newId": "67890"})],
+        );
+        assert_eq!(patches.len(), 1);
+        // The value should be replaced cleanly to the numeric new_id.
+        assert_eq!(patches[0]["value"], 67890u64);
     }
 }

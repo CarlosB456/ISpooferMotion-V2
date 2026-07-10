@@ -31,12 +31,13 @@ local function normalizeAssetId(value: any): string?
 	local assetId = string.match(str, "^rbxassetid://(%d+)$")
 		or string.match(str, "^rbxasset://(%d+)$")
 		or string.match(str, "^id=(%d+)$")
-		or string.match(str, "^[?&]id=(%d+)$")
-		or string.match(str, "[?&]id=(%d+)")
-		or string.match(str, "roblox%.com/asset/%?id=(%d+)")
-		or string.match(str, "roblox%.com/library/(%d+)")
-		or string.match(str, "roblox%.com/catalog/(%d+)")
-		or string.match(str, "create%.roblox%.com/marketplace/asset/(%d+)")
+		-- Anchored: only match when id= appears at the end of the query string or is the sole
+		-- param. Prevents extracting IDs from keys like '?badid=12345abc'.
+		or string.match(str, "[?&]id=(%d+)$")
+		or string.match(str, "roblox%.com/asset/%?id=(%d+)$")
+		or string.match(str, "roblox%.com/library/(%d+)$")
+		or string.match(str, "roblox%.com/catalog/(%d+)$")
+		or string.match(str, "create%.roblox%.com/marketplace/asset/(%d+)$")
 		or string.match(str, "^%d+$")
 
 	if not assetId or #assetId > 20 then
@@ -226,11 +227,22 @@ local function applyPatch(patch: Patch): (boolean, string?)
 			return false, tagErr
 		end
 		local ok, err = pcall(function()
+			-- Build a set of the incoming new tags so we can safely skip removal of
+			-- non-asset tags that happen to match the asset-slot heuristics.
+			local newTagSet: { [string]: boolean } = {}
+			for _, newTag in ipairs(decoded) do
+				newTagSet[newTag] = true
+			end
 			for _, oldTag in ipairs(CollectionService:GetTags(obj)) do
+				-- Only remove a tag if it looks like an asset reference AND is not
+				-- already in the replacement set (which would mean it is unchanged).
 				if
-					isAssetFormat(oldTag)
-					or stringContainsAssetReference(oldTag)
-					or nameLooksLikeAssetSlot(oldTag)
+					not newTagSet[oldTag]
+					and (
+						isAssetFormat(oldTag)
+						or stringContainsAssetReference(oldTag)
+						or nameLooksLikeAssetSlot(oldTag)
+					)
 				then
 					CollectionService:RemoveTag(obj, oldTag)
 				end

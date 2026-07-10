@@ -357,7 +357,7 @@ pub async fn batch_get_download_urls_for_assets(
 
     struct BatchChunkResult {
         urls: HashMap<String, String>,
-        // asset IDs that came back with 403/access-denied errors — these need a different place ID
+        // asset IDs that came back with 403/access-denied errors - these need a different place ID
         access_denied_ids: std::collections::HashSet<String>,
         has_transient_error: bool,
     }
@@ -434,7 +434,7 @@ pub async fn batch_get_download_urls_for_assets(
                 .cloned()
                 .collect();
             if pending.is_empty() {
-                break; // all resolved — no need to try more place IDs
+                break; // all resolved - no need to try more place IDs
             }
 
             let current_place_id_num = current_place_id_opt
@@ -495,7 +495,7 @@ pub async fn batch_get_download_urls_for_assets(
                             chunk_access_denied.extend(res.access_denied_ids);
                             has_transient = res.has_transient_error;
                         }
-                        break; // got a 200 — stop UA cycling
+                        break; // got a 200 - stop UA cycling
                     } else if resp.status() == reqwest::StatusCode::UNAUTHORIZED {
                         return Err("Your ROBLOSECURITY cookie is missing, invalid, or expired. Please update it in settings.".into());
                     } else if resp.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
@@ -523,7 +523,7 @@ pub async fn batch_get_download_urls_for_assets(
                     has_transient = true; // timeout or network error
                 }
                 if !chunk_urls.is_empty() {
-                    break; // partial success is good enough — stop UA cycling
+                    break; // partial success is good enough - stop UA cycling
                 }
                 wait_rate_limit(RateLimitBucket::DownloadResolution).await;
             }
@@ -531,9 +531,9 @@ pub async fn batch_get_download_urls_for_assets(
             // Absorb newly resolved URLs into the running total
             resolved_this_chunk.extend(chunk_urls);
 
-            // Prepare next pending_with_place to only retry access-denied IDs (not transient errors —
+            // Prepare next pending_with_place to only retry access-denied IDs (not transient errors -
             // those might succeed with the same place ID on retry, which the outer loop already handles)
-            let _ = chunk_access_denied; // consumed — next iteration will re-filter from resolved_this_chunk
+            let _ = chunk_access_denied; // consumed - next iteration will re-filter from resolved_this_chunk
             let _ = has_transient;
         }
 

@@ -320,7 +320,7 @@ pub async fn download_animation_asset_with_progress(
             }
 
             if is_retryable_download_status(status) && attempt < 9 {
-                // 429 and 5xx are transient — worth retrying on the same URL.
+                // 429 and 5xx are transient - worth retrying on the same URL.
                 let retry_after_ms = crate::utils::extract_retry_after(&download_resp, None)
                     .unwrap_or_else(|| 800 * (attempt + 1));
                 if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
