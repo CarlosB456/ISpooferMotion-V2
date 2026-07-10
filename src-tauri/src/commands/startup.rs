@@ -46,22 +46,26 @@ pub async fn sync_roblox_plugin(app: AppHandle) -> crate::error::Result<bool> {
     }
 
     // Determine Roblox plugins directory based on OS
-    let mut roblox_plugins_dir: Option<PathBuf> = None;
-
-    #[cfg(target_os = "windows")]
-    {
-        if let Ok(local_app_data) = std::env::var("LOCALAPPDATA") {
-            roblox_plugins_dir = Some(PathBuf::from(local_app_data).join("Roblox").join("Plugins"));
+    let roblox_plugins_dir: Option<PathBuf> = {
+        #[cfg(target_os = "windows")]
+        {
+            std::env::var("LOCALAPPDATA")
+                .ok()
+                .map(|local_app_data| PathBuf::from(local_app_data).join("Roblox").join("Plugins"))
         }
-    }
 
-    #[cfg(target_os = "macos")]
-    {
-        if let Ok(home) = std::env::var("HOME") {
-            roblox_plugins_dir =
-                Some(PathBuf::from(home).join("Documents").join("Roblox").join("Plugins"));
+        #[cfg(target_os = "macos")]
+        {
+            std::env::var("HOME")
+                .ok()
+                .map(|home| PathBuf::from(home).join("Documents").join("Roblox").join("Plugins"))
         }
-    }
+
+        #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+        {
+            None
+        }
+    };
 
     if let Some(dest_dir) = roblox_plugins_dir {
         // Create directory if it doesn't exist
