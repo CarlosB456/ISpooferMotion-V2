@@ -2,7 +2,6 @@
 --!nolint
 -- luacheck: ignore
 ---@diagnostic disable: undefined-global, unused-local, unused-function, lowercase-global
---# selene: allow(unused_variable, global_usage, undefined_variable, empty_if)
 
 -- These variables are globals provided by the environment or other concatenated files
 -- HttpService, decodeJsonResponseBody, logToPlugin, discoverServer, setPluginGuiStatus,

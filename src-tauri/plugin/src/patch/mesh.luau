@@ -107,7 +107,6 @@ local function moveMeshPartContentsInto(src: BasePart, dst: BasePart)
 	end
 end
 
--- selene: allow(unused_variable)
 local function copyMeshPartInto(src: MeshPart, dst: BasePart, overrideTextureId: string?)
 	copyMeshPartPropertiesInto(src, dst, overrideTextureId)
 	moveMeshPartContentsInto(src, dst)

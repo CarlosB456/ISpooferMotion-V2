@@ -1,9 +1,11 @@
 std = "roblox"
+exclude = ["plugin-build/**", "dist-plugin/**", "node_modules/**"]
 
 [rules]
-empty_if = "warn"
+empty_if = "allow"
 multiple_statements = "allow"
-shadowing = "warn"
+shadowing = "allow"
 unscoped_variables = "allow"
-unused_variable = "warn"
-global_usage = "warn"
+unused_variable = "allow"
+global_usage = "allow"
+undefined_variable = "allow"

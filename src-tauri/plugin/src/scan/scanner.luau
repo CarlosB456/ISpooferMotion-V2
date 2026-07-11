@@ -1,6 +1,6 @@
 --!nocheck
 --!nolint
---# selene: allow(unused_variable, global_usage, shadowing, empty_if)
+
 -- luacheck: ignore
 ---@diagnostic disable: undefined-global, unused-local, unused-function, lowercase-global
 local SCAN_CHUNK_BYTES: number = 1000000
