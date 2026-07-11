@@ -416,6 +416,7 @@ local function applyPatches(patches: any)
 	end
 
 	patchRunning = true
+	setPluginGuiStatus(string.format("Applying %d replacement(s)...", #patches))
 	local recording: any = nil
 	local succeeded = 0
 	local failed = 0
@@ -512,7 +513,8 @@ local function applyPatches(patches: any)
 	end
 
 	if succeeded > 0 then
-		setPluginGuiStatus("Scanning Assets...")
-		task.spawn(scan)
+		setPluginGuiStatus("Replacements complete. Waiting for new scan or replacements...")
+	else
+		setPluginGuiStatus("Waiting for new scan or replacements...")
 	end
 end
