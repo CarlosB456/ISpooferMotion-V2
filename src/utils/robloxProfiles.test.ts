@@ -7,7 +7,7 @@ import {
   saveCachedGroups,
   detectCookie,
   validateCookieProfile,
-  type RobloxUserInfo
+  type RobloxUserInfo,
 } from './robloxProfiles';
 import { invoke } from '@tauri-apps/api/core';
 
@@ -30,9 +30,19 @@ describe('robloxProfiles', () => {
     });
 
     it('saves and merges users correctly', () => {
-      const user1: RobloxUserInfo = { id: 1, name: 'User1', displayName: 'User1', authType: 'cookie' };
-      const user2: RobloxUserInfo = { id: 2, name: 'User2', displayName: 'User2', authType: 'cookie' };
-      
+      const user1: RobloxUserInfo = {
+        id: 1,
+        name: 'User1',
+        displayName: 'User1',
+        authType: 'cookie',
+      };
+      const user2: RobloxUserInfo = {
+        id: 2,
+        name: 'User2',
+        displayName: 'User2',
+        authType: 'cookie',
+      };
+
       mergeCachedUser(user1);
       let users = loadCachedUsers();
       expect(users).toHaveLength(1);
@@ -59,7 +69,7 @@ describe('robloxProfiles', () => {
     it('saves and loads groups correctly', () => {
       const groups = [{ id: 10, name: 'Group1' }];
       saveCachedGroups('123', groups);
-      
+
       const loaded = loadCachedGroups('123');
       expect(loaded).toHaveLength(1);
       expect(loaded[0].name).toBe('Group1');
@@ -96,7 +106,8 @@ describe('robloxProfiles', () => {
     it('fetches user info and merges to cache', async () => {
       (invoke as any).mockImplementation((cmd: string) => {
         if (cmd === 'get_authenticated_user_id') return Promise.resolve('123');
-        if (cmd === 'get_roblox_user_info') return Promise.resolve({ id: 123, name: 'TestUser', displayName: 'Test' });
+        if (cmd === 'get_roblox_user_info')
+          return Promise.resolve({ id: 123, name: 'TestUser', displayName: 'Test' });
         if (cmd === 'get_roblox_user_avatar') return Promise.resolve('avatar_url');
         return Promise.resolve(null);
       });

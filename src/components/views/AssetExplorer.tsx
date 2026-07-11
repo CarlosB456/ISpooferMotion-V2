@@ -16,7 +16,11 @@ import { useSpooferStore } from '../../stores/spooferStore';
 import type { ScriptRefProgressPayload, TauriEventPayload } from '../../types/tauriEvents';
 import type { PluginAsset, PluginAssetStore } from '../../utils/pluginBridge';
 import { stopRobloxAudio } from '../../utils/robloxAudio';
-import type { ParsedAssetRef, ParseProgress, RbxInstance } from '../../utils/robloxPlaceParser/types';
+import type {
+  ParsedAssetRef,
+  ParseProgress,
+  RbxInstance,
+} from '../../utils/robloxPlaceParser/types';
 import { logIsm } from '../../utils/robloxProfiles';
 import { isTauriRuntime } from '../../utils/tauriRuntime';
 import { ExplorerTreeNode, getAssetId } from './asset-explorer/ExplorerTree';
@@ -399,8 +403,16 @@ export default function AssetExplorer({ isOpen, setIsOpen, onScanReceived }: Ass
 
   const loadFromPath = async (filePath: string) => {
     const fileName = filePath.replace(/\\/g, '/').split('/').pop() || filePath;
-    if (!fileName.endsWith('.rbxl') && !fileName.endsWith('.rbxlx') && !fileName.endsWith('.rbxm') && !fileName.endsWith('.rbxmx')) {
-      logIsm('warn', `Only .rbxl, .rbxlx, .rbxm, and .rbxmx files are supported. Got: "${fileName}"`);
+    if (
+      !fileName.endsWith('.rbxl') &&
+      !fileName.endsWith('.rbxlx') &&
+      !fileName.endsWith('.rbxm') &&
+      !fileName.endsWith('.rbxmx')
+    ) {
+      logIsm(
+        'warn',
+        `Only .rbxl, .rbxlx, .rbxm, and .rbxmx files are supported. Got: "${fileName}"`,
+      );
       return;
     }
     setParsingFileName(fileName);
@@ -480,7 +492,13 @@ export default function AssetExplorer({ isOpen, setIsOpen, onScanReceived }: Ass
         } else if (type === 'drop') {
           setIsDragOver(false);
           const paths: string[] = (event.payload as { paths?: string[] }).paths ?? [];
-          const placeFile = paths.find((p) => p.endsWith('.rbxl') || p.endsWith('.rbxlx') || p.endsWith('.rbxm') || p.endsWith('.rbxmx'));
+          const placeFile = paths.find(
+            (p) =>
+              p.endsWith('.rbxl') ||
+              p.endsWith('.rbxlx') ||
+              p.endsWith('.rbxm') ||
+              p.endsWith('.rbxmx'),
+          );
           if (placeFile) {
             loadFromPath(placeFile);
           } else if (paths.length > 0) {

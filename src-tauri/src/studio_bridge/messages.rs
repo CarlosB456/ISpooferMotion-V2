@@ -1289,10 +1289,7 @@ mod tests {
             property: "SoundId".into(),
             value: "rbxassetid://12345".into(),
         }];
-        let patches = plan_patches(
-            &records,
-            &[json!({"originalId": "12345", "newId": "99999"})],
-        );
+        let patches = plan_patches(&records, &[json!({"originalId": "12345", "newId": "99999"})]);
         assert_eq!(patches.len(), 1);
         assert_eq!(patches[0]["value"], "rbxassetid://99999");
     }
@@ -1319,10 +1316,7 @@ mod tests {
             property: "__Attribute__:SoundAsset".into(),
             value: "12345".into(),
         }];
-        let patches = plan_patches(
-            &records,
-            &[json!({"originalId": "12345", "newId": "67890"})],
-        );
+        let patches = plan_patches(&records, &[json!({"originalId": "12345", "newId": "67890"})]);
         assert_eq!(patches.len(), 1);
         // The value should be replaced cleanly to the numeric new_id.
         assert_eq!(patches[0]["value"], 67890u64);

@@ -36,12 +36,14 @@ The system consists of three main components:
 ## Startup & Shutdown Flows
 
 ### Startup
+
 1. **Frontend Boot**: The React application mounts and initializes `zustand` stores. It establishes the Tauri IPC channel.
 2. **Backend Boot**: Tauri starts the Rust backend.
 3. **HTTP Bridge Initialization**: During Tauri's setup phase, `studio_bridge::start_server` is invoked asynchronously. It attempts to bind to a TCP port between 14285 and 14289. Once bound, it writes a `.lock` file (or relies on internal state) so the frontend knows the active port.
 4. **Auth Resolution**: The backend attempts to read the `.ROBLOSECURITY` cookie from the OS keyring and validates it.
 
 ### Shutdown
+
 1. **Graceful Exit**: When the Tauri application is closed, all Tokio async tasks attached to the `studio_bridge` are dropped.
 2. **Resource Cleanup**: The HTTP server shuts down automatically as its Tokio runtime drops. Any pending patches or scan states are discarded.
 
@@ -58,5 +60,5 @@ The system consists of three main components:
 ## Dependency Rules
 
 - **Frontend -> Backend**: The frontend may only call backend functions via explicit Tauri commands (exported via Specta to `src/bindings.ts`).
-- **Backend -> Studio**: The backend does NOT push to Studio. Studio *polls* the backend HTTP server to bypass local network security constraints in the Roblox engine.
+- **Backend -> Studio**: The backend does NOT push to Studio. Studio _polls_ the backend HTTP server to bypass local network security constraints in the Roblox engine.
 - **Studio -> Backend**: Studio sends telemetry and asset records via standard `HttpService:PostAsync` calls to `http://localhost:<PORT>`.

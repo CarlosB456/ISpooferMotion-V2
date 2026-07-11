@@ -588,8 +588,9 @@ mod tests {
         assert_eq!(headers.get(ACCEPT_LANGUAGE).expect("accept language header"), "en-US,en;q=0.9");
         assert_eq!(headers.get(ORIGIN).expect("origin header"), "https://create.roblox.com");
         assert_eq!(headers.get(REFERER).expect("referer header"), "https://create.roblox.com/");
-        
-        let user_agent = headers.get(USER_AGENT).expect("user agent header").to_str().expect("user agent str");
+
+        let user_agent =
+            headers.get(USER_AGENT).expect("user agent header").to_str().expect("user agent str");
         assert!(user_agent.contains("Mozilla/5.0"));
         // Just checking it exists
     }
@@ -626,7 +627,7 @@ mod tests {
         let resp: RobloxAssetAuthResponse = serde_json::from_str(json).expect("valid json");
         assert_eq!(resp.display_name.expect("display name"), "Asset Display");
         assert_eq!(resp.name.expect("name"), "Asset Name");
-        
+
         let creator = resp.creation_context.expect("creation context").creator.expect("creator");
         assert_eq!(creator.user_id.expect("user id"), "999");
         assert!(creator.group_id.is_none());
@@ -646,7 +647,7 @@ mod tests {
         let resp: RobloxAssetAuthResponse = serde_json::from_str(json).expect("valid json");
         assert!(resp.display_name.is_none());
         assert_eq!(resp.name.expect("name"), "Group Asset");
-        
+
         let creator = resp.creation_context.expect("creation context").creator.expect("creator");
         assert_eq!(creator.group_id.expect("group id"), "777");
         assert!(creator.user_id.is_none());

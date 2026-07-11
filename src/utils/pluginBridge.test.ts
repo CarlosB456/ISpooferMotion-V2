@@ -29,7 +29,10 @@ describe('pluginBridge', () => {
     const { fetchPluginBridge } = await import('./pluginBridge');
     mockFetch.mockResolvedValue(new Response());
     await fetchPluginBridge('/api', '1234', { method: 'POST' });
-    expect(mockFetch).toHaveBeenCalledWith('http://localhost:1234/api', expect.objectContaining({ method: 'POST' }));
+    expect(mockFetch).toHaveBeenCalledWith(
+      'http://localhost:1234/api',
+      expect.objectContaining({ method: 'POST' }),
+    );
   });
 
   describe('findPluginBridgePort', () => {

@@ -83,7 +83,6 @@ export default function App() {
                     {activeTab === 'spoofing' && <SpoofingView key="spoofing" />}
                     {activeTab === 'activity' && <ActivityView key="activity" />}
                     {activeTab === 'settings' && <SettingsView key="settings" />}
-
                   </AnimatePresence>
                 </Suspense>
               </div>

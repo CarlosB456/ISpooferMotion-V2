@@ -54,7 +54,7 @@ describe('ErrorBoundary', () => {
     render(
       <ErrorBoundary>
         <ThrowError />
-      </ErrorBoundary>
+      </ErrorBoundary>,
     );
 
     expect(screen.getByText('Safe Component')).toBeInTheDocument();
@@ -67,7 +67,7 @@ describe('ErrorBoundary', () => {
     render(
       <ErrorBoundary>
         <ThrowError shouldThrow={true} />
-      </ErrorBoundary>
+      </ErrorBoundary>,
     );
 
     expect(screen.getByText(/Oops, something broke/)).toBeInTheDocument();
@@ -82,7 +82,7 @@ describe('ErrorBoundary', () => {
     render(
       <ErrorBoundary>
         <ThrowError shouldThrow={true} />
-      </ErrorBoundary>
+      </ErrorBoundary>,
     );
 
     // Error boundary does fetch async in componentDidCatch
@@ -90,11 +90,14 @@ describe('ErrorBoundary', () => {
       expect(apiClient.fetchTelemetry).toHaveBeenCalled();
     });
 
-    expect(apiClient.fetchTelemetry).toHaveBeenCalledWith('https://ispoofermotion.com/api/app-errors', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: expect.stringContaining('Test error!'),
-    });
+    expect(apiClient.fetchTelemetry).toHaveBeenCalledWith(
+      'https://ispoofermotion.com/api/app-errors',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: expect.stringContaining('Test error!'),
+      },
+    );
 
     consoleError.mockRestore();
   });
@@ -106,7 +109,7 @@ describe('ErrorBoundary', () => {
     render(
       <ErrorBoundary>
         <ThrowError shouldThrow={true} />
-      </ErrorBoundary>
+      </ErrorBoundary>,
     );
 
     await vi.waitFor(() => {
@@ -118,7 +121,7 @@ describe('ErrorBoundary', () => {
 
     const fetchCall = vi.mocked(apiClient.fetchTelemetry).mock.calls[0];
     const payload = JSON.parse(fetchCall[1]!.body as string);
-    
+
     expect(payload.appVersion).toBe('1.0.0');
     expect(payload.osInfo).toBe('windows 10.0.0');
 
@@ -136,7 +139,7 @@ describe('ErrorBoundary', () => {
     render(
       <ErrorBoundary>
         <ThrowError shouldThrow={true} />
-      </ErrorBoundary>
+      </ErrorBoundary>,
     );
 
     // Wait a tick just in case
@@ -152,7 +155,7 @@ describe('ErrorBoundary', () => {
   it('reload button calls window.location.reload', () => {
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
     const reloadMock = vi.fn();
-    
+
     // Backup original location
     const originalLocation = window.location;
     delete (window as any).location;
@@ -161,7 +164,7 @@ describe('ErrorBoundary', () => {
     render(
       <ErrorBoundary>
         <ThrowError shouldThrow={true} />
-      </ErrorBoundary>
+      </ErrorBoundary>,
     );
 
     const reloadBtn = screen.getByText('Reload Application');

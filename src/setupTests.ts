@@ -5,7 +5,7 @@ import React from 'react';
 // Mock matchMedia
 Object.defineProperty(window, 'matchMedia', {
   writable: true,
-  value: vi.fn().mockImplementation(query => ({
+  value: vi.fn().mockImplementation((query) => ({
     matches: false,
     media: query,
     onchange: null,
@@ -44,7 +44,7 @@ vi.mock('framer-motion', async () => {
           return React.createElement(key as string, { ...rest, ref });
         });
       },
-    }
+    },
   );
   return {
     ...actual,
@@ -56,7 +56,7 @@ vi.mock('framer-motion', async () => {
 // Mock Tauri invoke globally
 vi.mock('@tauri-apps/api/core', () => {
   const listeners: Record<string, Function[]> = {};
-  
+
   return {
     invoke: vi.fn((cmd, _args) => {
       if (cmd === 'get_config') return Promise.resolve({});
@@ -67,12 +67,12 @@ vi.mock('@tauri-apps/api/core', () => {
       if (!listeners[event]) listeners[event] = [];
       listeners[event].push(handler);
       return Promise.resolve(() => {
-        listeners[event] = listeners[event].filter(h => h !== handler);
+        listeners[event] = listeners[event].filter((h) => h !== handler);
       });
     }),
     emit: vi.fn((event, payload) => {
       if (listeners[event]) {
-        listeners[event].forEach(handler => handler({ event, payload }));
+        listeners[event].forEach((handler) => handler({ event, payload }));
       }
       return Promise.resolve();
     }),

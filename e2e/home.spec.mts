@@ -12,9 +12,9 @@ test.describe('ISpooferMotion E2E', () => {
     let mainPage;
     for (let i = 0; i < 30; i++) {
       const pages = context.pages();
-      mainPage = pages.find(p => p.url().includes('localhost:5173'));
+      mainPage = pages.find((p) => p.url().includes('localhost:5173'));
       if (mainPage) break;
-      await new Promise(r => setTimeout(r, 1000));
+      await new Promise((r) => setTimeout(r, 1000));
     }
 
     expect(mainPage).toBeDefined();

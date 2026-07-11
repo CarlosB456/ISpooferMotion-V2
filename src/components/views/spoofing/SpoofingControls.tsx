@@ -58,7 +58,8 @@ export function SpoofingControls({
           onClick={() => void handleRetryFailedAssets()}
           disabled={isSpoofing || isReplacing || isScanningStudio}
         >
-          {t('spoof.retryFailed').replace('{count}', failedAssetIds.length.toString())} ({failedAssetIds.length})
+          {t('spoof.retryFailed').replace('{count}', failedAssetIds.length.toString())} (
+          {failedAssetIds.length})
         </Button>
       )}
 
@@ -134,4 +135,3 @@ export function SpoofingControls({
     </motion.div>
   );
 }
-

@@ -74,7 +74,7 @@ function applyEasing(t: number, style: number, dir: number): number {
 
 function flattenPoses(poses: RobloxPose[]): Map<string, RobloxPose> {
   // Flatten the pose tree into a map for fast bone lookups.
-    const map = new Map<string, RobloxPose>();
+  const map = new Map<string, RobloxPose>();
   const walk = (list: RobloxPose[]) => {
     for (const p of list) {
       map.set(p.name, p);
@@ -329,7 +329,7 @@ export default function AnimationPreview({ assetId, assetName, onClose }: Animat
     const W = container.clientWidth || 560;
     const H = container.clientHeight || 340;
 
-        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setSize(W, H);
     renderer.setClearColor(0x000000, 0);

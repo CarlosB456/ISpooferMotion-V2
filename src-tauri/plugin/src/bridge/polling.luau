@@ -96,7 +96,7 @@ local function fetchApiDumpProperties()
 					or string.find(lower, "thumbnail")
 					or string.find(lower, "skybox")
 					or string.find(lower, "accessory")
-				end
+			end
 
 			local function isHumanoidDescriptionAsset(className, name, valType)
 				if className ~= "HumanoidDescription" then
@@ -128,7 +128,11 @@ local function fetchApiDumpProperties()
 				local valType = member.ValueType and member.ValueType.Name or ""
 				local name = member.Name
 				local isAsset = valType == "Content" or valType == "ContentId"
-				if not isAsset and (valType == "string" or valType == "int64") and isAssetLike(name) then
+				if
+					not isAsset
+					and (valType == "string" or valType == "int64")
+					and isAssetLike(name)
+				then
 					isAsset = true
 				end
 				if not isAsset and isHumanoidDescriptionAsset(className, name, valType) then
@@ -185,10 +189,14 @@ local function fetchApiDumpProperties()
 			STRING_SCAN_PROPERTIES = newStringProps
 			logToPlugin("[ISpooferMotion] Live API dump loaded from GitHub.")
 		else
-			logToPlugin("[Warning] [ISpooferMotion] Failed to parse live API dump from GitHub; using bundled data.")
+			logToPlugin(
+				"[Warning] [ISpooferMotion] Failed to parse live API dump from GitHub; using bundled data."
+			)
 		end
 	else
-		logToPlugin("[Warning] [ISpooferMotion] Could not fetch live API dump from GitHub; using bundled data.")
+		logToPlugin(
+			"[Warning] [ISpooferMotion] Could not fetch live API dump from GitHub; using bundled data."
+		)
 	end
 	-- Release the guard so a future reconnect can trigger another fetch if needed.
 	fetchingApiDump = false
@@ -269,7 +277,9 @@ function startPolling(): ()
 						else
 							logToPlugin("Received " .. #patches .. " replacements from Desktop App")
 							autoReplaceEnabled = false
-							setPluginGuiStatus("Applying " .. #patches .. " targeted replacements...")
+							setPluginGuiStatus(
+								"Applying " .. #patches .. " targeted replacements..."
+							)
 							task.spawn(applyPatches, patches)
 						end
 					elseif type(mappings) == "table" and #mappings > 0 then

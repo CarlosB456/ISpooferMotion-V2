@@ -166,7 +166,8 @@ local function scanBundledStringProperties(
 			if ok then
 				local normalized = contentValueToString(val, false)
 				if
-					normalized and (stringContainsAssetReference(normalized) or isAssetFormat(normalized))
+					normalized
+					and (stringContainsAssetReference(normalized) or isAssetFormat(normalized))
 				then
 					addRecord(records, obj, prop, normalized, false)
 				end

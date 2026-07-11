@@ -16,7 +16,9 @@ describe('robloxAnimParser', () => {
     vi.mocked(tauriCore.invoke).mockResolvedValue(mockAnim);
 
     const result = await parseAnimationXml('<roblox>...</roblox>');
-    expect(tauriCore.invoke).toHaveBeenCalledWith('parse_animation_data', { xml: '<roblox>...</roblox>' });
+    expect(tauriCore.invoke).toHaveBeenCalledWith('parse_animation_data', {
+      xml: '<roblox>...</roblox>',
+    });
     expect(result).toBe(mockAnim);
   });
 

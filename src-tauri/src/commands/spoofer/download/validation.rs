@@ -30,9 +30,9 @@ fn is_valid_image(head: &[u8]) -> bool {
 }
 
 fn is_valid_video(head: &[u8]) -> bool {
-    head.windows(4).any(|w| {
-        w == b"ftyp" || w == b"moov" || w == b"mdat" || w == b"free" || w == b"webm"
-    }) || head.starts_with(MAGIC_WEBM_MKV)
+    head.windows(4)
+        .any(|w| w == b"ftyp" || w == b"moov" || w == b"mdat" || w == b"free" || w == b"webm")
+        || head.starts_with(MAGIC_WEBM_MKV)
 }
 
 fn is_valid_model(head: &[u8], head_text: &str) -> bool {

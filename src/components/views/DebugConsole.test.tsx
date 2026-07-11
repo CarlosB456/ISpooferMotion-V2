@@ -36,7 +36,7 @@ describe('DebugConsole', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(LanguageContext.useLanguage).mockReturnValue({ t: mockT } as any);
-    
+
     vi.mocked(debugLogger.getDebugLogs).mockReturnValue([
       {
         id: '1',
@@ -51,8 +51,8 @@ describe('DebugConsole', () => {
         level: 'error',
         source: 'console',
         message: 'Error message',
-        payload: [{ foo: 'bar' }]
-      }
+        payload: [{ foo: 'bar' }],
+      },
     ] as any);
 
     vi.mocked(debugLogger.subscribeDebugLogs).mockImplementation((_callback) => {
@@ -67,13 +67,13 @@ describe('DebugConsole', () => {
 
   it('renders logs correctly when isOpen', () => {
     render(<DebugConsole isOpen={true} onClose={() => {}} />);
-    
+
     expect(screen.getByText('debug.title')).toBeInTheDocument();
-    
+
     // Check if messages render
     expect(screen.getByText('Test message')).toBeInTheDocument();
     expect(screen.getByText('Error message')).toBeInTheDocument();
-    
+
     // Check if JsonViewer is rendered for payload
     expect(screen.getByTestId('json-viewer')).toBeInTheDocument();
     expect(screen.getByText('{"foo":"bar"}')).toBeInTheDocument();
@@ -81,13 +81,13 @@ describe('DebugConsole', () => {
 
   it('filters logs by level', async () => {
     render(<DebugConsole isOpen={true} onClose={() => {}} />);
-    
+
     // The multi-select dropdown needs interaction, but this might be complex if it's a custom component.
     // Instead we can just check if clear logs works.
-    
+
     const clearBtn = screen.getByLabelText('debug.clearLogs');
     fireEvent.click(clearBtn);
-    
+
     expect(debugLogger.clearDebugLogs).toHaveBeenCalled();
   });
 
@@ -99,22 +99,22 @@ describe('DebugConsole', () => {
     });
 
     render(<DebugConsole isOpen={true} onClose={() => {}} />);
-    
+
     const copyBtn = screen.getByLabelText('debug.copyLogs');
     fireEvent.click(copyBtn);
-    
+
     expect(navigator.clipboard.writeText).toHaveBeenCalledWith(
-      '[12:00:00] [ISM] INFO: Test message\n[12:00:01] [CONSOLE] ERROR: Error message'
+      '[12:00:00] [ISM] INFO: Test message\n[12:00:01] [CONSOLE] ERROR: Error message',
     );
   });
 
   it('handles close button', () => {
     const onClose = vi.fn();
     render(<DebugConsole isOpen={true} onClose={onClose} />);
-    
+
     const closeBtn = screen.getByLabelText('debug.hideConsole');
     fireEvent.click(closeBtn);
-    
+
     expect(onClose).toHaveBeenCalled();
   });
 });

@@ -7,7 +7,7 @@ describe('apiClient', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.stubGlobal('fetch', vi.fn());
-    
+
     // Default mocks
     vi.spyOn(window.localStorage.__proto__, 'getItem').mockReturnValue(null);
     vi.spyOn(pluginBridge, 'findPluginBridgePort').mockResolvedValue(null);
@@ -29,10 +29,13 @@ describe('apiClient', () => {
 
     it('pings plugin bridge if cache is invalid or missing', async () => {
       vi.spyOn(pluginBridge, 'findPluginBridgePort').mockResolvedValue('55056');
-      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve({ studioPlaceId: '987654' })
-      }));
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue({
+          ok: true,
+          json: () => Promise.resolve({ studioPlaceId: '987654' }),
+        }),
+      );
 
       const result = await getStudioPlaceIdFallback();
       expect(result).toBe('987654');
@@ -51,15 +54,15 @@ describe('apiClient', () => {
     it('uses standard browser fetch when not in Tauri', async () => {
       vi.spyOn(tauriRuntime, 'isTauriRuntime').mockReturnValue(false);
       vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response()));
-      
+
       await fetchTelemetry('https://example.com');
-      
+
       expect(fetch).toHaveBeenCalledWith('https://example.com', undefined);
     });
 
     it('uses tauri-apps/plugin-http fetch when in Tauri', async () => {
       vi.spyOn(tauriRuntime, 'isTauriRuntime').mockReturnValue(true);
-      
+
       // We can test this by mocking fetch to reject, but the dynamic import
       // might be hard to intercept without top-level vi.mock. We will skip
       // deep testing the dynamic import to avoid vitest hoisting issues.

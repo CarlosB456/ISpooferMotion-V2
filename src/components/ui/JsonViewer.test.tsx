@@ -47,17 +47,17 @@ describe('JsonViewer', () => {
   it('renders empty objects and arrays', () => {
     const { rerender } = render(<JsonViewer data={{}} name="emptyObj" />);
     expect(screen.getByText('{}')).toBeInTheDocument();
-    
+
     rerender(<JsonViewer data={[]} name="emptyArr" />);
     expect(screen.getByText('[]')).toBeInTheDocument();
   });
 
   it('can collapse and expand', async () => {
     const data = { nested: { value: 123 } };
-    
+
     // Level 0 is expanded by default. nested is level 1, also expanded by default.
     render(<JsonViewer data={data} />);
-    
+
     expect(screen.getByText('123')).toBeInTheDocument();
 
     // Click on the nested key to collapse it
@@ -67,7 +67,7 @@ describe('JsonViewer', () => {
     // Should now say "1 keys" and "123" is hidden (framer-motion handles unmount, but react-testing-library might see it with opacity 0 or it might unmount)
     // Wait for the exit animation or just check for "1 keys"
     expect(screen.getByText('1 keys')).toBeInTheDocument();
-    
+
     // Expand again
     fireEvent.click(toggle!);
     expect(screen.queryByText('1 keys')).not.toBeInTheDocument();
@@ -75,7 +75,7 @@ describe('JsonViewer', () => {
 
   it('copies data to clipboard', async () => {
     const data = { foo: 'bar' };
-    
+
     Object.assign(navigator, {
       clipboard: {
         writeText: vi.fn(),

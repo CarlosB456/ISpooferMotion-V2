@@ -86,7 +86,7 @@ describe('ResultsModal', () => {
       expect(TauriFs.readTextFile).toHaveBeenCalledWith('C:/test/file.rbxlx');
       expect(TauriFs.writeTextFile).toHaveBeenCalledWith(
         'C:/test/file_Spoofed.rbxlx',
-        '<roblox>456 and 012</roblox>'
+        '<roblox>456 and 012</roblox>',
       );
       expect(onClose).toHaveBeenCalled();
       expect(mockSetSpoofingLogs).toHaveBeenCalled();

@@ -138,7 +138,7 @@ export const ConfigProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   }, []);
 
   // Memoized to prevent full app re-renders on minor state changes.
-    const contextValue = useMemo<ConfigContextType>(
+  const contextValue = useMemo<ConfigContextType>(
     () => ({
       config: configState.config,
       updateConfig: configState.updateConfig,

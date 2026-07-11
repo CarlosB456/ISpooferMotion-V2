@@ -27,7 +27,10 @@ describe('useAppInitialization', () => {
     vi.useFakeTimers();
     vi.clearAllMocks();
 
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({}) }));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({}) }),
+    );
 
     const tauriHttp = await import('@tauri-apps/plugin-http');
     mockFetch = tauriHttp.fetch as any;
@@ -38,7 +41,9 @@ describe('useAppInitialization', () => {
   });
 
   it('initializes with default state', async () => {
-    mockFetch.mockImplementation(() => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }));
+    mockFetch.mockImplementation(() =>
+      Promise.resolve({ ok: true, json: () => Promise.resolve({}) }),
+    );
 
     const { result } = renderHook(() => useAppInitialization());
 
@@ -47,7 +52,9 @@ describe('useAppInitialization', () => {
   });
 
   it('sets Roblox API down if check_roblox_api_status returns false', async () => {
-    mockFetch.mockImplementation(() => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }));
+    mockFetch.mockImplementation(() =>
+      Promise.resolve({ ok: true, json: () => Promise.resolve({}) }),
+    );
 
     (tauriCore.invoke as any).mockImplementationOnce((cmd: string) => {
       if (cmd === 'check_roblox_api_status') return Promise.resolve(false);
@@ -65,10 +72,13 @@ describe('useAppInitialization', () => {
   });
 
   it('sets maintenance mode if config returns true', async () => {
-    mockFetch.mockImplementation(() => Promise.resolve({
-      ok: true,
-      json: () => Promise.resolve({ maintenanceMode: true, maintenanceMessage: 'Down for updates' }),
-    }));
+    mockFetch.mockImplementation(() =>
+      Promise.resolve({
+        ok: true,
+        json: () =>
+          Promise.resolve({ maintenanceMode: true, maintenanceMessage: 'Down for updates' }),
+      }),
+    );
 
     const { result } = renderHook(() => useAppInitialization());
 
@@ -82,7 +92,9 @@ describe('useAppInitialization', () => {
   });
 
   it('registers keyboard shortcuts and events on mount', async () => {
-    mockFetch.mockImplementation(() => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }));
+    mockFetch.mockImplementation(() =>
+      Promise.resolve({ ok: true, json: () => Promise.resolve({}) }),
+    );
 
     const addEventListenerSpy = vi.spyOn(window, 'addEventListener');
 

@@ -7,7 +7,6 @@ pub mod secrets;
 // lib.rs registers all commands via their full crate::commands::ipc::submodule::fn path,
 // so no re-exports are needed here. Submodules are public for direct access only.
 
-
 use keyring::Entry;
 use regex::Regex;
 use reqwest::header::{COOKIE, USER_AGENT};

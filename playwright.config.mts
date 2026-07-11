@@ -5,7 +5,7 @@ const config: PlaywrightTestConfig = {
   testDir: './e2e',
   timeout: 30000,
   expect: {
-    timeout: 5000
+    timeout: 5000,
   },
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
@@ -17,7 +17,8 @@ const config: PlaywrightTestConfig = {
     trace: 'on-first-retry',
   },
   webServer: {
-    command: 'cross-env WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS="--remote-debugging-port=9222" bun run tauri dev',
+    command:
+      'cross-env WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS="--remote-debugging-port=9222" bun run tauri dev',
     port: 9222,
     reuseExistingServer: !process.env.CI,
     timeout: 300 * 1000,

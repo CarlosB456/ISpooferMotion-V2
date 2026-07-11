@@ -18,7 +18,7 @@ vi.mock('../utils/studioBridge', () => ({
 describe('spooferStore', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    
+
     // Reset all state for reliable testing
     const store = useSpooferStore.getState();
     store.setRootInstances([]);
@@ -89,10 +89,10 @@ describe('applyReplacements', () => {
 
   it('queues replacements to studio bridge when memory injection is disabled', async () => {
     useConfigStore.getState().updateConfig('advanced', 'memoryInjectionEnabled', false);
-    
+
     await applyReplacements({ '123': '456' });
     const store = useSpooferStore.getState();
-    
+
     expect(store.replaceError).toBe(false);
     expect(store.isReplacing).toBe(false);
     expect(store.spoofingLogs.join('')).toContain('Queued replacements to plugin bridge');
@@ -101,25 +101,26 @@ describe('applyReplacements', () => {
 
   it('uses memory injection if enabled and studio process is found', async () => {
     useConfigStore.getState().updateConfig('advanced', 'memoryInjectionEnabled', true);
-    
+
     (tauriCore.invoke as any).mockImplementation((cmd: string) => {
       if (cmd === 'find_studio_process') return Promise.resolve(1234);
-      if (cmd === 'scan_and_replace_multiple_strings') return Promise.resolve({
-        '123': { total_replaced: 5 }
-      });
+      if (cmd === 'scan_and_replace_multiple_strings')
+        return Promise.resolve({
+          '123': { total_replaced: 5 },
+        });
       return Promise.resolve(null);
     });
 
     await applyReplacements({ '123': '456' });
     const store = useSpooferStore.getState();
-    
+
     expect(store.replaceError).toBe(false);
     expect(store.spoofingLogs.join('')).toContain('Patched 5 exact matches in memory');
   });
 
   it('handles memory injection failure gracefully if process is not found', async () => {
     useConfigStore.getState().updateConfig('advanced', 'memoryInjectionEnabled', true);
-    
+
     (tauriCore.invoke as any).mockImplementation((cmd: string) => {
       if (cmd === 'find_studio_process') return Promise.resolve(null); // No process found
       return Promise.resolve(null);
@@ -127,7 +128,7 @@ describe('applyReplacements', () => {
 
     await applyReplacements({ '123': '456' });
     const store = useSpooferStore.getState();
-    
+
     expect(store.replaceError).toBe(true);
     expect(store.spoofingLogs.join('')).toContain('Roblox Studio is not running.');
   });

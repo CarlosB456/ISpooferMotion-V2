@@ -39,15 +39,15 @@ describe('Titlebar Component', () => {
     render(
       <IsmProvider>
         <Titlebar />
-      </IsmProvider>
+      </IsmProvider>,
     );
 
     // Title is present
     expect(screen.getByText('ISpooferMotion')).toBeInTheDocument();
-    
+
     // Default version before async loaded
     expect(screen.getByText('v?')).toBeInTheDocument();
-    
+
     // Wait for async version load mock (would need await findByText in real scenario, but get_app_version returns empty in our setupTests)
   });
 });

@@ -12,13 +12,7 @@ import {
 import { invoke } from '@tauri-apps/api/core';
 import { readText as readClipboardText } from '@tauri-apps/plugin-clipboard-manager';
 import { motion } from 'framer-motion';
-import {
-  ArrowDownUp,
-  Settings2,
-  ShieldAlert,
-  SlidersHorizontal,
-  Wand2,
-} from 'lucide-react';
+import { ArrowDownUp, Settings2, ShieldAlert, SlidersHorizontal, Wand2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 

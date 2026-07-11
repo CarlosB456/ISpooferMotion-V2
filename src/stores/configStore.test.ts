@@ -25,7 +25,9 @@ describe('configStore', () => {
   });
 
   it('updates an entire category', () => {
-    useConfigStore.getState().updateCategory('spoofing', { cookie: 'test_cookie', apiKey: 'test_key' });
+    useConfigStore
+      .getState()
+      .updateCategory('spoofing', { cookie: 'test_cookie', apiKey: 'test_key' });
     const { config } = useConfigStore.getState();
     expect(config.spoofing.cookie).toBe('test_cookie');
     expect(config.spoofing.apiKey).toBe('test_key');
@@ -54,8 +56,10 @@ describe('configStore', () => {
 
   it('saves secrets to backend', async () => {
     const invokeMock = (tauriCore.invoke as any).mockResolvedValueOnce(undefined);
-    
-    useConfigStore.getState().updateCategory('spoofing', { cookie: 'new_cookie', apiKey: 'new_key' });
+
+    useConfigStore
+      .getState()
+      .updateCategory('spoofing', { cookie: 'new_cookie', apiKey: 'new_key' });
     await useConfigStore.getState().saveSecrets();
 
     expect(invokeMock).toHaveBeenCalledWith('save_profile_secrets', {

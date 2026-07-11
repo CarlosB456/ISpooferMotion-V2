@@ -32,7 +32,7 @@ globalThis.ResizeObserver = class ResizeObserver {
 // Mock THREE.js to prevent webgl context errors in jsdom
 vi.mock('three', () => {
   return {
-    WebGLRenderer: vi.fn().mockImplementation(function() {
+    WebGLRenderer: vi.fn().mockImplementation(function () {
       return {
         setSize: vi.fn(),
         setPixelRatio: vi.fn(),
@@ -44,28 +44,28 @@ vi.mock('three', () => {
         domElement: document.createElement('canvas'),
       };
     }),
-    Scene: vi.fn().mockImplementation(function() {
+    Scene: vi.fn().mockImplementation(function () {
       return {
         add: vi.fn(),
         remove: vi.fn(),
         traverse: vi.fn(),
       };
     }),
-    PerspectiveCamera: vi.fn().mockImplementation(function() {
+    PerspectiveCamera: vi.fn().mockImplementation(function () {
       return {
         position: { set: vi.fn() },
         lookAt: vi.fn(),
         updateProjectionMatrix: vi.fn(),
       };
     }),
-    GridHelper: vi.fn().mockImplementation(function() {
+    GridHelper: vi.fn().mockImplementation(function () {
       return {
         position: { y: 0 },
         geometry: { dispose: vi.fn() },
         material: { dispose: vi.fn() },
       };
     }),
-    Mesh: vi.fn().mockImplementation(function() {
+    Mesh: vi.fn().mockImplementation(function () {
       return {
         rotation: { x: 0 },
         position: { y: 0, set: vi.fn() },
@@ -73,20 +73,22 @@ vi.mock('three', () => {
         material: { dispose: vi.fn() },
       };
     }),
-    PlaneGeometry: vi.fn().mockImplementation(function() {
+    PlaneGeometry: vi.fn().mockImplementation(function () {
       return { dispose: vi.fn() };
     }),
-    ShadowMaterial: vi.fn().mockImplementation(function() {
+    ShadowMaterial: vi.fn().mockImplementation(function () {
       return { dispose: vi.fn() };
     }),
-    AmbientLight: vi.fn().mockImplementation(function() { return {}; }),
-    DirectionalLight: vi.fn().mockImplementation(function() {
+    AmbientLight: vi.fn().mockImplementation(function () {
+      return {};
+    }),
+    DirectionalLight: vi.fn().mockImplementation(function () {
       return {
         position: { set: vi.fn() },
         shadow: { mapSize: {}, camera: {} },
       };
     }),
-    Object3D: vi.fn().mockImplementation(function() {
+    Object3D: vi.fn().mockImplementation(function () {
       return {
         add: vi.fn(),
         remove: vi.fn(),
@@ -94,7 +96,7 @@ vi.mock('three', () => {
         matrix: { copy: vi.fn() },
       };
     }),
-    Matrix4: vi.fn().mockImplementation(function() {
+    Matrix4: vi.fn().mockImplementation(function () {
       return {
         identity: vi.fn().mockReturnThis(),
         set: vi.fn().mockReturnThis(),
@@ -104,40 +106,40 @@ vi.mock('three', () => {
         copy: vi.fn().mockReturnThis(),
       };
     }),
-    Vector3: vi.fn().mockImplementation(function() {
+    Vector3: vi.fn().mockImplementation(function () {
       return { set: vi.fn() };
     }),
-    Quaternion: vi.fn().mockImplementation(function() {
+    Quaternion: vi.fn().mockImplementation(function () {
       return {
         setFromRotationMatrix: vi.fn(),
         slerp: vi.fn(),
       };
     }),
-    MeshStandardMaterial: vi.fn().mockImplementation(function() {
+    MeshStandardMaterial: vi.fn().mockImplementation(function () {
       return { dispose: vi.fn() };
     }),
-    Timer: vi.fn().mockImplementation(function() {
+    Timer: vi.fn().mockImplementation(function () {
       return {
         update: vi.fn(),
         getDelta: vi.fn().mockReturnValue(0.016),
       };
     }),
-    Box3: vi.fn().mockImplementation(function() {
+    Box3: vi.fn().mockImplementation(function () {
       return {
         setFromObject: vi.fn().mockReturnThis(),
         getSize: vi.fn(),
         getCenter: vi.fn(),
       };
     }),
-    TextureLoader: vi.fn().mockImplementation(function() {
+    TextureLoader: vi.fn().mockImplementation(function () {
       return {
         load: vi.fn().mockReturnValue({}),
       };
     }),
-    Texture: vi.fn().mockImplementation(function() {
+    Texture: vi.fn().mockImplementation(function () {
       return { dispose: vi.fn() };
     }),
-    MeshBasicMaterial: vi.fn().mockImplementation(function() {
+    MeshBasicMaterial: vi.fn().mockImplementation(function () {
       return { dispose: vi.fn() };
     }),
     SRGBColorSpace: 'srgb',
@@ -147,7 +149,7 @@ vi.mock('three', () => {
 });
 
 vi.mock('three/examples/jsm/controls/OrbitControls.js', () => ({
-  OrbitControls: vi.fn().mockImplementation(function() {
+  OrbitControls: vi.fn().mockImplementation(function () {
     return {
       target: { set: vi.fn() },
       update: vi.fn(),
@@ -157,7 +159,7 @@ vi.mock('three/examples/jsm/controls/OrbitControls.js', () => ({
 }));
 
 vi.mock('three/examples/jsm/loaders/OBJLoader.js', () => ({
-  OBJLoader: vi.fn().mockImplementation(function() {
+  OBJLoader: vi.fn().mockImplementation(function () {
     return {
       load: vi.fn((_url, onLoad) => {
         // Just immediately call onLoad with a dummy Object3D
@@ -240,7 +242,7 @@ describe('AnimationPreview', () => {
     screen.getByRole('button'); // Since loading state only has the modal overlay and close button
     // wait for loading state to finish so close button appears
     await waitFor(() => {
-        expect(screen.getByText('misc.animationLoadFailed')).toBeInTheDocument();
+      expect(screen.getByText('misc.animationLoadFailed')).toBeInTheDocument();
     });
 
     // Actually, there's a close button in the header.

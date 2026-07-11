@@ -15,7 +15,9 @@ vi.mock('../../contexts/StudioConnectionContext', () => ({
 
 // Tauri APIs
 vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn().mockResolvedValue(null) }));
-vi.mock('@tauri-apps/plugin-clipboard-manager', () => ({ readText: vi.fn().mockResolvedValue('') }));
+vi.mock('@tauri-apps/plugin-clipboard-manager', () => ({
+  readText: vi.fn().mockResolvedValue(''),
+}));
 vi.mock('@tauri-apps/plugin-dialog', () => ({ open: vi.fn().mockResolvedValue(null) }));
 vi.mock('@tauri-apps/plugin-notification', () => ({}));
 
@@ -69,19 +71,22 @@ vi.mock('../../stores/spooferStore', () => ({
       setKeyframeWarningCount: vi.fn(),
       assetMetadataMap: {},
       setAssetMetadataMap: vi.fn(),
-    })
+    }),
   ),
   applyReplacements: vi.fn(),
 }));
 
-
 // Utilities
 vi.mock('../../utils/debugLogger', () => ({ addDebugLog: vi.fn() }));
 vi.mock('../../utils/spoofingLogs', () => ({ appendSpoofingLog: vi.fn() }));
-vi.mock('../../utils/studioBridge', () => ({ queueStudioReplacements: vi.fn().mockResolvedValue(null) }));
+vi.mock('../../utils/studioBridge', () => ({
+  queueStudioReplacements: vi.fn().mockResolvedValue(null),
+}));
 vi.mock('../../utils/studioScan', () => ({ triggerStudioScan: vi.fn().mockResolvedValue(null) }));
 vi.mock('../../utils/tauriRuntime', () => ({ isTauriRuntime: vi.fn().mockReturnValue(true) }));
-vi.mock('../../utils/apiClient', () => ({ getStudioPlaceIdFallback: vi.fn().mockResolvedValue(null) }));
+vi.mock('../../utils/apiClient', () => ({
+  getStudioPlaceIdFallback: vi.fn().mockResolvedValue(null),
+}));
 vi.mock('../../utils/robloxProfiles', () => ({
   loadCachedGroups: vi.fn().mockResolvedValue([]),
   loadCachedUsers: vi.fn().mockResolvedValue([]),
@@ -108,7 +113,8 @@ vi.mock('@codycon/ism-library', () => ({
   FormColorPickerRow: () => <div data-testid="ism-color-picker">FormColorPickerRow</div>,
   MultiSelectDropdown: () => <div data-testid="ism-multiselect">MultiSelectDropdown</div>,
   Spinner: () => <div data-testid="ism-spinner">Spinner</div>,
-  Modal: ({ children, isOpen }: any) => isOpen ? <div data-testid="ism-modal">{children}</div> : null,
+  Modal: ({ children, isOpen }: any) =>
+    isOpen ? <div data-testid="ism-modal">{children}</div> : null,
   ModalContent: ({ children }: any) => <div data-testid="ism-modal-content">{children}</div>,
   ModalHeader: ({ children }: any) => <div data-testid="ism-modal-header">{children}</div>,
   ModalBody: ({ children }: any) => <div data-testid="ism-modal-body">{children}</div>,
@@ -157,16 +163,26 @@ vi.mock('../modals/ResultsModal', () => ({
 
 // Framer Motion (no animation in tests)
 vi.mock('framer-motion', () => ({
-  motion: new Proxy({}, {
-    get: (_target, prop) => {
-      const El = ({ children, ...rest }: any) => {
-        const { variants: _v, initial: _i, animate: _a, exit: _e, layout: _l, ...domProps } = rest;
-        return <div {...domProps}>{children}</div>;
-      };
-      El.displayName = String(prop);
-      return El;
+  motion: new Proxy(
+    {},
+    {
+      get: (_target, prop) => {
+        const El = ({ children, ...rest }: any) => {
+          const {
+            variants: _v,
+            initial: _i,
+            animate: _a,
+            exit: _e,
+            layout: _l,
+            ...domProps
+          } = rest;
+          return <div {...domProps}>{children}</div>;
+        };
+        El.displayName = String(prop);
+        return El;
+      },
     },
-  }),
+  ),
   AnimatePresence: ({ children }: any) => <>{children}</>,
 }));
 
@@ -200,7 +216,11 @@ describe('SpoofingView', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(LanguageContext.useLanguage).mockReturnValue({ t: mockT, lang: 'en', setLang: vi.fn() } as any);
+    vi.mocked(LanguageContext.useLanguage).mockReturnValue({
+      t: mockT,
+      lang: 'en',
+      setLang: vi.fn(),
+    } as any);
     vi.mocked(ConfigContext.useConfig).mockReturnValue({
       config: mockConfig,
       updateConfig: vi.fn(),
@@ -213,7 +233,6 @@ describe('SpoofingView', () => {
       loading: false,
       clientVersion: '1.0',
     } as any);
-
   });
 
   it('renders without crashing', () => {

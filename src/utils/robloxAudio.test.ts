@@ -30,7 +30,9 @@ describe('robloxAudio', () => {
       }),
       currentTime: 0,
     };
-    globalThis.Audio = vi.fn().mockImplementation(function() { return mockAudio; }) as any;
+    globalThis.Audio = vi.fn().mockImplementation(function () {
+      return mockAudio;
+    }) as any;
   });
 
   afterEach(() => {
@@ -67,7 +69,10 @@ describe('robloxAudio', () => {
     const result = await playRobloxAudio('123', dummyConfig);
 
     expect(result).toBe(false);
-    expect(robloxProfiles.logIsm).toHaveBeenCalledWith('error', expect.stringContaining('backend error'));
+    expect(robloxProfiles.logIsm).toHaveBeenCalledWith(
+      'error',
+      expect.stringContaining('backend error'),
+    );
   });
 
   it('handles playback error event', async () => {
@@ -76,7 +81,10 @@ describe('robloxAudio', () => {
 
     // Trigger error event
     mockAudio.onerror();
-    expect(robloxProfiles.logIsm).toHaveBeenCalledWith('error', expect.stringContaining('Playback failed'));
+    expect(robloxProfiles.logIsm).toHaveBeenCalledWith(
+      'error',
+      expect.stringContaining('Playback failed'),
+    );
   });
 
   it('handles playback ended event without error', async () => {

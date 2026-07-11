@@ -44,14 +44,22 @@ describe('AssetExplorer', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(LanguageContext.useLanguage).mockReturnValue({ t: mockT } as any);
-    vi.mocked(ConfigContext.useConfig).mockReturnValue({ config: { ui: { transparency: true } } } as any);
-    const mockStudioState = vi.fn().mockReturnValue({ studioConnected: true, scanStatus: 'idle', logs: [], loading: false, clientVersion: '1.0' });
+    vi.mocked(ConfigContext.useConfig).mockReturnValue({
+      config: { ui: { transparency: true } },
+    } as any);
+    const mockStudioState = vi.fn().mockReturnValue({
+      studioConnected: true,
+      scanStatus: 'idle',
+      logs: [],
+      loading: false,
+      clientVersion: '1.0',
+    });
     vi.mocked(StudioConnectionContext.useStudioConnectionState).mockImplementation(mockStudioState);
   });
 
   it('renders components correctly', () => {
     render(<AssetExplorer isOpen={true} setIsOpen={() => {}} />);
-    
+
     // Assert that the component mounted without throwing
     expect(document.querySelector('button')).toBeInTheDocument();
   });

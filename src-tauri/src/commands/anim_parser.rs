@@ -111,7 +111,8 @@ pub fn parse_animation_data(xml: String) -> Result<Option<RobloxAnimationClip>, 
         } else {
             // Search one more layer deep just in case it's wrapped in a model
             for inner_child in instance.children() {
-                let inner_instance = dom.get_by_ref(*inner_child).expect("inner child should exist");
+                let inner_instance =
+                    dom.get_by_ref(*inner_child).expect("inner child should exist");
                 if inner_instance.class == "KeyframeSequence" {
                     kfs_ref = Some(*inner_child);
                     break;

@@ -21,7 +21,7 @@ export default function WatermarkEngine() {
       .catch(() => setVersion('Unknown'));
 
     let timeoutId: ReturnType<typeof setTimeout>;
-    
+
     const unlistenInstant = listen('capture-instant', () => {
       setInstantCapture(true);
       clearTimeout(timeoutId);
@@ -42,8 +42,8 @@ export default function WatermarkEngine() {
   }, []);
 
   // Base opacity is 0. If they hit a screenshot key OR open OBS, it spikes.
-  const opacity = (riskLevel === 'high' || instantCapture) ? 0.6 : 0;
-  
+  const opacity = riskLevel === 'high' || instantCapture ? 0.6 : 0;
+
   // Cut the transition duration to 0 to make the fade-in instant, beating the DWM freeze
   const transitionDuration = opacity > 0 ? 0 : 0.5;
   const watermarkText = `ISpooferMotion v${version}`;

@@ -10,7 +10,7 @@ interface RobloxStatusBannerProps {
 export function RobloxStatusBanner({ isVisible }: RobloxStatusBannerProps) {
   const { t } = useLanguage();
   // Dropdown banner for Roblox API outages.
-    return (
+  return (
     <AnimatePresence>
       {isVisible && (
         <motion.div

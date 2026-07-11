@@ -39,7 +39,9 @@ describe('ActivityView', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(LanguageContext.useLanguage).mockReturnValue({ t: mockT } as any);
-    vi.mocked(ConfigContext.useConfig).mockReturnValue({ config: { ui: { transparency: true } } } as any);
+    vi.mocked(ConfigContext.useConfig).mockReturnValue({
+      config: { ui: { transparency: true } },
+    } as any);
     vi.mocked(ConfigStore.useConfigStore).mockReturnValue({} as any); // mock whatever we need
   });
 
@@ -52,11 +54,9 @@ describe('ActivityView', () => {
         endTime: '12:01:00',
         durationMs: 60000,
         account: { id: '1', name: 'TestUser', avatarUrl: '' },
-        assetResults: [
-          { id: '123', name: 'TestFile.rbxlx', success: true }
-        ],
+        assetResults: [{ id: '123', name: 'TestFile.rbxlx', success: true }],
         config: { assets: '[]', spoofSounds: false, downloadOnly: false },
-        logFilePath: ''
+        logFilePath: '',
       },
     ]);
 

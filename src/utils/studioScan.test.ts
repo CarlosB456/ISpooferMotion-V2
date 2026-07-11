@@ -41,14 +41,18 @@ describe('studioScan', () => {
 
     // Advance time to allow the first invoke to resolve and timeout to start
     await vi.advanceTimersByTimeAsync(0); // process microtasks
-    
+
     // Advance timers by 1500 to trigger the next poll
     await vi.advanceTimersByTimeAsync(1500);
 
     await scanPromise;
 
     expect(pluginBridge.fetchPluginBridge).toHaveBeenCalledTimes(5);
-    expect(pluginBridge.fetchPluginBridge).toHaveBeenCalledWith('/request-sounds', '5555', expect.any(Object));
+    expect(pluginBridge.fetchPluginBridge).toHaveBeenCalledWith(
+      '/request-sounds',
+      '5555',
+      expect.any(Object),
+    );
     expect(tauriCore.invoke).toHaveBeenCalledTimes(2);
   });
 
@@ -64,11 +68,14 @@ describe('studioScan', () => {
     vi.mocked(pluginBridge.fetchPluginBridge).mockResolvedValue({ ok: true } as Response);
 
     // Mock invoke to return scanning = true, synced = false
-    vi.mocked(tauriCore.invoke).mockResolvedValue({ scanStatus: { scanning: true }, synced: false });
+    vi.mocked(tauriCore.invoke).mockResolvedValue({
+      scanStatus: { scanning: true },
+      synced: false,
+    });
 
     const scanPromise = triggerStudioScan();
     const expectPromise = expect(scanPromise).rejects.toThrow(/Roblox Studio is not connected/);
-    
+
     // Wait for the first poll
     await vi.advanceTimersByTimeAsync(1500);
     // Wait for the next polls
@@ -84,7 +91,9 @@ describe('studioScan', () => {
     vi.mocked(tauriCore.invoke).mockResolvedValue({ scanStatus: { scanning: true }, synced: true });
 
     const scanPromise = triggerStudioScan();
-    const expectPromise = expect(scanPromise).rejects.toThrow(/Studio scan is taking longer than 5 minutes/);
+    const expectPromise = expect(scanPromise).rejects.toThrow(
+      /Studio scan is taking longer than 5 minutes/,
+    );
 
     // 5 minutes = 300,000ms
     await vi.advanceTimersByTimeAsync(300000);

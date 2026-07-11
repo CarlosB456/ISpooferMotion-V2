@@ -444,8 +444,8 @@ pub async fn handle_api_dump() -> Json<crate::api_dump::ApiDumpProperties> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::time::Instant;
     use serde_json::json;
+    use std::time::Instant;
 
     #[test]
     fn test_clear_stale_incomplete_not_stale() {

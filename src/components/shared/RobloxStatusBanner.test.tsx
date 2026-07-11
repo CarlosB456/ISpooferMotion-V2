@@ -15,9 +15,11 @@ describe('RobloxStatusBanner', () => {
   });
 
   it('renders the banner when isVisible is true', () => {
-    (LanguageContext.useLanguage as any).mockReturnValue({ t: (k: string) => k === 'misc.robloxApiDown' ? 'Roblox API is down' : k });
+    (LanguageContext.useLanguage as any).mockReturnValue({
+      t: (k: string) => (k === 'misc.robloxApiDown' ? 'Roblox API is down' : k),
+    });
     render(<RobloxStatusBanner isVisible={true} />);
-    
+
     expect(screen.getByText('Roblox API is down')).toBeInTheDocument();
   });
 });

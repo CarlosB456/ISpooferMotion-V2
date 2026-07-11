@@ -1001,7 +1001,7 @@ mod tests {
     fn test_valid_place_ids() {
         assert!(valid_place_ids(None).is_empty());
         assert!(valid_place_ids(Some("abc, def")).is_empty());
-        
+
         let ids = valid_place_ids(Some("123, abc, 456, 456,  789  "));
         assert_eq!(ids.len(), 3);
         assert_eq!(ids[0], "123");
@@ -1020,21 +1020,12 @@ mod tests {
 
     #[test]
     fn test_selected_account_id() {
-        assert_eq!(
-            selected_account_id(&serde_json::json!({ "id": 123 })),
-            Some("123".to_string())
-        );
+        assert_eq!(selected_account_id(&serde_json::json!({ "id": 123 })), Some("123".to_string()));
         assert_eq!(
             selected_account_id(&serde_json::json!({ "id": "456" })),
             Some("456".to_string())
         );
-        assert_eq!(
-            selected_account_id(&serde_json::json!({ "id": "abc" })),
-            None
-        );
-        assert_eq!(
-            selected_account_id(&serde_json::json!({ "name": "cody" })),
-            None
-        );
+        assert_eq!(selected_account_id(&serde_json::json!({ "id": "abc" })), None);
+        assert_eq!(selected_account_id(&serde_json::json!({ "name": "cody" })), None);
     }
 }

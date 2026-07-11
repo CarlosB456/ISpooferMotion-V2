@@ -28,7 +28,7 @@ describe('tauriRuntime', () => {
     vi.doMock('@tauri-apps/api/core', () => ({
       invoke: vi.fn().mockResolvedValue({ platform: 'windows' }),
     }));
-    
+
     const module = await import('./tauriRuntime');
     expect(await module.isMemoryInjectionSupported()).toBe(true);
   });
@@ -38,7 +38,7 @@ describe('tauriRuntime', () => {
     vi.doMock('@tauri-apps/api/core', () => ({
       invoke: vi.fn().mockResolvedValue({ platform: 'macos' }),
     }));
-    
+
     const module = await import('./tauriRuntime');
     expect(await module.isMemoryInjectionSupported()).toBe(false);
   });

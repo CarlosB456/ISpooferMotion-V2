@@ -1,4 +1,3 @@
-
 #[tauri::command]
 #[specta::specta]
 // Ping Roblox to check for availability before proceeding with API calls.

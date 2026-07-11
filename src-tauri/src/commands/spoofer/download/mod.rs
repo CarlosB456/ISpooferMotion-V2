@@ -86,7 +86,9 @@ pub async fn download_animation_asset_with_progress(
     let client = crate::utils::get_http_client_with_proxy(proxy_url.as_deref());
     let mut place_ids = parse_place_ids(place_id.as_deref());
 
-    if let Some(cached_place_id) = crate::commands::spoofer::remote_cache::get_local_context(&asset_id) {
+    if let Some(cached_place_id) =
+        crate::commands::spoofer::remote_cache::get_local_context(&asset_id)
+    {
         if !place_ids.contains(&cached_place_id) {
             place_ids.insert(0, cached_place_id);
         }

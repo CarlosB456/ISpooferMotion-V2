@@ -25,11 +25,11 @@ describe('debugLogger', () => {
     expect(logs[0].message).toBe('Test message 1');
     expect(logs[0].level).toBe('info');
     expect(logs[0].source).toBe('console');
-    
+
     expect(logs[1].message).toBe('Test message 2');
     expect(logs[1].level).toBe('error');
     expect(logs[1].source).toBe('ism');
-    
+
     expect(logs[1].id).toBeGreaterThan(logs[0].id);
   });
 
@@ -57,10 +57,10 @@ describe('debugLogger', () => {
     expect(listener).toHaveBeenCalledWith([]);
 
     addDebugLog('info', ['New log']);
-    
+
     // Listeners are called asynchronously via setTimeout(0)
     vi.runAllTimers();
-    
+
     expect(listener).toHaveBeenCalledTimes(2);
     expect(listener.mock.calls[1][0][0].message).toBe('New log');
 
@@ -70,7 +70,7 @@ describe('debugLogger', () => {
   it('calls tauri invoke for append_debug_log if in tauri runtime', () => {
     vi.spyOn(tauriRuntime, 'isTauriRuntime').mockReturnValue(true);
     addDebugLog('warn', ['Warning message']);
-    
+
     expect(invoke).toHaveBeenCalledWith('append_debug_log', {
       level: 'warn',
       source: 'console',
