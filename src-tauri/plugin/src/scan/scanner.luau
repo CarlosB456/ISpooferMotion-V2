@@ -1,5 +1,6 @@
 --!nocheck
 --!nolint
+--# selene: allow(unused_variable, global_usage, shadowing, empty_if)
 -- luacheck: ignore
 ---@diagnostic disable: undefined-global, unused-local, unused-function, lowercase-global
 local SCAN_CHUNK_BYTES: number = 1000000
@@ -386,9 +387,6 @@ local function scanAssets(): ()
 		setPluginGuiStatus("Waiting for new scan or replacements...")
 		-- wait for GUI update
 		task.wait(1)
-		-- No longer hiding UI automatically
-	else
-		-- No longer hiding UI automatically
 	end
 end
 

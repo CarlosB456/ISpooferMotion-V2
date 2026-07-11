@@ -1,5 +1,6 @@
 --!nocheck
 --!nolint
+--# selene: allow(unused_variable, global_usage, shadowing, empty_if)
 -- luacheck: ignore
 ---@diagnostic disable: undefined-global, unused-local, unused-function, lowercase-global
 local BLOCKED_SET_PROPERTIES: { [string]: boolean } = {
@@ -420,7 +421,7 @@ local function applyPatches(patches: any)
 	local failed = 0
 	local failedPatchesList = {}
 
-	local batchOk, batchErr = pcall(function()
+	pcall(function()
 		recording = ChangeHistoryService:TryBeginRecording("ISpooferMotion Pre-Patch")
 	end)
 
@@ -513,7 +514,5 @@ local function applyPatches(patches: any)
 	if succeeded > 0 then
 		setPluginGuiStatus("Scanning Assets...")
 		task.spawn(scan)
-	else
-		-- No longer hiding UI automatically
 	end
 end
