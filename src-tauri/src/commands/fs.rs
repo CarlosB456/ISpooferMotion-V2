@@ -21,16 +21,8 @@ pub async fn open_data_folder(app: AppHandle) -> crate::error::Result<bool> {
     let Ok(data_dir) = app.path().app_data_dir() else {
         return Ok(false);
     };
-
-    // Open the data directory in the native file explorer.
-    #[cfg(target_os = "windows")]
-    let cmd = Command::new("explorer").arg(data_dir).spawn();
-    #[cfg(target_os = "macos")]
-    let cmd = Command::new("open").arg(data_dir).spawn();
-    #[cfg(target_os = "linux")]
-    let cmd = Command::new("xdg-open").arg(data_dir).spawn();
-
-    Ok(cmd.is_ok())
+    use tauri_plugin_opener::OpenerExt;
+    Ok(app.opener().open_path(data_dir.to_string_lossy().to_string(), None::<String>).is_ok())
 }
 
 #[tauri::command]
@@ -88,8 +80,9 @@ async fn download_roblox_audio(
     asset_id: &str,
     cookie: Option<&str>,
 ) -> crate::error::Result<std::path::PathBuf> {
-    let client =
-        reqwest::Client::builder().redirect(reqwest::redirect::Policy::limited(10)).build()?;
+    // Use the shared connection-pooled client; Roblox asset delivery redirects are handled
+    // by the default policy (up to 10 hops) which reqwest follows automatically.
+    let client = crate::utils::get_http_client();
     let mut request = client
         .get(format!("https://assetdelivery.roblox.com/v1/asset/?id={asset_id}"))
         .header(reqwest::header::USER_AGENT, "ISpooferMotion/2.0");

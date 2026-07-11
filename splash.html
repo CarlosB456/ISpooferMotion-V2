@@ -26,31 +26,9 @@
     .spinner {
       border: 3px solid rgba(255, 255, 255, 0.1);
       border-radius: 50%;
-      border-top: 3px solid #6366f1;
+      border-top: 3px solid #ffffff;
       width: 24px;
       height: 24px;
-      -webkit-animation: spin 1s linear infinite;
-      animation: spin 1s linear infinite;
-    }
-
-    @-webkit-keyframes spin {
-      0% {
-        -webkit-transform: rotate(0deg);
-      }
-
-      100% {
-        -webkit-transform: rotate(360deg);
-      }
-    }
-
-    @keyframes spin {
-      0% {
-        transform: rotate(0deg);
-      }
-
-      100% {
-        transform: rotate(360deg);
-      }
     }
   </style>
 </head>
@@ -62,7 +40,7 @@
       <img src="/src-tauri/icons/128x128.png" alt="ISpooferMotion" class="w-24 h-24 drop-shadow-xl" fetchpriority="high" />
       <h1 class="text-xl font-bold tracking-tight">ISpooferMotion</h1>
       <div class="flex items-center space-x-3 text-sm text-gray-400">
-        <div class="spinner" id="spinner"></div>
+        <div class="spinner animate-spin" id="spinner"></div>
         <span id="status-text">Checking for updates...</span>
       </div>
       <div id="update-actions" class="flex items-center space-x-3" style="display: none; margin-top: 1rem;">

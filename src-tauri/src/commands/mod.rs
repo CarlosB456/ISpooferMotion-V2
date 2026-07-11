@@ -9,6 +9,7 @@ pub mod place_parser;
 pub mod resolver;
 pub mod roblox_status;
 pub mod session;
+pub mod screenshot_monitor;
 pub mod spoofer;
 pub mod startup;
 pub mod studio;

@@ -31,7 +31,7 @@ startPolling()
 
 local toolbar = plugin:CreateToolbar("ISpooferMotion")
 local toggleButton =
-	toolbar:CreateButton("ToggleUI", "Show/Hide ISpooferMotion UI", "rbxassetid://137844667859456")
+	toolbar:CreateButton("Toggle UI", "Show/Hide ISpooferMotion UI", "rbxassetid://137844667859456")
 
 toggleButton.Click:Connect(function()
 	togglePluginGui()

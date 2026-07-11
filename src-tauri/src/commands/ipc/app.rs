@@ -1,5 +1,6 @@
 #![allow(clippy::needless_pass_by_value)]
-use super::{clear_profile_secrets, AppHandle, DialogExt, Manager};
+use super::{AppHandle, DialogExt, Manager};
+use crate::commands::ipc::secrets::clear_profile_secrets;
 use crate::commands::AnyValue;
 
 pub const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -103,7 +104,7 @@ pub async fn uninstall_app(app: AppHandle) -> crate::error::Result<bool> {
     // Clear all user data and credentials before exiting.
     let _ = clear_profile_secrets(app.clone(), None).await;
     if let Ok(data_dir) = app.path().app_data_dir() {
-        let _ = std::fs::remove_dir_all(&data_dir);
+        let _ = tokio::fs::remove_dir_all(&data_dir).await;
     }
     app.exit(0);
     Ok(true)

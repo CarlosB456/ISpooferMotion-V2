@@ -1,12 +1,7 @@
-#[tauri::command]
-#[specta::specta]
-// Send finalized asset mappings to the Roblox Studio plugin. Returns "ok" or an error string.
-pub async fn push_to_studio(
-    replacements_map: crate::commands::AnyValue,
-    plugin_port: Option<String>,
-) -> crate::error::Result<String> {
-    log::info!("push_to_studio called with replacements_map: {:?}", replacements_map);
-    let mappings = replacements_map
+pub(crate) fn parse_replacements_map(
+    replacements_map: &crate::commands::AnyValue,
+) -> Vec<serde_json::Value> {
+    replacements_map
         .0
         .as_object()
         .cloned()
@@ -32,7 +27,18 @@ pub async fn push_to_studio(
                 })
                 .collect::<Vec<_>>()
         })
-        .unwrap_or_default();
+        .unwrap_or_default()
+}
+
+#[tauri::command]
+#[specta::specta]
+// Send finalized asset mappings to the Roblox Studio plugin. Returns "ok" or an error string.
+pub async fn push_to_studio(
+    replacements_map: crate::commands::AnyValue,
+    plugin_port: Option<String>,
+) -> crate::error::Result<String> {
+    log::info!("push_to_studio called with replacements_map: {:?}", replacements_map);
+    let mappings = parse_replacements_map(&replacements_map);
 
     if mappings.is_empty() {
         log::error!("push_to_studio: no valid mappings after parsing");
@@ -63,5 +69,69 @@ pub async fn push_to_studio(
             log::error!("push_to_studio: fallback HTTP failed: {}", e);
             Ok("plugin_not_connected".into())
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_replacements_map_valid_strings() {
+        let json = serde_json::json!({
+            "123": "456",
+            "abc": "def"
+        });
+        let any_val = crate::commands::AnyValue(json);
+
+        let mut parsed = parse_replacements_map(&any_val);
+        // Sort to ensure deterministic order in test
+        parsed.sort_by(|a, b| {
+            a["originalId"].as_str().expect("str").cmp(b["originalId"].as_str().expect("str"))
+        });
+
+        assert_eq!(parsed.len(), 2);
+        assert_eq!(parsed[0]["originalId"], "123");
+        assert_eq!(parsed[0]["newId"], "456");
+        assert_eq!(parsed[1]["originalId"], "abc");
+        assert_eq!(parsed[1]["newId"], "def");
+    }
+
+    #[test]
+    fn test_parse_replacements_map_numbers() {
+        let json = serde_json::json!({
+            "123": 456,
+            "789": -100
+        });
+        let any_val = crate::commands::AnyValue(json);
+
+        let mut parsed = parse_replacements_map(&any_val);
+        parsed.sort_by(|a, b| {
+            a["originalId"].as_str().expect("str").cmp(b["originalId"].as_str().expect("str"))
+        });
+
+        assert_eq!(parsed.len(), 2);
+        assert_eq!(parsed[0]["originalId"], "123");
+        assert_eq!(parsed[0]["newId"], "456"); // numbers convert to string
+        assert_eq!(parsed[1]["originalId"], "789");
+        assert_eq!(parsed[1]["newId"], "-100");
+    }
+
+    #[test]
+    fn test_parse_replacements_map_filters_invalid() {
+        let json = serde_json::json!({
+            "123": "", // empty string rejected
+            "456": "456", // same as original rejected
+            "789": null, // null rejected
+            "abc": ["array"], // array rejected
+            "valid": "yes"
+        });
+        let any_val = crate::commands::AnyValue(json);
+
+        let parsed = parse_replacements_map(&any_val);
+
+        assert_eq!(parsed.len(), 1);
+        assert_eq!(parsed[0]["originalId"], "valid");
+        assert_eq!(parsed[0]["newId"], "yes");
     }
 }

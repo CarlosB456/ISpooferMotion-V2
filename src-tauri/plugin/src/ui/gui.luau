@@ -53,6 +53,21 @@ local function createPluginGui()
 	statusText.Text = "Connected to ISpooferMotion Desktop App."
 	statusText.Parent = container
 
+	local versionLabel = Instance.new("TextLabel")
+	versionLabel.Name = "VersionWatermark"
+	versionLabel.Size = UDim2.fromOffset(200, 20)
+	versionLabel.Position = UDim2.new(1, -10, 1, -10)
+	versionLabel.AnchorPoint = Vector2.new(1, 1)
+	versionLabel.BackgroundTransparency = 1
+	versionLabel.Font = Enum.Font.RobotoMono
+	versionLabel.TextSize = 14
+	versionLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
+	versionLabel.TextStrokeColor3 = Color3.new(0, 0, 0)
+	versionLabel.TextStrokeTransparency = 0.5
+	versionLabel.TextXAlignment = Enum.TextXAlignment.Right
+	versionLabel.Text = "ISpooferMotion v" .. (PLUGIN_VERSION or "Unknown")
+	versionLabel.Parent = container
+
 	logsScrollingFrame = Instance.new("ScrollingFrame")
 	logsScrollingFrame.Name = "Logs"
 	logsScrollingFrame.Size = UDim2.fromOffset(600, 300)
@@ -141,21 +156,25 @@ end)
 
 function logToPlugin(text)
 	local msg = tostring(text)
-	if string.find(msg, "[Warning]") then
+	-- Use plain=true so "[Warning]" is matched as a literal string, not a Lua character class.
+	if string.find(msg, "[Warning]", 1, true) then
 		warn(msg)
 	else
 		print("[ISpooferMotion] " .. msg)
 	end
 end
 
-local function setPluginGuiStatus(text)
+-- Pass silent=true for transient progress updates that should not produce log output.
+local function setPluginGuiStatus(text: string, silent: boolean?)
 	if not gui then
 		createPluginGui()
 	end
 	if statusText then
 		statusText.Text = text
 	end
-	logToPlugin(text)
+	if not silent then
+		logToPlugin(text)
+	end
 end
 
 function hidePluginGui()
@@ -164,6 +183,8 @@ function hidePluginGui()
 		gui = nil
 		statusText = nil
 		logsScrollingFrame = nil
+		-- Reset counter so eviction logic works correctly when the GUI is recreated.
+		logCounter = 0
 	end
 end
 

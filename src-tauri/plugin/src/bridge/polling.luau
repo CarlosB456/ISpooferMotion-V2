@@ -31,7 +31,14 @@ local function requestPollEndpoint(baseUrl: string, endpoint: string): (boolean,
 	return true, decoded, response.StatusCode
 end
 
+-- Guard against concurrent fetchApiDumpProperties calls (e.g. rapid daemon reconnects).
+local fetchingApiDump = false
+
 local function fetchApiDumpProperties()
+	if fetchingApiDump then
+		return
+	end
+	fetchingApiDump = true
 	local ok, response = pcall(function()
 		return HttpService:RequestAsync({
 			Url = "https://raw.githubusercontent.com/MaximumADHD/Roblox-Client-Tracker/roblox/API-Dump.json",
@@ -61,8 +68,10 @@ local function fetchApiDumpProperties()
 
 			local function isAssetLike(name)
 				local lower = string.lower(name)
-				return string.sub(lower, -2) == "id"
-					or string.sub(lower, -3) == "url"
+				-- Note: we do NOT check `string.sub(lower, -2) == "id"` here because that matches
+				-- non-asset properties like UserId, TeamId, SessionId, etc. The specific patterns
+				-- below are sufficient and more precise.
+				return string.sub(lower, -3) == "url"
 					or string.sub(lower, -5) == "asset"
 					or string.sub(lower, -7) == "content"
 					or string.sub(lower, -4) == "path"
@@ -87,7 +96,7 @@ local function fetchApiDumpProperties()
 					or string.find(lower, "thumbnail")
 					or string.find(lower, "skybox")
 					or string.find(lower, "accessory")
-			end
+				end
 
 			local function isHumanoidDescriptionAsset(className, name, valType)
 				if className ~= "HumanoidDescription" then
@@ -174,13 +183,15 @@ local function fetchApiDumpProperties()
 
 			ASSET_PROPERTIES = newAssetProps
 			STRING_SCAN_PROPERTIES = newStringProps
-			logToPlugin("")
+			logToPlugin("[ISpooferMotion] Live API dump loaded from GitHub.")
 		else
-			logToPlugin("[Warning] ")
+			logToPlugin("[Warning] [ISpooferMotion] Failed to parse live API dump from GitHub; using bundled data.")
 		end
 	else
-		logToPlugin("[Warning] ")
+		logToPlugin("[Warning] [ISpooferMotion] Could not fetch live API dump from GitHub; using bundled data.")
 	end
+	-- Release the guard so a future reconnect can trigger another fetch if needed.
+	fetchingApiDump = false
 end
 
 function startPolling(): ()
@@ -215,6 +226,8 @@ function startPolling(): ()
 					logToPlugin("[Warning] " .. "[ISpooferMotion] Lost connection to " .. baseUrl)
 					setPluginGuiStatus("Lost connection; reconnecting...")
 					BASE_URL = nil
+					-- Also clear autoReplace so stale patches are not applied on reconnect.
+					autoReplaceEnabled = false
 				elseif type(decoded) == "table" and decoded.requestAssets == true then
 					if scanRunning then
 						logToPlugin("[Warning] Scan already running, ignoring poll request")
@@ -237,11 +250,13 @@ function startPolling(): ()
 		while polling do
 			local baseUrl = BASE_URL
 			if baseUrl and autoReplaceEnabled then
-				local patchOk, decoded, statusCode = requestPollEndpoint(baseUrl, "/poll-replacements")
+				local patchOk, decoded = requestPollEndpoint(baseUrl, "/poll-replacements")
 
 				if not patchOk then
 					logToPlugin("[Warning] " .. "[ISpooferMotion] Lost connection to " .. baseUrl)
 					BASE_URL = nil
+					-- Clear autoReplace so we don't immediately re-apply on reconnect.
+					autoReplaceEnabled = false
 				elseif type(decoded) == "table" then
 					local patches = decoded.patches
 					local mappings = decoded.mappings

@@ -417,38 +417,16 @@ pub mod remote_cache;
 pub mod upload;
 
 pub use download::{batch_get_download_urls_for_assets, download_animation_asset_with_progress};
-pub use memory::{
-    __cmd__find_studio_process, __cmd__focus_and_save_studio,
-    __cmd__scan_and_replace_multiple_strings, __tauri_command_name_find_studio_process,
-    __tauri_command_name_focus_and_save_studio,
-    __tauri_command_name_scan_and_replace_multiple_strings, find_studio_process,
-    focus_and_save_studio, scan_and_replace_multiple_strings,
-};
-pub use permissions::{
-    __cmd__patch_asset_permissions, __tauri_command_name_patch_asset_permissions,
-    patch_asset_permissions,
-};
+pub use memory::{find_studio_process, focus_and_save_studio, scan_and_replace_multiple_strings};
+pub use permissions::{patch_asset_permissions, set_asset_privacy};
 pub use place::{
-    __cmd__clear_downloads_directory_command, __cmd__find_asset_by_name,
-    __cmd__get_multiple_place_ids, __cmd__get_place_id_from_creator,
-    __cmd__get_place_id_from_universe_id, __cmd__get_universe_id_from_place_id,
-    __tauri_command_name_clear_downloads_directory_command,
-    __tauri_command_name_find_asset_by_name, __tauri_command_name_get_multiple_place_ids,
-    __tauri_command_name_get_place_id_from_creator,
-    __tauri_command_name_get_place_id_from_universe_id,
-    __tauri_command_name_get_universe_id_from_place_id, clear_downloads_directory_command,
-    find_asset_by_name, get_asset_creator_for_asset, get_multiple_place_ids,
-    get_place_id_from_creator, get_place_id_from_universe_id, get_universe_id_from_place_id,
-    parse_excluded_id_list, should_skip_asset_for_spoofing,
+    clear_downloads_directory_command, find_asset_by_name, get_asset_creator_for_asset,
+    get_multiple_place_ids, get_place_id_from_creator, get_place_id_from_universe_id,
+    get_universe_id_from_place_id, parse_excluded_id_list, search_global_places,
+    should_skip_asset_for_spoofing,
 };
-pub use remote_cache::{
-    __cmd__initialize_remote_cache, __tauri_command_name_initialize_remote_cache,
-    initialize_remote_cache,
-};
-pub use upload::{
-    __cmd__publish_asset_with_progress, __tauri_command_name_publish_asset_with_progress,
-    publish_asset_with_progress,
-};
+pub use remote_cache::initialize_remote_cache;
+pub use upload::publish_asset_with_progress;
 
 #[cfg(test)]
 mod tests {
@@ -463,6 +441,7 @@ mod tests {
             RateLimitBucket::DownloadResolution,
             RateLimitBucket::AssetDownload,
             RateLimitBucket::PlaceLookup,
+            RateLimitBucket::AssetResolve,
         ];
         let mut names = HashSet::new();
         assert!(buckets.into_iter().all(|bucket| names.insert(bucket.name())));

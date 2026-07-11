@@ -54,13 +54,39 @@ vi.mock('framer-motion', async () => {
 });
 
 // Mock Tauri invoke globally
-vi.mock('@tauri-apps/api/core', () => ({
-  invoke: vi.fn((cmd, _args) => {
-    if (cmd === 'get_config') return Promise.resolve({});
-    if (cmd === 'is_update_available') return Promise.resolve(false);
-    return Promise.resolve(null);
-  }),
-}));
+vi.mock('@tauri-apps/api/core', () => {
+  const listeners: Record<string, Function[]> = {};
+  
+  return {
+    invoke: vi.fn((cmd, _args) => {
+      if (cmd === 'get_config') return Promise.resolve({});
+      if (cmd === 'is_update_available') return Promise.resolve(false);
+      return Promise.resolve(null);
+    }),
+    listen: vi.fn((event, handler) => {
+      if (!listeners[event]) listeners[event] = [];
+      listeners[event].push(handler);
+      return Promise.resolve(() => {
+        listeners[event] = listeners[event].filter(h => h !== handler);
+      });
+    }),
+    emit: vi.fn((event, payload) => {
+      if (listeners[event]) {
+        listeners[event].forEach(handler => handler({ event, payload }));
+      }
+      return Promise.resolve();
+    }),
+    __listeners: listeners, // For tests to trigger events
+  };
+});
+
+vi.mock('@tauri-apps/api/event', async () => {
+  const core = (await import('@tauri-apps/api/core')) as any;
+  return {
+    listen: core.listen,
+    emit: core.emit,
+  };
+});
 
 vi.mock('@tauri-apps/api/window', () => ({
   getCurrentWindow: () => ({

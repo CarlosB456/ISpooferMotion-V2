@@ -218,9 +218,10 @@ local function flushScanRecordsOrError(records: { Record })
 			logToPlugin(
 				"[Warning] "
 					.. string.format(
-						"[ISpooferMotion] Scan chunk send failed (attempt %d/%d), retrying...",
+						"[ISpooferMotion] Scan chunk send failed (attempt %d/%d), pausing %.1fs before retry...",
 						attempt,
-						FLUSH_MAX_RETRIES
+						FLUSH_MAX_RETRIES,
+						FLUSH_RETRY_WAIT
 					)
 			)
 			task.wait(FLUSH_RETRY_WAIT)
@@ -232,14 +233,20 @@ end
 local function processScannedObject(records: { Record }, obj: Instance)
 	scanAttributeRecords(records, obj)
 	scanTagRecords(records, obj)
-	scanSpecialInstanceAssets(records, obj)
 
+	-- scannedProps is created first so scanSpecialInstanceAssets can populate it.
+	-- This prevents scanBundledStringProperties from re-reading properties that
+	-- were already captured (e.g. Sound.SoundId, MeshPart.TextureID).
 	local scannedProps: { [string]: boolean } = {}
+	scanSpecialInstanceAssets(records, obj, scannedProps)
+
 	local assetProps = ASSET_PROPERTIES[obj.ClassName]
 	if assetProps then
 		for _, prop in ipairs(assetProps) do
-			scannedProps[prop] = true
-			captureProperty(records, obj, prop)
+			if not scannedProps[prop] then
+				scannedProps[prop] = true
+				captureProperty(records, obj, prop)
+			end
 		end
 	end
 
@@ -285,11 +292,9 @@ local function scanAssets(): ()
 	local processed = 0
 	local lastYieldTime = os.clock()
 	local lastProgressTime = 0
-	local totalObjects = 0
 
 	local function scanRecursive(obj: Instance, currentService: string)
 		processed += 1
-		totalObjects += 1
 		processScannedObject(records, obj)
 
 		if #records >= SEND_CHUNK_SIZE or getPendingRecordBytes() >= SCAN_CHUNK_BYTES then
@@ -304,7 +309,7 @@ local function scanAssets(): ()
 					scanning = true,
 					current_service = currentService,
 					scanned = processed,
-					total = totalObjects,
+					total = processed,
 				})
 			end)
 			lastProgressTime = now

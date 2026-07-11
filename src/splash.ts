@@ -9,29 +9,21 @@ async function runSplashFlow() {
     statusText.innerText = 'Checking for updates...';
   }
 
-  // In dev mode, mock an update so the prompt can be tested.
-  // Vite sets import.meta.env.DEV = true during development.
-  const isDev = import.meta.env.DEV;
-
   let update: Awaited<ReturnType<typeof check>> | null = null;
 
-  if (isDev) {
-    update = { version: '99.0.0', downloadAndInstall: async () => {} } as unknown as Awaited<ReturnType<typeof check>>;
-  } else {
-    try {
-      update = await Promise.race([
-        check(),
-        new Promise<null>((_, reject) =>
-          setTimeout(() => reject(new Error('Updater check timed out')), 5000)
-        )
-      ]);
-    } catch (err) {
-      console.error('Failed to check for updates:', err);
-      // Continue even if update fails
-    }
+  try {
+    update = await Promise.race([
+      check(),
+      new Promise<null>((_, reject) =>
+        setTimeout(() => reject(new Error('Updater check timed out')), 5000)
+      )
+    ]);
+  } catch (err) {
+    console.error('Failed to check for updates:', err);
+    // Continue even if update fails
   }
 
-    if (update) {
+    if (update && update.available !== false) {
       console.log(`Update available: ${update.version}`);
       if (statusText) {
         statusText.innerText = `Update v${update.version} is available`;

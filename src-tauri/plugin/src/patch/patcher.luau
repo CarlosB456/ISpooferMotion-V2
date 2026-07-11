@@ -99,13 +99,9 @@ local function normalizePatch(rawPatch: any): (Patch?, string?)
 			return nil, propertyErr
 		end
 		property = rawPatch.property
-	end
-
-	if rawPatch.action == "setProperty" or rawPatch.action == "replaceAttribute" then
-		local okProperty, propertyErr = validatePropertyName(property)
-		if not okProperty then
-			return nil, propertyErr
-		end
+	elseif rawPatch.action == "setProperty" or rawPatch.action == "replaceAttribute" then
+		-- These actions require a property name - fail early with a clear message.
+		return nil, "Patch action '" .. rawPatch.action .. "' requires a property name"
 	end
 
 	return {
@@ -418,6 +414,21 @@ local function applyPatches(patches: any)
 		recording = ChangeHistoryService:TryBeginRecording("ISpooferMotion Pre-Patch")
 	end)
 
+	-- finishPatch is called unconditionally at the end of every code path to ensure
+	-- FinishRecording is always paired with TryBeginRecording and patchRunning is cleared.
+	local function finishPatch()
+		if recording then
+			pcall(function()
+				ChangeHistoryService:FinishRecording(
+					recording,
+					Enum.FinishRecordingOperation.Commit
+				)
+			end)
+			recording = nil
+		end
+		patchRunning = false
+	end
+
 	local batchOk, batchErr = pcall(function()
 		for index, rawPatch in ipairs(patches) do
 			local ok, patchOk, patchErr = pcall(function()
@@ -445,9 +456,11 @@ local function applyPatches(patches: any)
 				)
 			end
 
-			if index % 50 == 0 then
+			if index % 50 == 0 and index < #patches then
+				-- Silent=true: transient progress updates should not produce log spam.
 				setPluginGuiStatus(
-					string.format("Applying replacements (%d/%d)...", index, #patches)
+					string.format("Applying replacements (%d/%d)...", index, #patches),
+					true
 				)
 				task.wait()
 			end
@@ -459,13 +472,8 @@ local function applyPatches(patches: any)
 		logToPlugin("[Warning] " .. "[ISpooferMotion] Patch batch failed: " .. tostring(batchErr))
 	end
 
-	if recording then
-		pcall(function()
-			ChangeHistoryService:FinishRecording(recording, Enum.FinishRecordingOperation.Commit)
-		end)
-	end
-
-	patchRunning = false
+	-- Always commit the history recording and release the patch lock.
+	finishPatch()
 
 	logToPlugin(
 		string.format(

@@ -329,7 +329,7 @@ pub async fn batch_get_download_urls_for_assets(
         if let Ok(id) = id_str.parse::<i64>() {
             let mut final_place_id = place_id_num;
             if let Some(cached_place_id_str) =
-                crate::commands::spoofer::remote_cache::get_context(id_str)
+                crate::commands::spoofer::remote_cache::get_local_context(id_str)
             {
                 if let Ok(cached_id) = cached_place_id_str.parse::<i64>() {
                     final_place_id = Some(cached_id);
@@ -434,7 +434,7 @@ pub async fn batch_get_download_urls_for_assets(
                 .cloned()
                 .collect();
             if pending.is_empty() {
-                break; // all resolved - no need to try more place IDs
+                break; // all resolved
             }
 
             let current_place_id_num = current_place_id_opt

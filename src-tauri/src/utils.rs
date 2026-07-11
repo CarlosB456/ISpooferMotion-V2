@@ -149,7 +149,8 @@ pub fn normalize_roblox_cookie(cookie_value: &str) -> String {
 pub fn sanitize_filename(filename: &str) -> String {
     let mut safe = String::new();
     for c in filename.chars() {
-        if "<>:\"/\\|?*\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0A\x0B\x0C\x0D\x0E\x0F\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1A\x1B\x1C\x1D\x1E\x1F".contains(c) {
+        // Use a match arm so the compiler emits a jump table - O(1) per char vs O(n) string scan.
+        if matches!(c, '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*' | '\x00'..='\x1F') {
             safe.push('_');
         } else {
             safe.push(c);
@@ -280,7 +281,9 @@ mod tests {
     fn test_normalize_roblox_cookie() {
         assert_eq!(normalize_roblox_cookie("cookie_value"), "cookie_value");
         assert_eq!(
-            normalize_roblox_cookie(".ROBLOSECURITY=_|WARNING:-DO-NOT-SHARE-THIS|_; domain=.roblox.com"),
+            normalize_roblox_cookie(
+                ".ROBLOSECURITY=_|WARNING:-DO-NOT-SHARE-THIS|_; domain=.roblox.com"
+            ),
             "_|WARNING:-DO-NOT-SHARE-THIS|_"
         );
         assert_eq!(

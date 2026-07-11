@@ -1,4 +1,5 @@
-use super::{build_roblox_cookie_header, AppHandle, ProfileRequest, COOKIE, USER_AGENT};
+use super::{build_roblox_cookie_header, AppHandle, COOKIE, USER_AGENT};
+use crate::commands::ipc::secrets::ProfileRequest;
 use crate::commands::AnyValue;
 use serde_json::Value;
 

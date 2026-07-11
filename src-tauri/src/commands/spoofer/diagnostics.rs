@@ -55,7 +55,8 @@ pub async fn record_failed_transfer_diagnostic(
 
     let _ = tokio::fs::create_dir_all(&diagnostics_dir).await;
 
-    let timestamp = chrono::Utc::now().format("%Y-%m-%dT%H-%M-%S%.3fZ").to_string();
+    let now = chrono::Utc::now();
+    let timestamp = now.format("%Y-%m-%dT%H-%M-%S%.3fZ").to_string();
     let safe_asset_id = crate::utils::sanitize_filename(asset_id);
     let safe_asset_mode = crate::utils::sanitize_filename(asset_type.unwrap_or("asset"));
     let uuid_str = uuid::Uuid::new_v4().to_string();
@@ -78,7 +79,7 @@ pub async fn record_failed_transfer_diagnostic(
     let _ = tokio::fs::copy(file_path, &payload_dest).await;
 
     let metadata = DiagnosticMetadata {
-        timestamp: chrono::Utc::now().to_rfc3339(),
+        timestamp: now.to_rfc3339(),
         asset_id: asset_id.to_string(),
         asset_mode: asset_type.unwrap_or("asset").to_string(),
         error: error_msg.to_string(),

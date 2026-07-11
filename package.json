@@ -1,6 +1,6 @@
 {
   "name": "ispoofermotion",
-  "version": "2.2.0",
+  "version": "2.2.1",
   "description": "Animation spoofing utility for Roblox",
   "author": {
     "name": "IncredibroXP",
@@ -8,6 +8,7 @@
   },
   "license": "GPL-3.0-or-later",
   "scripts": {
+    "prepare": "husky",
     "dev": "vite",
     "build:app": "vite build",
     "build:plugin": "bun scripts/build-plugin.mjs",
@@ -30,6 +31,18 @@
     "lint": "eslint .",
     "test": "vitest run --passWithNoTests",
     "check": "run-s typecheck rust:check rust:lint rust:test lint test build"
+  },
+  "lint-staged": {
+    "*.{js,ts,jsx,tsx}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.rs": [
+      "cargo fmt --manifest-path src-tauri/Cargo.toml --"
+    ],
+    "*.luau": [
+      "bunx @johnnymorganz/stylua-bin"
+    ]
   },
   "dependencies": {
     "@codycon/ism-library": "file:./ISM-Library/packages/ui",
@@ -77,7 +90,9 @@
     "eslint-plugin-react-refresh": "0.5.3",
     "eslint-plugin-simple-import-sort": "13.0.0",
     "globals": "17.7.0",
+    "husky": "^9.1.7",
     "jsdom": "^29.1.1",
+    "lint-staged": "^17.0.8",
     "npm-run-all": "4.1.5",
     "prettier": "3.9.4",
     "tailwindcss": "4.3.2",

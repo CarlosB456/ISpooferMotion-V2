@@ -25,7 +25,8 @@ local function registerObject(obj: Instance): string
 end
 
 local function getRegisteredObject(token: string): Instance?
-	local obj = objectRegistry[tostring(token)]
+	local normalizedToken = tostring(token)
+	local obj = objectRegistry[normalizedToken]
 	if not obj then
 		return nil
 	end
@@ -34,7 +35,15 @@ local function getRegisteredObject(token: string): Instance?
 		return obj.Parent
 	end)
 
-	return if valid and parent ~= nil then obj else nil
+	if valid and parent ~= nil then
+		return obj
+	end
+
+	-- Object is destroyed - prune both tables immediately so memory is reclaimed
+	-- rather than waiting until the next resetObjectRegistry() call.
+	objectRegistry[normalizedToken] = nil
+	objectTokens[obj] = nil
+	return nil
 end
 
 local function replaceRegisteredObject(token: string, obj: Instance)

@@ -4,45 +4,9 @@ pub mod logging;
 pub mod profile;
 pub mod secrets;
 
-pub use app::{
-    __cmd__clear_plugin_cache, __cmd__get_app_version, __cmd__get_release_source,
-    __cmd__get_runtime_info, __cmd__open_external, __cmd__quit_app, __cmd__select_folder,
-    __cmd__uninstall_app, __cmd__window_close, __cmd__window_minimize,
-    __tauri_command_name_clear_plugin_cache, __tauri_command_name_get_app_version,
-    __tauri_command_name_get_release_source, __tauri_command_name_get_runtime_info,
-    __tauri_command_name_open_external, __tauri_command_name_quit_app,
-    __tauri_command_name_select_folder, __tauri_command_name_uninstall_app,
-    __tauri_command_name_window_close, __tauri_command_name_window_minimize, clear_plugin_cache,
-    get_app_version, get_release_source, get_runtime_info, open_external, quit_app, select_folder,
-    uninstall_app, window_close, window_minimize,
-};
-pub use job::{
-    __cmd__check_session, __cmd__run_spoofer_action, __cmd__spoofer_cancel, __cmd__spoofer_pause,
-    __cmd__spoofer_resume, __tauri_command_name_check_session,
-    __tauri_command_name_run_spoofer_action, __tauri_command_name_spoofer_cancel,
-    __tauri_command_name_spoofer_pause, __tauri_command_name_spoofer_resume, check_session,
-    run_spoofer_action, spoofer_cancel, spoofer_pause, spoofer_resume,
-};
-pub use logging::{
-    __cmd__append_debug_log, __cmd__copy_debug_info, __cmd__export_support_report,
-    __cmd__open_logs_folder, __cmd__open_plugins_folder, __tauri_command_name_append_debug_log,
-    __tauri_command_name_copy_debug_info, __tauri_command_name_export_support_report,
-    __tauri_command_name_open_logs_folder, __tauri_command_name_open_plugins_folder,
-    append_debug_log, copy_debug_info, export_support_report, open_logs_folder,
-    open_plugins_folder,
-};
-pub use profile::{
-    __cmd__fetch_audio_quota, __cmd__get_roblox_profile, __tauri_command_name_fetch_audio_quota,
-    __tauri_command_name_get_roblox_profile, fetch_audio_quota, get_roblox_profile,
-};
-pub use secrets::{
-    __cmd__clear_profile_secrets, __cmd__load_profile_secrets, __cmd__load_renderer_settings,
-    __cmd__save_profile_secrets, __cmd__save_renderer_settings,
-    __tauri_command_name_clear_profile_secrets, __tauri_command_name_load_profile_secrets,
-    __tauri_command_name_load_renderer_settings, __tauri_command_name_save_profile_secrets,
-    __tauri_command_name_save_renderer_settings, clear_profile_secrets, load_profile_secrets,
-    load_renderer_settings, save_profile_secrets, save_renderer_settings, ProfileRequest,
-};
+// lib.rs registers all commands via their full crate::commands::ipc::submodule::fn path,
+// so no re-exports are needed here. Submodules are public for direct access only.
+
 
 use keyring::Entry;
 use regex::Regex;

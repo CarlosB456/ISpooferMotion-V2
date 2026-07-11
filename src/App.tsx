@@ -7,6 +7,7 @@ import Sidebar from './components/layout/Sidebar';
 import StatusBar from './components/layout/StatusBar';
 import Titlebar from './components/layout/Titlebar';
 import { RobloxStatusBanner } from './components/shared/RobloxStatusBanner';
+import WatermarkEngine from './components/layout/WatermarkEngine';
 
 import { useConfig } from './contexts/ConfigContext';
 import { useLanguage } from './contexts/LanguageContext';
@@ -137,6 +138,7 @@ export default function App() {
           />
 
           <StatusBar />
+          <WatermarkEngine />
         </motion.div>
       </div>
     </IsmProvider>

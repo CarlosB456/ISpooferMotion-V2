@@ -229,7 +229,11 @@ pub async fn get_studio_health_status() -> AnyValue {
     let guard = data.read().await;
     let synced = guard
         .last_plugin_poll_time
-        .is_some_and(|t| t.elapsed() < std::time::Duration::from_secs(3));
+        // The plugin uses a 25-second long-poll on /poll, so the timestamp is only
+        // refreshed at the START of each poll iteration - not while it's waiting.
+        // A 3-second window causes the frontend to flash "disconnected" mid-poll.
+        // 30s gives one full poll cycle + a safety margin.
+        .is_some_and(|t| t.elapsed() < std::time::Duration::from_secs(30));
     AnyValue(json!({
         "synced": synced,
         "protocolVersion": STUDIO_PROTOCOL_VERSION,

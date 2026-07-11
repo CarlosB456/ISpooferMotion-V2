@@ -192,6 +192,9 @@ pub async fn handle_scan_abort(State(state): State<AppState>) -> Json<Value> {
 // Long-poll endpoint for Studio tasks. Times out after 25 seconds.
 pub async fn handle_poll(State(state): State<AppState>) -> Json<Value> {
     let timeout = tokio::time::Duration::from_secs(25);
+    // Heartbeat interval: refresh last_plugin_poll_time while we're waiting so
+    // the frontend health check never sees a stale timestamp during a quiet poll.
+    let heartbeat_interval = tokio::time::Duration::from_secs(5);
     let start = Instant::now();
     let notify = std::sync::Arc::clone(&state.data.read().await.notify);
 
@@ -216,13 +219,18 @@ pub async fn handle_poll(State(state): State<AppState>) -> Json<Value> {
         if start.elapsed() > timeout {
             return Json(serde_json::json!({ "requestAssets": false }));
         }
+        // Wait for a notification OR the heartbeat interval, whichever comes first.
+        // This ensures last_plugin_poll_time is refreshed regularly even during a
+        // long idle wait, preventing the frontend from falsely reading "disconnected".
         let remaining = timeout.saturating_sub(start.elapsed());
-        let _ = tokio::time::timeout(remaining, notify.notified()).await;
+        let wait = remaining.min(heartbeat_interval);
+        let _ = tokio::time::timeout(wait, notify.notified()).await;
     }
 }
 
 pub async fn handle_poll_replacements(State(state): State<AppState>) -> Json<Value> {
     let timeout = tokio::time::Duration::from_secs(25);
+    let heartbeat_interval = tokio::time::Duration::from_secs(5);
     let start = Instant::now();
     let notify = std::sync::Arc::clone(&state.data.read().await.notify);
 
@@ -246,7 +254,8 @@ pub async fn handle_poll_replacements(State(state): State<AppState>) -> Json<Val
             return Json(serde_json::json!({ "mappings": [], "patches": [] }));
         }
         let remaining = timeout.saturating_sub(start.elapsed());
-        let _ = tokio::time::timeout(remaining, notify.notified()).await;
+        let wait = remaining.min(heartbeat_interval);
+        let _ = tokio::time::timeout(wait, notify.notified()).await;
     }
 }
 
@@ -430,4 +439,91 @@ legacy_complete_handler!(handle_script_refs_complete, last_script_refs);
 
 pub async fn handle_api_dump() -> Json<crate::api_dump::ApiDumpProperties> {
     Json(crate::api_dump::get_api_dump_properties().await)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::Instant;
+    use serde_json::json;
+
+    #[test]
+    fn test_clear_stale_incomplete_not_stale() {
+        let mut store = AssetStore {
+            scanning: false,
+            complete: false,
+            timestamp: Some(Instant::now() - Duration::from_secs(30)),
+            assets: vec![json!("test")],
+        };
+        clear_stale(&mut store);
+        assert!(!store.assets.is_empty());
+        assert!(store.timestamp.is_some());
+    }
+
+    #[test]
+    fn test_clear_stale_incomplete_is_stale() {
+        let mut store = AssetStore {
+            scanning: false,
+            complete: false,
+            timestamp: Some(Instant::now() - Duration::from_secs(65)),
+            assets: vec![json!("test")],
+        };
+        clear_stale(&mut store);
+        assert!(store.assets.is_empty());
+        assert!(store.timestamp.is_none());
+        assert!(!store.complete);
+    }
+
+    #[test]
+    fn test_clear_stale_complete_not_stale() {
+        let mut store = AssetStore {
+            scanning: false,
+            complete: true,
+            timestamp: Some(Instant::now() - Duration::from_secs(300)),
+            assets: vec![json!("test")],
+        };
+        clear_stale(&mut store);
+        assert!(!store.assets.is_empty());
+        assert!(store.timestamp.is_some());
+    }
+
+    #[test]
+    fn test_clear_stale_complete_is_stale() {
+        let mut store = AssetStore {
+            scanning: false,
+            complete: true,
+            timestamp: Some(Instant::now() - Duration::from_secs(605)),
+            assets: vec![json!("test")],
+        };
+        clear_stale(&mut store);
+        assert!(store.assets.is_empty());
+        assert!(store.timestamp.is_none());
+        assert!(!store.complete);
+    }
+
+    #[test]
+    fn test_clear_stale_scanning() {
+        let mut store = AssetStore {
+            scanning: true,
+            complete: false,
+            timestamp: Some(Instant::now() - Duration::from_secs(1000)),
+            assets: vec![json!("test")],
+        };
+        clear_stale(&mut store);
+        assert!(!store.assets.is_empty());
+        assert!(store.timestamp.is_some());
+    }
+
+    #[test]
+    fn test_snapshot_returns_clone() {
+        let mut store = AssetStore {
+            scanning: false,
+            complete: false,
+            timestamp: Some(Instant::now() - Duration::from_secs(30)),
+            assets: vec![json!("test")],
+        };
+        let snap = snapshot(&mut store);
+        assert_eq!(snap.assets.len(), 1);
+        assert_eq!(snap.assets[0], json!("test"));
+    }
 }

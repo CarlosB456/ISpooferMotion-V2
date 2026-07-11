@@ -110,13 +110,22 @@ local function flushRecords(records: { Record }): boolean
 	return ok
 end
 
-local function captureProperty(records: { Record }, obj: Instance, property: string)
+local function captureProperty(
+	records: { Record },
+	obj: Instance,
+	property: string,
+	scannedProps: { [string]: boolean }?
+)
 	local ok, value = pcall(function()
 		return (obj :: any)[property]
 	end)
 
 	if ok then
 		addRecord(records, obj, property, value, true)
+		-- Mark as scanned so scanBundledStringProperties does not re-read this property.
+		if scannedProps then
+			scannedProps[property] = true
+		end
 	end
 end
 
@@ -157,7 +166,7 @@ local function scanBundledStringProperties(
 			if ok then
 				local normalized = contentValueToString(val, false)
 				if
-					normalized and (stringContainsAssetReference(normalized) or isAssetFormat(val))
+					normalized and (stringContainsAssetReference(normalized) or isAssetFormat(normalized))
 				then
 					addRecord(records, obj, prop, normalized, false)
 				end
@@ -166,7 +175,11 @@ local function scanBundledStringProperties(
 	end
 end
 
-local function scanSpecialInstanceAssets(records: { Record }, obj: Instance)
+local function scanSpecialInstanceAssets(
+	records: { Record },
+	obj: Instance,
+	scannedProps: { [string]: boolean }?
+)
 	if obj:IsA("HumanoidDescription") then
 		for _, prop in ipairs({
 			"Face",
@@ -180,7 +193,7 @@ local function scanSpecialInstanceAssets(records: { Record }, obj: Instance)
 			"Pants",
 			"Shirt",
 		}) do
-			captureProperty(records, obj, prop)
+			captureProperty(records, obj, prop, scannedProps)
 		end
 
 		local okEmotes, emotes = pcall(function()
@@ -213,75 +226,80 @@ local function scanSpecialInstanceAssets(records: { Record }, obj: Instance)
 	end
 
 	if obj:IsA("PackageLink") then
-		captureProperty(records, obj, "PackageId")
-		captureProperty(records, obj, "AssetId")
+		captureProperty(records, obj, "PackageId", scannedProps)
+		captureProperty(records, obj, "AssetId", scannedProps)
 	end
 
 	if obj:IsA("SurfaceAppearance") then
 		for _, prop in ipairs({ "ColorMap", "MetalnessMap", "NormalMap", "RoughnessMap" }) do
-			captureProperty(records, obj, prop)
+			captureProperty(records, obj, prop, scannedProps)
 		end
 	end
 
 	if obj:IsA("CharacterMesh") then
-		captureProperty(records, obj, "MeshId")
-		captureProperty(records, obj, "BaseTextureId")
-		captureProperty(records, obj, "OverlayTextureId")
+		captureProperty(records, obj, "MeshId", scannedProps)
+		captureProperty(records, obj, "BaseTextureId", scannedProps)
+		captureProperty(records, obj, "OverlayTextureId", scannedProps)
 	end
 
 	if obj:IsA("Decal") or obj:IsA("Texture") then
-		captureProperty(records, obj, "Texture")
+		captureProperty(records, obj, "Texture", scannedProps)
 	end
 
 	if obj:IsA("SpecialMesh") or obj:IsA("FileMesh") then
-		captureProperty(records, obj, "MeshId")
-		captureProperty(records, obj, "TextureId")
+		captureProperty(records, obj, "MeshId", scannedProps)
+		captureProperty(records, obj, "TextureId", scannedProps)
 	end
 
 	if obj:IsA("MeshPart") then
-		captureProperty(records, obj, "MeshId")
-		captureProperty(records, obj, "MeshContent")
-		captureProperty(records, obj, "TextureID")
+		captureProperty(records, obj, "MeshId", scannedProps)
+		captureProperty(records, obj, "MeshContent", scannedProps)
+		captureProperty(records, obj, "TextureID", scannedProps)
 	end
 
 	if obj:IsA("Animation") then
-		captureProperty(records, obj, "AnimationId")
+		captureProperty(records, obj, "AnimationId", scannedProps)
 	end
 
 	if obj:IsA("Sound") then
-		captureProperty(records, obj, "SoundId")
-		captureProperty(records, obj, "AudioContent")
+		captureProperty(records, obj, "SoundId", scannedProps)
+		captureProperty(records, obj, "AudioContent", scannedProps)
 	end
 
 	if obj:IsA("ImageLabel") or obj:IsA("ImageButton") then
-		captureProperty(records, obj, "Image")
-		captureProperty(records, obj, "HoverImage")
-		captureProperty(records, obj, "PressedImage")
+		captureProperty(records, obj, "Image", scannedProps)
+		captureProperty(records, obj, "HoverImage", scannedProps)
+		captureProperty(records, obj, "PressedImage", scannedProps)
 	end
 
 	if obj:IsA("VideoFrame") then
-		captureProperty(records, obj, "Video")
+		captureProperty(records, obj, "Video", scannedProps)
 	end
 
 	if obj:IsA("AudioPlayer") or obj:IsA("AudioEmitter") then
-		captureProperty(records, obj, "Asset")
-		captureProperty(records, obj, "AssetId")
+		captureProperty(records, obj, "Asset", scannedProps)
+		captureProperty(records, obj, "AssetId", scannedProps)
+	end
+
+	-- AudioDeviceInput uses the new audio API (added 2024) and holds an asset URI.
+	if obj:IsA("AudioDeviceInput") then
+		captureProperty(records, obj, "Asset", scannedProps)
 	end
 
 	if obj:IsA("ParticleEmitter") or obj:IsA("Beam") or obj:IsA("Trail") then
-		captureProperty(records, obj, "Texture")
+		captureProperty(records, obj, "Texture", scannedProps)
 	end
 
 	if obj:IsA("Shirt") then
-		captureProperty(records, obj, "ShirtTemplate")
+		captureProperty(records, obj, "ShirtTemplate", scannedProps)
 	end
 
 	if obj:IsA("Pants") then
-		captureProperty(records, obj, "PantsTemplate")
+		captureProperty(records, obj, "PantsTemplate", scannedProps)
 	end
 
 	if obj:IsA("ShirtGraphic") then
-		captureProperty(records, obj, "Graphic")
+		captureProperty(records, obj, "Graphic", scannedProps)
 	end
 
 	if obj:IsA("Sky") then
@@ -295,7 +313,7 @@ local function scanSpecialInstanceAssets(records: { Record }, obj: Instance)
 			"SunTextureId",
 			"MoonTextureId",
 		}) do
-			captureProperty(records, obj, prop)
+			captureProperty(records, obj, prop, scannedProps)
 		end
 	end
 
@@ -310,12 +328,19 @@ local function scanSpecialInstanceAssets(records: { Record }, obj: Instance)
 			"WalkAnimation",
 			"MoodAnimation",
 		}) do
-			captureProperty(records, obj, prop)
+			captureProperty(records, obj, prop, scannedProps)
 		end
 	end
 
 	if obj:IsA("WrapTarget") or obj:IsA("WrapLayer") then
-		captureProperty(records, obj, "ReferenceMeshId")
-		captureProperty(records, obj, "CageMeshId")
+		captureProperty(records, obj, "ReferenceMeshId", scannedProps)
+		captureProperty(records, obj, "CageMeshId", scannedProps)
+	end
+
+	-- MaterialVariant holds per-channel texture maps that are independently spoofable.
+	if obj:IsA("MaterialVariant") then
+		for _, prop in ipairs({ "ColorMap", "MetalnessMap", "NormalMap", "RoughnessMap" }) do
+			captureProperty(records, obj, prop, scannedProps)
+		end
 	end
 end

@@ -40,9 +40,6 @@ local function getJson(endpoint: string): (boolean, any)
 		return HttpService:RequestAsync({
 			Url = BASE_URL .. endpoint,
 			Method = "GET",
-			Headers = {
-				["Content-Type"] = "application/json",
-			},
 		})
 	end)
 

@@ -167,6 +167,9 @@ pub fn run() {
             // Initialize the bridge server asynchronously.
             tauri::async_runtime::spawn(crate::studio_bridge::start_server(app.handle().clone()));
 
+            // Initialize capture detection
+            crate::commands::screenshot_monitor::spawn_capture_monitor(app.handle().clone());
+
             // Initialize system tray icon.
             use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
             let _tray = TrayIconBuilder::new()
