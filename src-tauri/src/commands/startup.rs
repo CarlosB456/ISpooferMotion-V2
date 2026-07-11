@@ -16,6 +16,7 @@ pub async fn close_splashscreen(app: AppHandle) {
         .resizable(true)
         .fullscreen(false)
         .decorations(false)
+        .transparent(true)
         .center()
         .build()
         .unwrap_or_else(|_| {

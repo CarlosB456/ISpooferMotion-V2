@@ -7,6 +7,7 @@ import { useLanguage } from '../../../contexts/LanguageContext';
 
 export interface SpoofingControlsProps {
   failedAssetIds: string[];
+  failedReplacements: Set<string>;
   activeSpooferJobId: string | null;
   isSpoofing: boolean;
   isReplacing: boolean;
@@ -26,6 +27,7 @@ export interface SpoofingControlsProps {
 
 export function SpoofingControls({
   failedAssetIds,
+  failedReplacements,
   activeSpooferJobId,
   isSpoofing,
   isReplacing,
@@ -44,12 +46,14 @@ export function SpoofingControls({
 }: SpoofingControlsProps) {
   const { t } = useLanguage();
 
+  const totalFailed = failedAssetIds.length + failedReplacements.size;
+
   return (
     <motion.div
       variants={itemVariants}
       className="shrink-0 flex flex-wrap items-center justify-end gap-3 pt-4 mt-auto border-t border-border-subtle"
     >
-      {failedAssetIds.length > 0 && !activeSpooferJobId && (
+      {totalFailed > 0 && !activeSpooferJobId && (
         <Button
           variant="flat"
           color="warning"
@@ -58,8 +62,7 @@ export function SpoofingControls({
           onClick={() => void handleRetryFailedAssets()}
           disabled={isSpoofing || isReplacing || isScanningStudio}
         >
-          {t('spoof.retryFailed').replace('{count}', failedAssetIds.length.toString())} (
-          {failedAssetIds.length})
+          {t('spoof.retryFailed').replace('{count}', totalFailed.toString())} ({totalFailed})
         </Button>
       )}
 

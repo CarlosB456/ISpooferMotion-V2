@@ -63,6 +63,15 @@ local function coercePropertyValue(obj: Instance, property: string, value: any):
 	if type(currentValue) == "number" then
 		local assetId = normalizeAssetId(value)
 		return if assetId then tonumber(assetId) else tonumber(value) or value
+	elseif typeof(currentValue) == "Content" then
+		local uri = toAssetUri(value) or value
+		local ok, contentObj = pcall(function()
+			-- luacheck: ignore
+			return (Content :: any).fromUri(uri)
+		end)
+		if ok and contentObj then
+			return contentObj
+		end
 	end
 
 	return value
@@ -409,8 +418,9 @@ local function applyPatches(patches: any)
 	local recording: any = nil
 	local succeeded = 0
 	local failed = 0
+	local failedPatchesList = {}
 
-	pcall(function()
+	local batchOk, batchErr = pcall(function()
 		recording = ChangeHistoryService:TryBeginRecording("ISpooferMotion Pre-Patch")
 	end)
 
@@ -447,6 +457,14 @@ local function applyPatches(patches: any)
 				local patchName = if type(rawPatch) == "table"
 					then rawPatch.fullName or rawPatch.token
 					else "unknown patch"
+
+				-- Record the failed patch ID (or token) to send back to the backend
+				local failedId = "unknown"
+				if type(rawPatch) == "table" then
+					failedId = rawPatch.token or rawPatch.id or patchName
+				end
+				table.insert(failedPatchesList, failedId)
+
 				logToPlugin(
 					"[Warning] "
 						.. "[ISpooferMotion] Patch failed for "
@@ -482,10 +500,20 @@ local function applyPatches(patches: any)
 			failed
 		)
 	)
+
+	-- Report failed patches back to the desktop app
+	if #failedPatchesList > 0 then
+		pcall(function()
+			postJson("/patch-results", {
+				failedPatches = failedPatchesList,
+			})
+		end)
+	end
+
 	if succeeded > 0 then
 		setPluginGuiStatus("Scanning Assets...")
 		task.spawn(scan)
 	else
-		hidePluginGui()
+		-- No longer hiding UI automatically
 	end
 end

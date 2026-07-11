@@ -381,9 +381,14 @@ local function scanAssets(): ()
 		)
 	)
 	if autoReplaceEnabled then
-		setPluginGuiStatus("Waiting for Spoofer...")
+		-- Clear records after sending
+		table.clear(records)
+		setPluginGuiStatus("Waiting for new scan or replacements...")
+		-- wait for GUI update
+		task.wait(1)
+		-- No longer hiding UI automatically
 	else
-		hidePluginGui()
+		-- No longer hiding UI automatically
 	end
 end
 
@@ -409,6 +414,6 @@ local function scan(): ()
 			postJson("/scan-abort", {})
 		end)
 		logToPlugin("[Warning] " .. "[ISpooferMotion] Scan failed: " .. tostring(err))
-		setPluginGuiStatus("Scan Failed. Connected to Desktop App.")
+		setPluginGuiStatus("Scan Failed. Waiting for scan or replacements...")
 	end
 end

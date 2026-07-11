@@ -30,12 +30,18 @@ local function contentValueToString(value: any, allowNumberAssetId: boolean?): s
 			return value.Uri
 		end)
 		if okUri and type(uri) == "string" and uri ~= "" then
+			if string.find(uri, "016666666666666") or string.find(uri, "16666666666666") then
+				return nil
+			end
 			return uri
 		end
 		return nil
 	end
 
 	if type(value) == "string" then
+		if string.find(value, "016666666666666") or string.find(value, "16666666666666") then
+			return nil
+		end
 		return if value ~= "" and value ~= "nil" then value else nil
 	end
 
@@ -43,7 +49,11 @@ local function contentValueToString(value: any, allowNumberAssetId: boolean?): s
 		if not valueLooksLikePositiveAssetNumber(value) then
 			return nil
 		end
-		return "rbxassetid://" .. tostring(math.floor(value))
+		local strVal = tostring(math.floor(value))
+		if string.find(strVal, "016666666666666") or string.find(strVal, "16666666666666") then
+			return nil
+		end
+		return "rbxassetid://" .. strVal
 	end
 
 	return nil

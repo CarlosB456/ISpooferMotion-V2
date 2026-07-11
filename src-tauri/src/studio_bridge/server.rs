@@ -2,6 +2,7 @@
 use axum::extract::{Json, State};
 use serde_json::Value;
 use std::time::{Duration, Instant};
+use tauri::Emitter;
 
 use super::messages::{
     analyze_records, count_keyframe_warnings, plan_patches, AssetStore, StudioRecord,
@@ -48,7 +49,7 @@ pub async fn handle_scan_start(
     guard.scan_records_truncated = false;
     guard.scan_status = Some(serde_json::json!({
         "scanning": true,
-        "current_service": "Initializing...",
+        "current_service": "Spoofing...",
         "scanned": 0,
         "total": 0
     }));
@@ -289,6 +290,16 @@ pub async fn handle_replace_ids(
     }
     guard.notify.notify_waiters();
     Json(serde_json::json!({ "ok": true, "truncated": over_limit }))
+}
+
+pub async fn handle_patch_results(
+    State(state): State<AppState>,
+    Json(payload): Json<Value>,
+) -> Json<Value> {
+    if let Err(e) = state.app_handle.emit("patch-results", &payload) {
+        log::error!("Failed to emit patch-results event: {}", e);
+    }
+    Json(serde_json::json!({"success": true}))
 }
 
 fn clear_stale(store: &mut AssetStore) {

@@ -50,7 +50,7 @@ local function createPluginGui()
 	statusText.TextStrokeColor3 = Color3.new(0, 0, 0)
 	statusText.TextStrokeTransparency = 0
 	statusText.TextWrapped = true
-	statusText.Text = "Connected to ISpooferMotion Desktop App."
+	statusText.Text = "Waiting for Desktop App..."
 	statusText.Parent = container
 
 	local versionLabel = Instance.new("TextLabel")

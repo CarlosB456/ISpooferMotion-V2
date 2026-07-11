@@ -56,6 +56,9 @@ interface SpooferState {
   replaceError: boolean;
   setReplaceError: (val: boolean) => void;
 
+  failedReplacements: Set<string>;
+  setFailedReplacements: (val: Set<string> | ((prev: Set<string>) => Set<string>)) => void;
+
   spoofCompletionVersion: number;
   incrementSpoofCompletionVersion: () => void;
 
@@ -148,6 +151,12 @@ export const useSpooferStore = create<SpooferState>((set) => ({
 
   replaceError: false,
   setReplaceError: (val) => set({ replaceError: val }),
+
+  failedReplacements: new Set(),
+  setFailedReplacements: (val) =>
+    set((state) => ({
+      failedReplacements: typeof val === 'function' ? val(state.failedReplacements) : val,
+    })),
 
   spoofCompletionVersion: 0,
   incrementSpoofCompletionVersion: () =>

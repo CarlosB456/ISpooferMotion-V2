@@ -216,7 +216,7 @@ function startPolling(): ()
 				lastDiscovery = os.clock()
 				if connected and changed and BASE_URL then
 					logToPlugin("[ISpooferMotion] Connected to " .. BASE_URL)
-					setPluginGuiStatus("Connected to Desktop App.")
+					setPluginGuiStatus("Waiting for scan or replacements...")
 					task.spawn(fetchApiDumpProperties)
 				end
 			end

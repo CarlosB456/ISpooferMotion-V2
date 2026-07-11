@@ -214,7 +214,7 @@ fn extract_rich_text_asset_ids(text: &str) -> Vec<String> {
     for cap in rich_text_pattern().captures_iter(text) {
         if let Some(m) = cap.get(1) {
             let id = m.as_str();
-            if id != "0" {
+            if !is_blocked_asset_id(id) {
                 ids.push(id.to_string());
             }
         }
@@ -338,6 +338,10 @@ fn infer_category_from_line(line: &str) -> Option<&'static str> {
     None
 }
 
+fn is_blocked_asset_id(id: &str) -> bool {
+    id == "0" || id == "016666666666666" || id == "16666666666666"
+}
+
 fn extract_table_block_ids_with_context(source: &str) -> Vec<(String, Option<&'static str>)> {
     let mut results = Vec::new();
     let mut seen = HashSet::new();
@@ -402,7 +406,9 @@ fn extract_table_block_ids_with_context(source: &str) -> Vec<(String, Option<&'s
 
                 for id_cap in script_ref_pattern().captures_iter(block_text) {
                     if let Some(asset_id) = id_cap.get(1) {
-                        if asset_id.as_str() != "0" && seen.insert(asset_id.as_str().to_string()) {
+                        if !is_blocked_asset_id(asset_id.as_str())
+                            && seen.insert(asset_id.as_str().to_string())
+                        {
                             results.push((asset_id.as_str().to_string(), hint));
                         }
                     }
@@ -436,7 +442,7 @@ fn extract_script_asset_ids_with_context(source: &str) -> Vec<(String, Option<&'
             continue;
         };
         let asset_id = mat.as_str();
-        if asset_id == "0" {
+        if is_blocked_asset_id(asset_id) {
             continue;
         }
 
@@ -489,7 +495,7 @@ fn extract_runtime_load_ids(source: &str) -> Vec<RuntimeLoadRef> {
             continue;
         };
 
-        if id != "0" && seen.insert(id.to_string()) {
+        if !is_blocked_asset_id(id) && seen.insert(id.to_string()) {
             results.push(RuntimeLoadRef { asset_id: id.to_string(), call_type });
         }
     }
@@ -1004,14 +1010,14 @@ pub fn plan_patches(records: &[StudioRecord], mappings: &[Value]) -> Vec<Value> 
 
 fn normalize_asset_id(value: &str) -> Option<&str> {
     let trimmed = value.trim();
-    if trimmed.is_empty() || trimmed == "0" {
+    if trimmed.is_empty() || is_blocked_asset_id(trimmed) {
         return None;
     }
 
     if let Some(captures) = asset_id_pattern().captures(trimmed) {
         if let Some(asset_id) = captures.get(1) {
             let id = asset_id.as_str();
-            if id != "0" && !id.is_empty() {
+            if !is_blocked_asset_id(id) && !id.is_empty() {
                 return Some(id);
             }
         }
@@ -1019,7 +1025,7 @@ fn normalize_asset_id(value: &str) -> Option<&str> {
 
     let captures = script_ref_pattern().captures(trimmed)?;
     let asset_id = captures.get(1)?.as_str();
-    (asset_id != "0").then_some(asset_id)
+    (!is_blocked_asset_id(asset_id)).then_some(asset_id)
 }
 
 fn extract_script_asset_ids(source: &str) -> Vec<String> {
@@ -1033,7 +1039,7 @@ fn extract_script_asset_ids(source: &str) -> Vec<String> {
             let pattern = script_ref_pattern();
             for captures in pattern.captures_iter(&text) {
                 if let Some(asset_id) = captures.get(1) {
-                    if asset_id.as_str() != "0" {
+                    if !is_blocked_asset_id(asset_id.as_str()) {
                         self.ids.insert(asset_id.as_str().to_string());
                     }
                 }
@@ -1042,7 +1048,10 @@ fn extract_script_asset_ids(source: &str) -> Vec<String> {
 
         fn visit_number(&mut self, token: &full_moon::tokenizer::Token) {
             let text = token.to_string();
-            if text.len() >= 4 && text.chars().all(|c| c.is_ascii_digit()) && text != "0" {
+            if text.len() >= 4
+                && text.chars().all(|c| c.is_ascii_digit())
+                && !is_blocked_asset_id(&text)
+            {
                 self.ids.insert(text);
             }
         }
@@ -1059,7 +1068,7 @@ fn extract_script_asset_ids(source: &str) -> Vec<String> {
     let mut ids = HashSet::new();
     for captures in pattern.captures_iter(source) {
         if let Some(asset_id) = captures.get(1) {
-            if asset_id.as_str() != "0" {
+            if !is_blocked_asset_id(asset_id.as_str()) {
                 ids.insert(asset_id.as_str().to_string());
             }
         }

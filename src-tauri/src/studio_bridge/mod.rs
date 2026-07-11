@@ -28,11 +28,11 @@ use server::{
     get_last_animations, get_last_images, get_last_meshes, get_last_script_refs, get_last_sounds,
     handle_animations_complete, handle_api_dump, handle_assets_animations, handle_assets_images,
     handle_assets_meshes, handle_assets_script_refs, handle_assets_sounds, handle_images_complete,
-    handle_meshes_complete, handle_poll, handle_poll_animations, handle_poll_images,
-    handle_poll_replacements, handle_poll_sounds, handle_replace_ids, handle_scan_abort,
-    handle_scan_complete, handle_scan_progress, handle_scan_records, handle_scan_start,
-    handle_script_refs_complete, handle_sounds_complete, handle_studio_health, request_animations,
-    request_images, request_meshes, request_script_refs, request_sounds,
+    handle_meshes_complete, handle_patch_results, handle_poll, handle_poll_animations,
+    handle_poll_images, handle_poll_replacements, handle_poll_sounds, handle_replace_ids,
+    handle_scan_abort, handle_scan_complete, handle_scan_progress, handle_scan_records,
+    handle_scan_start, handle_script_refs_complete, handle_sounds_complete, handle_studio_health,
+    request_animations, request_images, request_meshes, request_script_refs, request_sounds,
 };
 
 const PLUGIN_PORT_START: u16 = 14285;
@@ -166,6 +166,7 @@ pub async fn start_server(_app_handle: AppHandle) {
         .route("/assets-script-refs", post(handle_assets_script_refs))
         .route("/script-refs-complete", post(handle_script_refs_complete))
         .route("/poll-replacements", get(handle_poll_replacements))
+        .route("/patch-results", post(handle_patch_results))
         .route("/replace-ids", post(handle_replace_ids))
         .route("/last-sounds", get(get_last_sounds))
         .route("/last-animations", get(get_last_animations))

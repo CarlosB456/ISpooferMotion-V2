@@ -53,16 +53,24 @@ vi.mock('framer-motion', async () => {
   };
 });
 
+const { listeners } = vi.hoisted(() => ({
+  listeners: {} as Record<string, Function[]>,
+}));
+
 // Mock Tauri invoke globally
 vi.mock('@tauri-apps/api/core', () => {
-  const listeners: Record<string, Function[]> = {};
-
   return {
     invoke: vi.fn((cmd, _args) => {
       if (cmd === 'get_config') return Promise.resolve({});
       if (cmd === 'is_update_available') return Promise.resolve(false);
       return Promise.resolve(null);
     }),
+    __listeners: listeners, // For tests to trigger events
+  };
+});
+
+vi.mock('@tauri-apps/api/event', () => {
+  return {
     listen: vi.fn((event, handler) => {
       if (!listeners[event]) listeners[event] = [];
       listeners[event].push(handler);
@@ -76,15 +84,6 @@ vi.mock('@tauri-apps/api/core', () => {
       }
       return Promise.resolve();
     }),
-    __listeners: listeners, // For tests to trigger events
-  };
-});
-
-vi.mock('@tauri-apps/api/event', async () => {
-  const core = (await import('@tauri-apps/api/core')) as any;
-  return {
-    listen: core.listen,
-    emit: core.emit,
   };
 });
 

@@ -10,6 +10,7 @@ import {
   pageVariants,
 } from '@codycon/ism-library';
 import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 import { readText as readClipboardText } from '@tauri-apps/plugin-clipboard-manager';
 import { motion } from 'framer-motion';
 import { ArrowDownUp, Settings2, ShieldAlert, SlidersHorizontal, Wand2 } from 'lucide-react';
@@ -94,17 +95,19 @@ export default function SpoofingView() {
     spoofingLogs: logs,
     setSpoofingLogs: setLogs,
     isSpoofing,
+    spoofCompletionVersion,
+    lastReplacements,
+    lastAssetResults,
     setIsSpoofing,
     setSpoofProgress,
-    lastReplacements,
-    spoofCompletionVersion,
+    setActiveSpooferJobId,
+    setReplaceError,
+    failedReplacements,
+    setFailedReplacements,
     isReplacing,
     replaceError,
-    setReplaceError,
     setIsReplacing,
     activeSpooferJobId,
-    setActiveSpooferJobId,
-    lastAssetResults,
     isJobPaused,
     setIsJobPaused,
     showAdvanced,
@@ -118,20 +121,21 @@ export default function SpoofingView() {
       spoofingLogs: s.spoofingLogs,
       setSpoofingLogs: s.setSpoofingLogs,
       isSpoofing: s.isSpoofing,
+      spoofCompletionVersion: s.spoofCompletionVersion,
+      lastReplacements: s.lastReplacements,
+      lastAssetResults: s.lastAssetResults,
       setIsSpoofing: s.setIsSpoofing,
       setSpoofProgress: s.setSpoofProgress,
-      lastReplacements: s.lastReplacements,
-      spoofCompletionVersion: s.spoofCompletionVersion,
+      setActiveSpooferJobId: s.setActiveSpooferJobId,
+      setReplaceError: s.setReplaceError,
+      failedReplacements: s.failedReplacements,
+      setFailedReplacements: s.setFailedReplacements,
       isReplacing: s.isReplacing,
       replaceError: s.replaceError,
-      setReplaceError: s.setReplaceError,
       setIsReplacing: s.setIsReplacing,
       activeSpooferJobId: s.activeSpooferJobId,
-      setActiveSpooferJobId: s.setActiveSpooferJobId,
       isJobPaused: s.isJobPaused,
       setIsJobPaused: s.setIsJobPaused,
-      lastAssetResults: s.lastAssetResults,
-      setLastAssetResults: s.setLastAssetResults,
       showAdvanced: s.showAdvanced,
       setShowAdvanced: s.setShowAdvanced,
     })),
@@ -516,6 +520,32 @@ export default function SpoofingView() {
     }
   };
 
+  useEffect(() => {
+    if (!isTauriRuntime()) return;
+
+    let unlisten: (() => void) | undefined;
+    const setupListener = async () => {
+      unlisten = await listen<{ failedPatches: string[] }>('patch-results', (event) => {
+        if (event.payload?.failedPatches?.length > 0) {
+          setFailedReplacements(new Set(event.payload.failedPatches));
+          setLogs((prev) =>
+            appendSpoofingLog(
+              prev,
+              `[WARN] ${event.payload.failedPatches.length} studio replacement(s) failed to apply.\n`,
+            ),
+          );
+        } else {
+          setFailedReplacements(new Set());
+        }
+      });
+    };
+
+    void setupListener();
+    return () => {
+      if (unlisten) unlisten();
+    };
+  }, []);
+
   const handleRetryReplacement = async () => {
     if (Object.keys(lastReplacements).length === 0) return;
 
@@ -811,20 +841,26 @@ export default function SpoofingView() {
   handleRunSpooferRef.current = handleRunSpoofer;
 
   const handleRetryFailedAssets = async () => {
-    if (failedAssetIds.length === 0) return;
+    if (failedAssetIds.length === 0 && failedReplacements.size === 0) return;
 
-    const assetTypes = failedAssetResults.reduce<Record<string, string>>((acc, result) => {
-      const id = String(result.id || '').replace(/\D/g, '');
-      const type = String(result.type || result.assetType || '');
-      if (id && type) acc[id] = type;
-      return acc;
-    }, {});
+    if (failedReplacements.size > 0) {
+      void handleRetryReplacement();
+    }
 
-    setSelectedAssetIds(new Set(failedAssetIds));
-    setLogs((prev) =>
-      appendSpoofingLog(prev, `[INFO] Retrying ${failedAssetIds.length} failed asset(s)...\n`),
-    );
-    await handleRunSpooferRef.current(failedAssetIds, false, { assetTypes });
+    if (failedAssetIds.length > 0) {
+      const assetTypes = failedAssetResults.reduce<Record<string, string>>((acc, result) => {
+        const id = String(result.id || '').replace(/\D/g, '');
+        const type = String(result.type || result.assetType || '');
+        if (id && type) acc[id] = type;
+        return acc;
+      }, {});
+
+      setSelectedAssetIds(new Set(failedAssetIds));
+      setLogs((prev) =>
+        appendSpoofingLog(prev, `[INFO] Retrying ${failedAssetIds.length} failed asset(s)...\n`),
+      );
+      await handleRunSpooferRef.current(failedAssetIds, false, { assetTypes });
+    }
   };
 
   useEffect(() => {
@@ -1093,6 +1129,7 @@ export default function SpoofingView() {
           {/* Bottom Action Bar */}
           <SpoofingControls
             failedAssetIds={failedAssetIds}
+            failedReplacements={failedReplacements}
             activeSpooferJobId={activeSpooferJobId}
             isSpoofing={isSpoofing}
             isReplacing={isReplacing}
