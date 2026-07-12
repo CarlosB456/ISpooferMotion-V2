@@ -1,3 +1,8 @@
+//! Miscellaneous shared utility functions.
+//!
+//! Provides thread-safe HTTP client initialization, rate-limit header parsing,
+//! file path sanitization, and generic error string extraction.
+
 use log::warn;
 use reqwest::Response;
 use std::path::Path;
@@ -9,6 +14,7 @@ static HTTP_CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
 static PROXY_CLIENT: OnceLock<std::sync::RwLock<(Option<String>, reqwest::Client)>> =
     OnceLock::new();
 
+/// Builds a new generic reqwest client, optionally configuring a proxy.
 fn build_client(proxy_url: Option<&str>) -> reqwest::Client {
     let mut builder = reqwest::Client::builder()
         // Use a 15-second timeout.
@@ -26,10 +32,15 @@ fn build_client(proxy_url: Option<&str>) -> reqwest::Client {
     builder.build().unwrap_or_else(|_| reqwest::Client::new())
 }
 
+/// Returns a globally cached, thread-safe HTTP client with default settings.
 pub fn get_http_client() -> &'static reqwest::Client {
     HTTP_CLIENT.get_or_init(|| build_client(None))
 }
 
+/// Returns a cached HTTP client bound to the specified proxy URL.
+///
+/// If the proxy changes, the cached client is destroyed and rebuilt. This ensures
+/// we do not leak connection pools while allowing the user to hot-swap proxy servers.
 pub fn get_http_client_with_proxy(proxy_url: Option<&str>) -> reqwest::Client {
     let lock = PROXY_CLIENT.get_or_init(|| std::sync::RwLock::new((None, build_client(None))));
 
@@ -53,7 +64,11 @@ pub fn get_http_client_with_proxy(proxy_url: Option<&str>) -> reqwest::Client {
     build_client(proxy_url)
 }
 
-// Check for exhausted rate limits or Retry-After headers. Returns backoff duration if necessary.
+/// Parses rate-limit headers to determine if we need to back off.
+///
+/// Returns the number of milliseconds to sleep if a limit was hit or the
+/// `x-ratelimit-remaining` count fell dangerously low. If headers are missing
+/// but the status is 429, this falls back to a standard exponential backoff.
 #[must_use]
 pub fn extract_retry_after(response: &reqwest::Response, attempt: Option<u32>) -> Option<u64> {
     let mut needs_wait = false;
@@ -61,11 +76,7 @@ pub fn extract_retry_after(response: &reqwest::Response, attempt: Option<u32>) -
     // Back off when rate limit is nearly empty (< 2 remaining).
     if let Some(remaining) = response.headers().get("x-ratelimit-remaining") {
         if let Ok(rem_str) = remaining.to_str() {
-            if let Ok(rem_num) = rem_str.parse::<i64>() {
-                if rem_num < 2 {
-                    needs_wait = true;
-                }
-            } else if rem_str == "0" {
+            if rem_str.parse::<i64>().is_ok_and(|n| n < 2) {
                 needs_wait = true;
             }
         }
@@ -113,6 +124,7 @@ pub fn extract_retry_after(response: &reqwest::Response, attempt: Option<u32>) -
     None
 }
 
+/// Formats a raw Roblox cookie value into a valid HTTP Cookie header string.
 #[must_use]
 pub fn build_roblox_cookie_header(cookie_value: &str) -> String {
     let normalized = normalize_roblox_cookie(cookie_value);
@@ -123,7 +135,11 @@ pub fn build_roblox_cookie_header(cookie_value: &str) -> String {
     }
 }
 
-// Sanitize raw Roblox cookie strings by stripping headers and quotes.
+/// Sanitizes raw Roblox cookie strings by stripping headers and quotes.
+///
+/// Users frequently paste cookies with the `.ROBLOSECURITY=` prefix or enclosed
+/// in browser-specific quotes. This strips all of that away so we are left with
+/// just the raw auth token.
 #[must_use]
 pub fn normalize_roblox_cookie(cookie_value: &str) -> String {
     let trimmed = cookie_value.trim().trim_matches(|c| c == '\'' || c == '"');
@@ -144,7 +160,11 @@ pub fn normalize_roblox_cookie(cookie_value: &str) -> String {
     normalized.trim().to_string()
 }
 
-// Sanitize file names by replacing invalid characters with underscores.
+/// Sanitizes file names by replacing invalid characters with underscores.
+///
+/// Prevents path traversal or OS-level file creation errors when saving
+/// assets downloaded from Roblox (since user-generated asset names can contain
+/// arbitrary characters).
 #[must_use]
 pub fn sanitize_filename(filename: &str) -> String {
     let mut safe = String::new();
@@ -167,6 +187,9 @@ pub fn sanitize_filename(filename: &str) -> String {
     }
 }
 
+/// Recursively deletes all files and folders inside the given directory path.
+///
+/// Used to wipe the `downloads` cache before a new patching run starts.
 pub async fn clear_downloads_directory(dir_path: &Path) -> Result<bool, String> {
     if !dir_path.exists() {
         if let Err(e) = tokio::fs::create_dir_all(dir_path).await {
@@ -194,30 +217,41 @@ pub async fn clear_downloads_directory(dir_path: &Path) -> Result<bool, String> 
     }
 }
 
-// Detect updated cookies provided mid-request and synchronize them with the frontend.
+/// Detects updated cookies provided mid-request and synchronizes them with the frontend.
+///
+/// Roblox occasionally rotates the `.ROBLOSECURITY` token via a `Set-Cookie` header
+/// on API responses. This catches the new token and immediately blasts it to the React
+/// UI so the user does not get silently logged out.
 pub fn check_for_roblosecurity_update(app: &AppHandle, resp: &Response, original_cookie: &str) {
+    let original_val = original_cookie.strip_prefix(".ROBLOSECURITY=").unwrap_or(original_cookie);
+
     for val in &resp.headers().get_all(reqwest::header::SET_COOKIE) {
         if let Ok(cookie_str) = val.to_str() {
-            if cookie_str.starts_with(".ROBLOSECURITY=") {
-                let parts: Vec<&str> = cookie_str.split(';').collect();
-                let new_cookie = parts[0].strip_prefix(".ROBLOSECURITY=").unwrap_or("");
-                let original_val =
-                    original_cookie.strip_prefix(".ROBLOSECURITY=").unwrap_or(original_cookie);
+            if let Some(rest) = cookie_str.strip_prefix(".ROBLOSECURITY=") {
+                // Truncate at the first semicolon to isolate the token value.
+                let new_cookie = rest.split_once(';').map_or(rest, |(v, _)| v);
                 if !new_cookie.is_empty() && new_cookie != original_val {
-                    let _ = app.emit(
-                        "roblosecurity-updated",
-                        serde_json::json!({
-                            "oldCookie": original_val,
-                            "newCookie": new_cookie
-                        }),
-                    );
+                    let _ = app.emit("roblosecurity-updated", new_cookie);
                 }
             }
         }
     }
 }
 
+/// Digs through an arbitrary JSON error payload to find a human-readable message.
+///
+/// Different Roblox endpoints return errors in wildly different JSON structures
+/// (`errors[0].message`, `userFacingMessage`, plain strings, etc). This attempts
+/// to gracefully extract the most relevant string for the user.
 pub fn extract_human_error(err_val: &serde_json::Value, status: Option<u16>) -> String {
+    extract_human_error_inner(err_val, status, 0)
+}
+
+fn extract_human_error_inner(
+    err_val: &serde_json::Value,
+    status: Option<u16>,
+    depth: u8,
+) -> String {
     if let Some(err_str) = err_val.as_str() {
         return err_str.to_string();
     }
@@ -249,11 +283,14 @@ pub fn extract_human_error(err_val: &serde_json::Value, status: Option<u16>) -> 
         }
     }
 
-    if let Some(obj) = err_val.as_object() {
-        for (_, value) in obj {
-            let nested = extract_human_error(value, None);
-            if !nested.starts_with("HTTP ") && nested != "Unknown error occurred" {
-                return nested;
+    // Limit recursion depth to prevent stack overflow on adversarial input.
+    if depth < 3 {
+        if let Some(obj) = err_val.as_object() {
+            for (_, value) in obj {
+                let nested = extract_human_error_inner(value, None, depth + 1);
+                if !nested.starts_with("HTTP ") && nested != "Unknown error occurred" {
+                    return nested;
+                }
             }
         }
     }

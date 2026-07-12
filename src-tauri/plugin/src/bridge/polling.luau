@@ -6,6 +6,14 @@
 -- These variables are globals provided by the environment or other concatenated files
 -- HttpService, decodeJsonResponseBody, logToPlugin, discoverServer, setPluginGuiStatus,
 -- scanRunning, patchRunning, scan, applyPatches, BASE_URL
+--- Manages the main communication loops with the daemon.
+---
+--- This module runs three concurrent loops:
+--- 1. Discovery/Health: Keeps the connection alive and reconnects if dropped.
+--- 2. Scan Poller: Waits for the daemon to request a workspace scan.
+--- 3. Patch Poller: Waits for targeted replacements from the daemon.
+
+--- Helper to hit a polling endpoint and return the parsed JSON response.
 local function requestPollEndpoint(baseUrl: string, endpoint: string): (boolean, any, number?)
 	local ok, response = pcall(function()
 		return HttpService:RequestAsync({
@@ -33,6 +41,9 @@ end
 -- Guard against concurrent fetchApiDumpProperties calls (e.g. rapid daemon reconnects).
 local fetchingApiDump = false
 
+--- Pulls the latest API dump from GitHub to power the property scanner.
+---
+--- If this fails, we fall back to the bundled API dump data in `properties.luau`.
 local function fetchApiDumpProperties()
 	if fetchingApiDump then
 		return
@@ -201,6 +212,9 @@ local function fetchApiDumpProperties()
 	fetchingApiDump = false
 end
 
+--- Starts the background polling loops.
+---
+--- Idempotent; if polling is already running, this does nothing.
 function startPolling(): ()
 	if polling then
 		return

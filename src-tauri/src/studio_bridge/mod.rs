@@ -1,4 +1,8 @@
-// Initialize the HTTP server interfacing locally with the Roblox Studio plugin.
+//! Local HTTP server that interfaces with the Roblox Studio plugin.
+//!
+//! Because Roblox Studio cannot initiate arbitrary WebSockets or IPC, it relies
+//! on a long-polling HTTP client. This module binds an ephemeral local port and
+//! routes incoming scan data, status checks, and patch instructions.
 pub mod messages;
 pub mod middleware;
 pub mod server;
@@ -52,6 +56,9 @@ pub(crate) fn active_bridge_port() -> &'static RwLock<Option<u16>> {
     ACTIVE_BRIDGE_PORT.get_or_init(|| RwLock::new(None))
 }
 
+/// Toggles whether the plugin should skip checking if the user actually owns the assets.
+///
+/// This is used during testing or offline spoofing scenarios.
 #[tauri::command]
 #[specta::specta]
 #[must_use]
@@ -63,6 +70,10 @@ pub async fn set_bridge_skip_owned_check(skip_owned: bool) -> bool {
     false
 }
 
+/// Pushes a batch of replacement mappings to the bridge state.
+///
+/// If scan records are already present, this immediately generates patch instructions
+/// so the plugin can fetch them on its next poll cycle.
 #[must_use]
 pub async fn queue_replace_mappings_internal(mappings: Vec<Value>) -> bool {
     let Some(data) = bridge_data() else {
@@ -82,6 +93,7 @@ pub async fn queue_replace_mappings_internal(mappings: Vec<Value>) -> bool {
 
 use messages::AssetServerStateData;
 
+/// The shared state injected into all axum route handlers.
 #[derive(Clone)]
 pub struct AppState {
     pub data: Arc<RwLock<AssetServerStateData>>,
@@ -90,7 +102,8 @@ pub struct AppState {
     pub app_handle: AppHandle,
 }
 
-pub async fn start_server(_app_handle: AppHandle) {
+/// Bootstraps the local HTTP server and binds to the first available port.
+pub async fn start_server(app_handle: AppHandle) {
     let data = Arc::new(RwLock::new(AssetServerStateData::default()));
     let _ = BRIDGE_DATA.set(Arc::clone(&data));
     let Some((listener, addr)) = bind_available_listener().await else {
@@ -101,7 +114,7 @@ pub async fn start_server(_app_handle: AppHandle) {
         data: Arc::clone(&data),
         bridge_port: addr.port(),
         started_at: SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis(),
-        app_handle: _app_handle.clone(),
+        app_handle: app_handle.clone(),
     };
     *active_bridge_port().write().await = Some(addr.port());
 
@@ -194,6 +207,7 @@ pub async fn start_server(_app_handle: AppHandle) {
     });
 }
 
+/// Returns the ephemeral port the bridge server successfully bound to.
 #[tauri::command]
 #[specta::specta]
 #[must_use]
@@ -201,7 +215,9 @@ pub async fn get_plugin_bridge_port() -> Option<u16> {
     *active_bridge_port().read().await
 }
 
-// Iterate over a small port range to accommodate multiple Studio instances.
+/// Iterates over a small port range to accommodate multiple Studio instances.
+///
+/// We try 14285-14289 first, and if all are taken, we ask the OS for any free port.
 async fn bind_available_listener() -> Option<(tokio::net::TcpListener, SocketAddr)> {
     for port in PLUGIN_PORT_START..=PLUGIN_PORT_END {
         let addr = SocketAddr::from(([127, 0, 0, 1], port));
@@ -218,6 +234,7 @@ async fn bind_available_listener() -> Option<(tokio::net::TcpListener, SocketAdd
     None
 }
 
+/// Checks if the Studio plugin has polled the daemon recently.
 #[tauri::command]
 #[specta::specta]
 #[must_use]
@@ -243,6 +260,7 @@ pub async fn get_studio_health_status() -> AnyValue {
     }))
 }
 
+/// Returns the current state of asset discovery for the frontend UI.
 #[tauri::command]
 #[specta::specta]
 #[must_use]

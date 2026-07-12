@@ -15,6 +15,8 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 #[cfg(target_os = "windows")]
 use std::process::Command;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::OnceLock;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 #[cfg(target_os = "windows")]
@@ -36,11 +38,18 @@ pub const BROWSER_COOKIE_SCAN_BYTES: u64 = 25 * 1024 * 1024;
 
 pub const PROFILE_COOKIE_SERVICE: &str = "ISpooferMotion.RobloxProfileCookie";
 
+fn roblosecurity_regex() -> &'static Regex {
+    static REGEX: OnceLock<Regex> = OnceLock::new();
+    REGEX.get_or_init(|| {
+        Regex::new(r#"(?i)_\|WARNING:-DO-NOT-SHARE-THIS\.--Sharing-this-will-allow-someone-to-log-in-as-you-and-to-steal-your-ROBUX-and-items\.\|_[^\s"';,]+"#)
+            .expect("Failed to compile ROBLOSECURITY regex")
+    })
+}
+
 #[must_use]
 pub fn extract_roblox_cookie(raw_value: &str) -> Option<String> {
     // Extract the ROBLOSECURITY token using regex as a reliable parsing method.
-    let re = Regex::new(r#"(?i)_\|WARNING:-DO-NOT-SHARE-THIS\.--Sharing-this-will-allow-someone-to-log-in-as-you-and-to-steal-your-ROBUX-and-items\.\|_[^\s"';,]+"#).ok()?;
-    re.find(raw_value).map(|m| m.as_str().to_string())
+    roblosecurity_regex().find(raw_value).map(|m| m.as_str().to_string())
 }
 
 #[cfg(not(target_os = "windows"))]
@@ -339,10 +348,13 @@ impl Drop for TempDb {
 // copy the db + WAL/SHM sidecars to temp dir so we can read in-flight cookies even
 // when the browser is running (Chrome uses WAL mode; without the -wal file the copy
 // only sees data from the last checkpoint and misses recent cookies)
+static TEMP_COUNTER: AtomicUsize = AtomicUsize::new(0);
+
 fn copy_cookie_db(path: &Path) -> Option<TempDb> {
     let ts = SystemTime::now().duration_since(UNIX_EPOCH).ok()?.as_millis();
     let pid = std::process::id();
-    let temp_db = std::env::temp_dir().join(format!("ism-cookies-{pid}-{ts}.sqlite"));
+    let count = TEMP_COUNTER.fetch_add(1, Ordering::Relaxed);
+    let temp_db = std::env::temp_dir().join(format!("ism-cookies-{pid}-{ts}-{count}.sqlite"));
     std::fs::copy(path, &temp_db).ok()?;
 
     // copy WAL sidecar so SQLite sees all recent writes (Chrome WAL mode)
@@ -470,7 +482,6 @@ pub fn get_cookie_from_browser_profiles() -> Option<String> {
     })
 }
 
-#[allow(clippy::needless_return)]
 pub fn get_cookie_from_roblox_studio_inner(
     #[allow(unused_variables)] user_id: Option<String>,
 ) -> crate::error::Result<Option<String>> {
@@ -519,7 +530,6 @@ pub fn get_cookie_from_roblox_studio_inner(
                 return Ok(Some(cookie));
             }
         }
-        return Ok(None);
     }
 
     #[cfg(target_os = "macos")]
@@ -534,7 +544,6 @@ pub fn get_cookie_from_roblox_studio_inner(
                 return Ok(Some(cookie));
             }
         }
-        return Ok(None);
     }
 
     #[cfg(target_os = "linux")]
@@ -553,13 +562,9 @@ pub fn get_cookie_from_roblox_studio_inner(
                 }
             }
         }
-        return Ok(None);
     }
 
-    #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
-    {
-        return Ok(None);
-    }
+    Ok(None)
 }
 
 pub fn profile_cookie_entry(user_id: &str) -> crate::error::Result<Entry> {

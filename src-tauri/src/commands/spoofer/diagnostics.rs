@@ -31,7 +31,7 @@ pub async fn prune_transfer_diagnostics(dir_path: &Path) {
             }
         }
 
-        dirs.sort_by(|a, b| b.file_name().cmp(&a.file_name()));
+        dirs.sort_by(|a, b| b.cmp(a));
 
         if dirs.len() > MAX_TRANSFER_DIAGNOSTICS {
             for dir_to_remove in dirs.iter().skip(MAX_TRANSFER_DIAGNOSTICS) {

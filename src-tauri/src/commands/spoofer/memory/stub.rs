@@ -1,7 +1,6 @@
-// No-op implementations for macOS/Linux; memory injection requires Windows.
-#[tauri::command]
-#[specta::specta]
-pub const fn find_studio_process() -> Option<u32> {
+// No-op stub: memory injection is Windows-only.
+#[must_use]
+pub fn find_studio_process() -> Option<u32> {
     None
 }
 

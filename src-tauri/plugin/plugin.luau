@@ -26,6 +26,15 @@ local BASE_URL: any
 --#include "src/bridge/discovery.luau"
 --#include "src/bridge/polling.luau"
 
+-- Runtime assertions to validate the build step included modules in the correct order
+assert(
+	MAX_SCRIPT_SOURCE_BYTES ~= nil,
+	"Include order violation: config/runtime.luau not loaded early"
+)
+assert(normalizeAssetId ~= nil, "Include order violation: util/assets.luau not loaded")
+assert(getMaxRecordValueBytes ~= nil, "Include order violation: scan/properties.luau not loaded")
+assert(applyPatch ~= nil, "Include order violation: patch/patcher.luau not loaded")
+
 print("[ISpooferMotion] Plugin loaded. Starting background connection to Desktop App...")
 startPolling()
 

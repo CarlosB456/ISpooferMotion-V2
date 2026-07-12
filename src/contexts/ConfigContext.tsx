@@ -26,8 +26,13 @@ interface ConfigContextType {
 
 const Context = createContext<ConfigContextType | undefined>(undefined);
 
-// Wraps the config store and initializes Tauri IPC listeners for the spoofer.
-// Sits near the root to ensure listeners are always mounted.
+/**
+ * Wraps the config store and initializes Tauri IPC listeners for the spoofer.
+ *
+ * Sits near the root to ensure IPC event listeners (like progress or logs) are always mounted
+ * and actively pushing state down into the `spooferStore` even when the user navigates away
+ * from the main execution view.
+ */
 export const ConfigProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const configState = useConfigStore();
 

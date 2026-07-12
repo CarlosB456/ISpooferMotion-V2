@@ -23,7 +23,12 @@ const getInitialLang = () => {
   return 'en';
 };
 
-// Zustand store for tracking current app language.
+/**
+ * Global Zustand store for tracking the active application language.
+ *
+ * Drives all i18n features in the UI. When updated, React components instantly
+ * re-render with the new translations.
+ */
 export const useLanguage = create<LanguageState>((set, get) => ({
   lang: getInitialLang(),
   setLang: (newLang: string) => {

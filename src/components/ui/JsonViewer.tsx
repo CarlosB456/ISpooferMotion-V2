@@ -12,6 +12,13 @@ interface JsonViewerProps {
   level?: number;
 }
 
+/**
+ * A recursive, interactive JSON viewer component.
+ *
+ * Built with Framer Motion for smooth expand/collapse animations. It's used
+ * heavily in the debug console to inspect raw API responses and payload structures
+ * without cluttering the UI.
+ */
 export function JsonViewer({ data, name, defaultExpanded = false, level = 0 }: JsonViewerProps) {
   const { t } = useLanguage();
 

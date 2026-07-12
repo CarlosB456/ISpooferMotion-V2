@@ -5,7 +5,11 @@ use axum::{
     response::Response,
 };
 
-// Enforce JSON for POST requests to ensure content-type consistency.
+/// Enforces JSON Content-Type for all incoming POST requests.
+///
+/// Studio plugins send payloads as JSON, so any POST request missing
+/// the appropriate `application/json` header is immediately rejected
+/// with a 415 Unsupported Media Type.
 pub async fn require_json_for_post(req: Request, next: Next) -> Result<Response, StatusCode> {
     if req.method() == Method::POST {
         let has_body = req

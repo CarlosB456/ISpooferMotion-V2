@@ -9,6 +9,12 @@ import { useLanguage } from '../../contexts/LanguageContext';
 import { useSpooferStore } from '../../stores/spooferStore';
 import { appendSpoofingLog } from '../../utils/spoofingLogs';
 
+/**
+ * Renders the final spoofing results and any error logs after a job completes.
+ *
+ * Provides quick actions to copy the mapping table or directly inject the spoofed IDs
+ * back into a raw `.rbxlx` file if the user didn't use the Studio plugin.
+ */
 export default function ResultsModal({
   isOpen,
   onClose,

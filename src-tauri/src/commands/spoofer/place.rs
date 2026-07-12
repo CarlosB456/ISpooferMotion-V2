@@ -126,17 +126,21 @@ pub async fn get_asset_creator_for_asset(
         ));
     }
 
-    let client = reqwest::Client::builder().timeout(Duration::from_secs(8)).build()?;
+    let client = crate::utils::get_http_client();
     let url = format!("https://apis.roblox.com/assets/user-auth/v1/assets/{asset_id}");
-    let resp = client
-        .get(&url)
-        .header(reqwest::header::COOKIE, &cookie_header)
-        .header(reqwest::header::USER_AGENT, "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36")
-        .header(reqwest::header::ACCEPT, "*/*")
-        .header("Origin", "https://create.roblox.com")
-        .header("Referer", "https://create.roblox.com/")
-        .send()
-        .await?;
+    let resp = tokio::time::timeout(
+        Duration::from_secs(8),
+        client
+            .get(&url)
+            .header(reqwest::header::COOKIE, &cookie_header)
+            .header(reqwest::header::USER_AGENT, "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36")
+            .header(reqwest::header::ACCEPT, "*/*")
+            .header("Origin", "https://create.roblox.com")
+            .header("Referer", "https://create.roblox.com/")
+            .send()
+    )
+    .await
+    .map_err(|_| crate::error::AppError::Custom("Request timed out".into()))??;
 
     crate::utils::check_for_roblosecurity_update(&app, &resp, &cookie_header);
 
@@ -174,15 +178,19 @@ async fn get_asset_creator_from_economy(
     asset_id: &str,
     cookie_header: &str,
 ) -> Option<(String, String)> {
-    let client = reqwest::Client::builder().timeout(Duration::from_secs(8)).build().ok()?;
+    let client = crate::utils::get_http_client();
     let url = format!("https://economy.roblox.com/v2/assets/{asset_id}/details");
-    let resp = client
-        .get(&url)
-        .header(reqwest::header::COOKIE, cookie_header)
-        .header(reqwest::header::USER_AGENT, "RobloxStudio/WinInet")
-        .send()
-        .await
-        .ok()?;
+    let resp = tokio::time::timeout(
+        Duration::from_secs(8),
+        client
+            .get(&url)
+            .header(reqwest::header::COOKIE, cookie_header)
+            .header(reqwest::header::USER_AGENT, "RobloxStudio/WinInet")
+            .send(),
+    )
+    .await
+    .ok()?
+    .ok()?;
     if !resp.status().is_success() {
         return None;
     }
@@ -240,7 +248,7 @@ pub async fn get_place_id_from_creator(
 
     // Check persistent cache first
     if let Some(ref path) = cache_path {
-        if let Ok(data) = std::fs::read_to_string(path) {
+        if let Ok(data) = tokio::fs::read_to_string(path).await {
             if let Ok(json) = serde_json::from_str::<serde_json::Value>(&data) {
                 if let Some(places) = json.get(&cache_key).and_then(|p| p.as_array()) {
                     let cached_places: Vec<String> = places
@@ -444,28 +452,13 @@ pub async fn get_place_id_from_creator(
 
     if let Some(ref target_name) = place_name {
         let lower_target = target_name.to_lowercase();
-        root_places.sort_by(|(_, name_a), (_, name_b)| {
-            let a_lower = name_a.to_lowercase();
-            let b_lower = name_b.to_lowercase();
-            let a_exact = a_lower == lower_target;
-            let b_exact = b_lower == lower_target;
-            if a_exact && !b_exact {
-                return std::cmp::Ordering::Less;
-            }
-            if !a_exact && b_exact {
-                return std::cmp::Ordering::Greater;
-            }
-
-            let a_contains = a_lower.contains(&lower_target);
-            let b_contains = b_lower.contains(&lower_target);
-            if a_contains && !b_contains {
-                return std::cmp::Ordering::Less;
-            }
-            if !a_contains && b_contains {
-                return std::cmp::Ordering::Greater;
-            }
-
-            std::cmp::Ordering::Equal
+        root_places.sort_by_cached_key(|(_, name)| {
+            let lower = name.to_lowercase();
+            let exact = lower == lower_target;
+            let contains = lower.contains(&lower_target);
+            // Sorting uses boolean tuple comparison: false < true.
+            // By inverting the booleans, we ensure true (exact match) sorts before false.
+            (!exact, !contains)
         });
     }
 
@@ -473,7 +466,8 @@ pub async fn get_place_id_from_creator(
 
     if !place_ids.is_empty() {
         if let Some(ref path) = cache_path {
-            let mut cache_json: serde_json::Value = std::fs::read_to_string(path)
+            let mut cache_json: serde_json::Value = tokio::fs::read_to_string(path)
+                .await
                 .ok()
                 .and_then(|s| serde_json::from_str(&s).ok())
                 .unwrap_or_else(|| serde_json::json!({}));
@@ -481,7 +475,7 @@ pub async fn get_place_id_from_creator(
             if let Some(obj) = cache_json.as_object_mut() {
                 obj.insert(cache_key, serde_json::json!(place_ids));
                 if let Ok(new_data) = serde_json::to_string(&cache_json) {
-                    let _ = std::fs::write(path, new_data);
+                    let _ = tokio::fs::write(path, new_data).await;
                 }
             }
         }

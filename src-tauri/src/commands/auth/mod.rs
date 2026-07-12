@@ -7,11 +7,42 @@ pub use cookies::{
 };
 use regex::Regex;
 use reqwest::header::{HeaderMap, HeaderValue, COOKIE, USER_AGENT};
+use serde::Deserialize;
+use std::sync::OnceLock;
 use tauri::AppHandle;
 pub use validation::{
     fetch_csrf_token_internal, force_refresh_csrf_token, ApiKeyOwnerDetectResult, AuthResponse,
     RobloxGroup, RobloxUserInfo, ROBLOX_USER_AGENT,
 };
+
+#[derive(Deserialize)]
+struct AvatarResponse {
+    data: Vec<AvatarItem>,
+}
+
+#[derive(Deserialize)]
+struct AvatarItem {
+    #[serde(rename = "imageUrl")]
+    image_url: String,
+}
+
+#[derive(Deserialize)]
+struct GroupResponse {
+    data: Vec<RobloxGroup>,
+}
+
+#[derive(Deserialize)]
+struct GroupIconsResponse {
+    data: Vec<GroupIconItem>,
+}
+
+#[derive(Deserialize)]
+struct GroupIconItem {
+    #[serde(rename = "targetId")]
+    target_id: i64,
+    #[serde(rename = "imageUrl")]
+    image_url: String,
+}
 
 #[tauri::command]
 #[specta::specta]
@@ -66,16 +97,21 @@ pub async fn get_authenticated_user_id(
 ) -> crate::error::Result<String> {
     // Verify cookie validity via the users endpoint and fetch the user ID.
     let url = "https://users.roblox.com/v1/users/authenticated";
-    let cookie_header_str = if cookie.starts_with(".ROBLOSECURITY=") {
-        cookie.clone()
+    let cookie_val = cookie.trim().replace(['\r', '\n'], "");
+    let cookie_header_str = if cookie_val.starts_with(".ROBLOSECURITY=") {
+        cookie_val
     } else {
-        format!(".ROBLOSECURITY={cookie}")
+        format!(".ROBLOSECURITY={cookie_val}")
     };
 
     let client = crate::utils::get_http_client();
 
     let mut headers = HeaderMap::new();
-    headers.insert(COOKIE, HeaderValue::from_str(&cookie_header_str)?);
+    headers.insert(
+        COOKIE,
+        HeaderValue::from_str(&cookie_header_str)
+            .map_err(|e| crate::error::AppError::Custom(format!("Invalid cookie header: {e}")))?,
+    );
     headers.insert(USER_AGENT, HeaderValue::from_static(ROBLOX_USER_AGENT));
 
     let res = client
@@ -145,17 +181,15 @@ pub async fn get_roblox_user_avatar(user_id: String) -> crate::error::Result<Str
         return Err(format!("Failed to get avatar thumbnail ({})", res.status()).into());
     }
 
-    let json: serde_json::Value = res
+    let json: AvatarResponse = res
         .json()
         .await
         .map_err(|e| crate::error::AppError::Custom(format!("Invalid JSON: {e}")))?;
 
-    let image_url = json["data"]
-        .as_array()
-        .and_then(|arr| arr.first())
-        .and_then(|item| item["imageUrl"].as_str())
-        .ok_or_else(|| crate::error::AppError::Custom("No avatar image URL found".to_string()))?
-        .to_string();
+    let image_url =
+        json.data.into_iter().next().map(|item| item.image_url).ok_or_else(|| {
+            crate::error::AppError::Custom("No avatar image URL found".to_string())
+        })?;
 
     Ok(image_url)
 }
@@ -167,16 +201,21 @@ pub async fn get_manageable_groups(
     cookie: String,
 ) -> crate::error::Result<Vec<RobloxGroup>> {
     let url = "https://develop.roblox.com/v1/user/groups/canmanage";
-    let cookie_header_str = if cookie.starts_with(".ROBLOSECURITY=") {
-        cookie.clone()
+    let cookie_val = cookie.trim().replace(['\r', '\n'], "");
+    let cookie_header_str = if cookie_val.starts_with(".ROBLOSECURITY=") {
+        cookie_val
     } else {
-        format!(".ROBLOSECURITY={cookie}")
+        format!(".ROBLOSECURITY={cookie_val}")
     };
 
     let client = crate::utils::get_http_client();
 
     let mut headers = HeaderMap::new();
-    headers.insert(COOKIE, HeaderValue::from_str(&cookie_header_str)?);
+    headers.insert(
+        COOKIE,
+        HeaderValue::from_str(&cookie_header_str)
+            .map_err(|e| crate::error::AppError::Custom(format!("Invalid cookie header: {e}")))?,
+    );
     headers.insert(USER_AGENT, HeaderValue::from_static(ROBLOX_USER_AGENT));
 
     let res = client
@@ -192,25 +231,12 @@ pub async fn get_manageable_groups(
         return Err(format!("Failed to get manageable groups ({})", res.status()).into());
     }
 
-    let json: serde_json::Value = res
+    let json: GroupResponse = res
         .json()
         .await
         .map_err(|e| crate::error::AppError::Custom(format!("Invalid JSON: {e}")))?;
 
-    let groups = json["data"]
-        .as_array()
-        .map(|arr| {
-            arr.iter()
-                .filter_map(|item| {
-                    let id = item["id"].as_i64()?;
-                    let name = item["name"].as_str()?.to_string();
-                    Some(RobloxGroup { id, name })
-                })
-                .collect::<Vec<_>>()
-        })
-        .unwrap_or_default();
-
-    Ok(groups)
+    Ok(json.data)
 }
 
 #[tauri::command]
@@ -235,17 +261,17 @@ pub async fn get_group_icon(group_id: String) -> crate::error::Result<String> {
         return Err(format!("Failed to get group icon ({})", res.status()).into());
     }
 
-    let json: serde_json::Value = res
+    let json: GroupIconsResponse = res
         .json()
         .await
         .map_err(|e| crate::error::AppError::Custom(format!("Invalid JSON: {e}")))?;
 
-    let image_url = json["data"]
-        .as_array()
-        .and_then(|arr| arr.first())
-        .and_then(|item| item["imageUrl"].as_str())
-        .ok_or_else(|| crate::error::AppError::Custom("No group icon URL found".to_string()))?
-        .to_string();
+    let image_url = json
+        .data
+        .into_iter()
+        .next()
+        .map(|item| item.image_url)
+        .ok_or_else(|| crate::error::AppError::Custom("No group icon URL found".to_string()))?;
 
     Ok(image_url)
 }
@@ -287,22 +313,24 @@ pub async fn get_group_icons_batch(
         return Err(format!("Failed to get group icons batch ({})", res.status()).into());
     }
 
-    let json: serde_json::Value = res
+    let json: GroupIconsResponse = res
         .json()
         .await
         .map_err(|e| crate::error::AppError::Custom(format!("Invalid JSON: {e}")))?;
 
-    if let Some(data) = json["data"].as_array() {
-        for item in data {
-            if let (Some(target_id), Some(image_url)) =
-                (item["targetId"].as_i64(), item["imageUrl"].as_str())
-            {
-                map.insert(target_id.to_string(), image_url.to_string());
-            }
-        }
+    for item in json.data {
+        map.insert(item.target_id.to_string(), item.image_url);
     }
 
     Ok(map)
+}
+
+fn opencloud_error_regex() -> &'static Regex {
+    static REGEX: OnceLock<Regex> = OnceLock::new();
+    REGEX.get_or_init(|| {
+        Regex::new(r"(?i)User\s+(\d+)\s+is\s+unauthorized")
+            .expect("Failed to compile OpenCloud error regex")
+    })
 }
 
 #[tauri::command]
@@ -361,9 +389,7 @@ pub async fn detect_opencloud_api_key_owner(
     }
 
     // Extract the user ID from the error message.
-    let re = Regex::new(r"(?i)User\s+(\d+)\s+is\s+unauthorized")
-        .map_err(|e| crate::error::AppError::Custom(format!("Regex error: {e}")))?;
-    if let Some(caps) = re.captures(&text) {
+    if let Some(caps) = opencloud_error_regex().captures(&text) {
         if let Some(owner) = caps.get(1) {
             return Ok(ApiKeyOwnerDetectResult {
                 ok: true,

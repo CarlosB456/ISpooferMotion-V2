@@ -1,5 +1,8 @@
-// Handle parsing asset references from Studio inputs using regex.
-#![allow(clippy::unwrap_used)]
+//! Heuristic parsing for asset references inside Studio inputs.
+//!
+//! Because Roblox Studio cannot reliably report asset IDs deeply embedded in script
+//! source code, rich text, or JSON strings, this module contains regex patterns and
+//! recursive string scanners to extract, classify, and validate them.
 use base64::{engine::general_purpose::STANDARD as B64, Engine as _};
 use regex::{Captures, Regex};
 use serde::{Deserialize, Serialize};
@@ -8,7 +11,7 @@ use std::collections::{HashMap, HashSet};
 
 use std::time::Instant;
 
-// Container for parsed assets sent to the UI.
+/// Stores extracted assets for a specific category (e.g., Sounds, Meshes).
 #[derive(Clone, Default, Serialize, Debug, specta::Type)]
 pub struct AssetStore {
     #[specta(type = Vec<String>)]
@@ -26,7 +29,10 @@ impl AssetStore {
     }
 }
 
-// Active state for the Studio bridge, tracking scan progress.
+/// The central state container for the Studio bridge daemon.
+///
+/// Keeps track of what the frontend has requested, the latest scan results,
+/// and pending patches waiting for the plugin to poll them.
 #[derive(Debug)]
 pub struct AssetServerStateData {
     pub request_sounds: bool,
@@ -91,10 +97,11 @@ pub struct StudioRecord {
     pub value: String,
 }
 
-// Match valid Roblox asset URLs or raw IDs.
+/// Returns a regex that matches valid Roblox asset URLs or raw numerical IDs.
 fn asset_id_pattern() -> &'static Regex {
     static RE: std::sync::OnceLock<Regex> = std::sync::OnceLock::new();
     RE.get_or_init(|| {
+        #[allow(clippy::unwrap_used)]
         Regex::new(
             r#"^(?i)(?:(?:https?://(?:www\.)?)?roblox\.com/(?:asset/?\?[^"'\s&]*?id=|library/)|create\.roblox\.com/(?:marketplace/)?|rbxassetid://|rbxasset://|rbxthumb://[^/]*/?)?(\d+)$"#,
         ).expect("Invalid asset id regex")
@@ -104,6 +111,7 @@ fn asset_id_pattern() -> &'static Regex {
 fn script_ref_pattern() -> &'static Regex {
     static RE: std::sync::OnceLock<Regex> = std::sync::OnceLock::new();
     RE.get_or_init(|| {
+        #[allow(clippy::unwrap_used)]
         Regex::new(
             r#"(?ix)(?:(?:https?://(?:www\.)?)?roblox\.com/asset/?\?[^"'\s&]*?id=|rbxassetid://|rbxthumb://[^/]*/?)?(\d{7,15})"#,
         ).expect("Invalid script reference regex")
@@ -115,6 +123,7 @@ fn script_rewrite_pattern() -> &'static Regex {
     RE.get_or_init(|| {
         // Minimum 7 digits matches script_ref_pattern - prevents 4–6 digit game constants
         // (HP values, dates, scores) from being incorrectly swapped.
+        #[allow(clippy::unwrap_used)]
         Regex::new(r#"(?ix)((?:(?:https?://(?:www\.)?)?roblox\.com/asset/?\?[^"'\s&]*?id=|rbxassetid://|rbxthumb://[^/]*/?)?)(\d{7,15})"#).expect("Invalid script rewrite regex")
     })
 }
@@ -122,6 +131,7 @@ fn script_rewrite_pattern() -> &'static Regex {
 fn table_block_pattern() -> &'static Regex {
     static RE: std::sync::OnceLock<Regex> = std::sync::OnceLock::new();
     RE.get_or_init(|| {
+        #[allow(clippy::unwrap_used)]
         Regex::new(r"(?ix)(?:(anim|sound|audio|music|mesh|texture|image|assetid)[a-zA-Z0-9_]*\s*(?:=|:)\s*\{)").expect("Invalid table block regex")
     })
 }
@@ -129,15 +139,17 @@ fn table_block_pattern() -> &'static Regex {
 fn rich_text_pattern() -> &'static Regex {
     static RE: std::sync::OnceLock<Regex> = std::sync::OnceLock::new();
     RE.get_or_init(|| {
+        #[allow(clippy::unwrap_used)]
         Regex::new(r#"(?i)<image\s*=\s*["']?(?:rbxassetid://)?(\d{4,15})["']?\s*/?>"#)
             .expect("Invalid rich text regex")
     })
 }
 
-// Parse require() or InsertService calls for dynamic asset loading.
+/// Returns a regex that captures runtime asset loads via `require`, `InsertService`, etc.
 fn runtime_load_pattern() -> &'static Regex {
     static RE: std::sync::OnceLock<Regex> = std::sync::OnceLock::new();
     RE.get_or_init(|| {
+        #[allow(clippy::unwrap_used)]
         Regex::new(
             r#"(?x)
             (?:
@@ -319,9 +331,13 @@ const IMAGE_KEYWORDS: &[&str] = &[
 const MESH_KEYWORDS: &[&str] = &["mesh", "hat", "gear", "accessory", "model", "asset", "catalog"];
 
 fn infer_category_from_line(line: &str) -> Option<&'static str> {
-    let lower = line.to_lowercase();
+    // Static regex avoids repeated compilation on the hot path.
+    static DIGIT_RE: std::sync::OnceLock<Regex> = std::sync::OnceLock::new();
+    #[allow(clippy::unwrap_used)]
+    let digit_re = DIGIT_RE.get_or_init(|| Regex::new(r"\d{4,15}").expect("invalid digit regex"));
 
-    let context: String = Regex::new(r"\d{4,15}").ok()?.replace_all(&lower, "").into_owned();
+    let lower = line.to_lowercase();
+    let context: String = digit_re.replace_all(&lower, "").into_owned();
 
     if ANIM_KEYWORDS.iter().any(|kw| context.contains(kw)) {
         return Some("animation");
@@ -420,13 +436,22 @@ fn extract_table_block_ids_with_context(source: &str) -> Vec<(String, Option<&'s
 }
 
 fn find_line_containing(source: &str, index: usize) -> &str {
-    let mut start = index;
     let bytes = source.as_bytes();
+    // Walk back to the start of this line.
+    let mut start = index;
     while start > 0 && bytes[start - 1] != b'\n' {
         start -= 1;
     }
+    // Walk forward to the end of this line.
     let mut end = index;
     while end < source.len() && bytes[end] != b'\n' && bytes[end] != b'\r' {
+        end += 1;
+    }
+    // Ensure the slice boundaries are on valid UTF-8 char boundaries.
+    while start > 0 && !source.is_char_boundary(start) {
+        start -= 1;
+    }
+    while end < source.len() && !source.is_char_boundary(end) {
         end += 1;
     }
     &source[start..end]
@@ -919,6 +944,17 @@ pub fn plan_patches(records: &[StudioRecord], mappings: &[Value]) -> Vec<Value> 
     let mut patches = Vec::new();
     let mut mesh_patches: HashMap<String, Value> = HashMap::new();
 
+    // Pre-compile bounded-replace regexes once per unique asset ID to avoid
+    // O(n * records) regex compilations inside the per-record loop.
+    let bounded_re_cache: HashMap<&str, Regex> = mapping_map
+        .keys()
+        .filter_map(|id| {
+            let pattern = format!(r"(?<![0-9]){}(?![0-9])", regex::escape(id));
+            #[allow(clippy::unwrap_used)]
+            Regex::new(&pattern).ok().map(|re| (*id, re))
+        })
+        .collect();
+
     for record in records {
         if matches!(
             record.property.as_str(),
@@ -965,15 +1001,20 @@ pub fn plan_patches(records: &[StudioRecord], mappings: &[Value]) -> Vec<Value> 
             continue;
         }
 
+        // Use the pre-compiled bounded regex to avoid substring corruption.
+        // Falls back to plain replace if the regex was not built (should not happen).
+        let do_bounded_replace = |value: &str| -> String {
+            bounded_re_cache
+                .get(asset_id)
+                .map(|re| re.replace_all(value, *new_id).into_owned())
+                .unwrap_or_else(|| value.replace(asset_id, new_id))
+        };
+
         if record.property.starts_with("__Attribute__:") {
             let attr_name = &record.property["__Attribute__:".len()..];
-            // Use bounded replacement to avoid substring corruption: e.g. replacing "123" must
-            // not corrupt "123456". Match the ID only when not preceded/followed by another digit.
-            let id_pattern = format!(r"(?<![0-9]){}(?![0-9])", regex::escape(asset_id));
-            let replaced_str = Regex::new(&id_pattern)
-                .map(|re| re.replace_all(&record.value, *new_id).into_owned())
-                .unwrap_or_else(|_| record.value.replace(asset_id, new_id));
+            let replaced_str = do_bounded_replace(&record.value);
             let replaced_val = if replaced_str.chars().all(|c| c.is_ascii_digit()) {
+                #[allow(clippy::unwrap_used)]
                 Value::Number(replaced_str.parse::<u64>().unwrap_or(0).into())
             } else {
                 Value::String(replaced_str)
@@ -988,18 +1029,12 @@ pub fn plan_patches(records: &[StudioRecord], mappings: &[Value]) -> Vec<Value> 
             continue;
         }
 
-        // Use bounded replacement to avoid substring corruption (e.g. replacing "123" inside
-        // "rbxassetid://123456" would produce a malformed URL with plain str::replace).
-        let id_pattern = format!(r"(?<![0-9]){}(?![0-9])", regex::escape(asset_id));
-        let replaced_value = Regex::new(&id_pattern)
-            .map(|re| re.replace_all(&record.value, *new_id).into_owned())
-            .unwrap_or_else(|_| record.value.replace(asset_id, new_id));
         patches.push(json!({
             "action": "setProperty",
             "token": record.token,
             "fullName": record.full_name,
             "property": record.property,
-            "value": replaced_value
+            "value": do_bounded_replace(&record.value)
         }));
     }
 

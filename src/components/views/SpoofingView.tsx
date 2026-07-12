@@ -6,7 +6,6 @@ import {
   ModalContent,
   ModalFooter,
   ModalHeader,
-  MultiSelectDropdown,
   pageVariants,
 } from '@codycon/ism-library';
 import { invoke } from '@tauri-apps/api/core';
@@ -17,11 +16,6 @@ import { ArrowDownUp, Settings2, ShieldAlert, SlidersHorizontal, Wand2 } from 'l
 import { useEffect, useRef, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
-import AnimationIcon from '../../assets/roblox_icons/Animation.png';
-import DecalIcon from '../../assets/roblox_icons/Decal.png';
-import MeshIcon from '../../assets/roblox_icons/MeshPart.png';
-import SoundIcon from '../../assets/roblox_icons/Sound.png';
-import VideoIcon from '../../assets/roblox_icons/VideoFrame.png';
 import { useConfig } from '../../contexts/ConfigContext';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useStudioConnectionState } from '../../contexts/StudioConnectionContext';
@@ -83,6 +77,13 @@ type ApiKeyOwnerDetectResult = {
   message?: string;
 };
 
+/**
+ * The primary workspace view where the actual spoofing execution is orchestrated.
+ *
+ * This component acts as the main controller for the spoofing lifecycle. It validates the
+ * selected Roblox profile/cookie, performs sanity checks on the Open Cloud API key, enforces
+ * rate limit quotas for audio uploads, and bridges the UI state down to the Rust core engine.
+ */
 export default function SpoofingView() {
   const { t } = useLanguage();
   const { studioPlaceId } = useStudioConnectionState();
@@ -363,51 +364,6 @@ export default function SpoofingView() {
     setGroups(loadCachedGroups(userId));
   };
 
-  const spoofOptions = [
-    {
-      value: 'animation',
-      assetType: 'animation',
-      label: t('explorer.animations'),
-      icon: AnimationIcon,
-    },
-    {
-      value: 'audio',
-      assetType: 'audio',
-      label: t('explorer.audio'),
-      icon: SoundIcon,
-    },
-    {
-      value: 'images',
-      assetType: 'image',
-      label: t('explorer.images'),
-      icon: DecalIcon,
-    },
-    {
-      value: 'meshes',
-      assetType: 'mesh',
-      label: t('explorer.meshes'),
-      icon: MeshIcon,
-    },
-    {
-      value: 'videos',
-      assetType: 'video',
-      label: t('explorer.videos'),
-      icon: VideoIcon,
-    },
-  ];
-
-  const selectedSpoofTypes = spoofOptions
-    .filter((option) => config.spoofing[option.value as keyof typeof config.spoofing])
-    .map((option) => option.value);
-
-  const handleSpoofTypesChange = (values: string[]) => {
-    const changes: Record<string, boolean> = {};
-    spoofOptions.forEach((option) => {
-      changes[option.value] = values.includes(option.value);
-    });
-    updateCategory('spoofing', changes);
-  };
-
   const buildRetryRunContext = async (retry: PendingSpoofRetry): Promise<SpooferRunContext> => {
     const selectedUserId = retry.selectedUserId || config.spoofing.selectedUser;
     let cookie = config.spoofing.cookie.trim();
@@ -684,14 +640,7 @@ export default function SpoofingView() {
     // Populate store with asset metadata for other components to display.
     useSpooferStore.getState().setAssetMetadataMap(Object.fromEntries(assetInfoMap));
 
-    const selectedTypes = new Set(
-      spoofOptions
-        .filter((option) => selectedSpoofTypes.includes(option.value))
-        .map((option) => option.assetType),
-    );
-    selectedTypes.add('script_ref');
-
-    const shouldIncludeSelectedId = (id: string, enforceType: boolean) => {
+    const shouldIncludeId = (id: string) => {
       const isMockKFS = id.startsWith('RAW_KFS_');
       if (!isMockKFS) {
         const numId = parseInt(id, 10);
@@ -699,21 +648,20 @@ export default function SpoofingView() {
       }
       const type = assetInfoMap.get(id)?.type;
       if (type === 'plugin') return false;
-      if (enforceType && type && !selectedTypes.has(type)) return false;
       return true;
     };
 
     const finalAssetIds = new Set<string>();
     if (overrideAssetIds) {
       overrideAssetIds.forEach((id) => {
-        if (shouldIncludeSelectedId(id, false)) finalAssetIds.add(id);
+        if (shouldIncludeId(id)) finalAssetIds.add(id);
       });
     } else {
       extraIdsSet.forEach((id) => {
-        if (shouldIncludeSelectedId(id, false)) finalAssetIds.add(id);
+        if (shouldIncludeId(id)) finalAssetIds.add(id);
       });
       selectedAssetIds.forEach((id) => {
-        if (shouldIncludeSelectedId(id, true)) finalAssetIds.add(id);
+        if (shouldIncludeId(id)) finalAssetIds.add(id);
       });
     }
 
@@ -1089,12 +1037,6 @@ export default function SpoofingView() {
                     {t('spoof.options')}
                   </span>
                 </div>
-                <MultiSelectDropdown
-                  options={spoofOptions}
-                  values={selectedSpoofTypes}
-                  onChange={handleSpoofTypesChange}
-                  placeholder={t('spoof.selectPlaceholder')}
-                />
                 <div className="flex flex-col gap-1.5">
                   <label className="text-sm font-medium text-text-primary">
                     {t('settings.forcePlaceIds')}

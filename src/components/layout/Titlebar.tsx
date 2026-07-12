@@ -12,6 +12,13 @@ import { useLanguage } from '../../contexts/LanguageContext';
 import { useSpooferStore } from '../../stores/spooferStore';
 import { isTauriRuntime } from '../../utils/tauriRuntime';
 
+/**
+ * Custom window titlebar replacing the native OS frame.
+ *
+ * Provides window dragging, minimize/close controls, and a quick-access toolbar
+ * for toggling advanced settings and the debug console. Ensures visual consistency
+ * across Windows, macOS, and Linux.
+ */
 export default function Titlebar() {
   const { t } = useLanguage();
   const { config, updateConfig } = useConfig();

@@ -1,3 +1,5 @@
+//! OS-level filesystem and system interaction commands.
+
 #[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
 use std::process::Command;
@@ -15,6 +17,7 @@ pub struct NotificationOptions {
     pub body: Option<String>,
 }
 
+/// Opens the application's config directory in the native file explorer.
 #[tauri::command]
 #[specta::specta]
 pub async fn open_data_folder(app: AppHandle) -> crate::error::Result<bool> {
@@ -25,6 +28,7 @@ pub async fn open_data_folder(app: AppHandle) -> crate::error::Result<bool> {
     Ok(app.opener().open_path(data_dir.to_string_lossy().to_string(), None::<String>).is_ok())
 }
 
+/// Deletes all cached data (like downloaded thumbnails and audio files).
 #[tauri::command]
 #[specta::specta]
 pub async fn clear_app_cache(app: AppHandle) -> crate::error::Result<bool> {
@@ -36,6 +40,10 @@ pub async fn clear_app_cache(app: AppHandle) -> crate::error::Result<bool> {
     Ok(true)
 }
 
+/// Downloads an audio asset from Roblox to the local cache and returns its path.
+///
+/// The frontend uses this to stream audio via HTML5 `<audio>` since we can't
+/// reliably bypass Roblox's CORS policies directly in the browser context.
 #[tauri::command]
 #[specta::specta]
 pub async fn play_roblox_audio(
@@ -111,6 +119,7 @@ async fn download_roblox_audio(
     Ok(audio_path)
 }
 
+/// Triggers a native desktop notification.
 #[tauri::command]
 #[specta::specta]
 pub async fn show_notification(
@@ -127,6 +136,7 @@ pub async fn show_notification(
     Ok(true)
 }
 
+/// Spawns a detached native terminal window that tails the latest log file.
 #[tauri::command]
 #[specta::specta]
 pub async fn open_dev_console(app: AppHandle) -> crate::error::Result<bool> {
@@ -145,10 +155,12 @@ pub async fn open_dev_console(app: AppHandle) -> crate::error::Result<bool> {
     };
 
     entries.retain(|e| {
-        let name = e.file_name().to_string_lossy().to_string();
-        name.starts_with("debug-") && name.ends_with(".txt")
+        let name = e.file_name();
+        let name_str = name.to_string_lossy();
+        name_str.starts_with("debug-") && name_str.ends_with(".txt")
     });
-    entries.sort_by_key(|e| e.file_name().to_string_lossy().to_string());
+    // Sort by filename lexicographically (ISO date prefix makes this time-ordered).
+    entries.sort_by_key(tokio::fs::DirEntry::file_name);
 
     if let Some(latest) = entries.last() {
         let path = latest.path();
@@ -165,10 +177,13 @@ pub async fn open_dev_console(app: AppHandle) -> crate::error::Result<bool> {
 
         #[cfg(target_os = "macos")]
         {
-            let path_text = path.to_string_lossy();
+            // `quoted form of POSIX path` is AppleScript's own shell-safe path
+            // escaping — it handles all special characters including quotes,
+            // spaces, and backslashes without any manual string construction.
+            let posix_path = path.to_string_lossy().into_owned();
             let script = format!(
-                "tell application \"Terminal\" to do script \"tail -f \\\"{}\\\"\"",
-                path_text.replace("\\", "\\\\").replace("\"", "\\\"")
+                "tell application \"Terminal\" to do script \"tail -f \" & quoted form of POSIX path of \"{}\"",
+                posix_path.replace('\\', "/")
             );
             let mut cmd = Command::new("osascript");
             cmd.args(["-e", &script]);

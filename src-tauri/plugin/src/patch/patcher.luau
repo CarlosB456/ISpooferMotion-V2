@@ -1,8 +1,14 @@
+--!nolint UnknownGlobal
 --!nocheck
 --!nolint
 
 -- luacheck: ignore
 ---@diagnostic disable: undefined-global, unused-local, unused-function, lowercase-global
+--- Handles applying targeted replacement instructions received from the daemon.
+---
+--- The desktop app analyzes the scanned assets, finds matches in its local database
+--- or the community cache, and sends back an array of `Patch` objects telling us
+--- exactly what to change.
 local BLOCKED_SET_PROPERTIES: { [string]: boolean } = {
 	Parent = true,
 	ClassName = true,
@@ -19,6 +25,7 @@ local VALID_PATCH_ACTIONS: { [string]: boolean } = {
 	replaceMeshPart = true,
 }
 
+--- Cleans up raw ID strings or Roblox URLs into a plain numeric asset ID.
 local function normalizeAssetId(value: any): string?
 	if value == nil then
 		return nil
@@ -48,11 +55,16 @@ local function normalizeAssetId(value: any): string?
 	return assetId
 end
 
+--- Converts a raw ID or URL into a standard `rbxassetid://` URI.
 local function toAssetUri(value: any): string?
 	local assetId = normalizeAssetId(value)
 	return if assetId then "rbxassetid://" .. assetId else nil
 end
 
+--- Safely converts an incoming patch value into the type expected by the property.
+---
+--- For example, if the property expects a `Content` object (like a TextureId), this
+--- wraps the raw string before we try to assign it.
 local function coercePropertyValue(obj: Instance, property: string, value: any): any
 	local readOk, currentValue = pcall(function()
 		return (obj :: any)[property]
@@ -78,6 +90,7 @@ local function coercePropertyValue(obj: Instance, property: string, value: any):
 	return value
 end
 
+--- Ensures a property name is safe to use and not a malicious payload.
 local function validatePropertyName(property: any): (boolean, string?)
 	if type(property) ~= "string" or property == "" or #property > 200 then
 		return false, "Invalid patch property"
@@ -88,6 +101,7 @@ local function validatePropertyName(property: any): (boolean, string?)
 	return true, nil
 end
 
+--- Validates that an incoming raw JSON patch has all the required fields.
 local function normalizePatch(rawPatch: any): (Patch?, string?)
 	if type(rawPatch) ~= "table" then
 		return nil, "Patch must be a table"
@@ -110,7 +124,7 @@ local function normalizePatch(rawPatch: any): (Patch?, string?)
 		end
 		property = rawPatch.property
 	elseif rawPatch.action == "setProperty" or rawPatch.action == "replaceAttribute" then
-		-- These actions require a property name - fail early with a clear message.
+		-- These actions require a property name
 		return nil, "Patch action '" .. rawPatch.action .. "' requires a property name"
 	end
 
@@ -126,6 +140,7 @@ local function normalizePatch(rawPatch: any): (Patch?, string?)
 		nil
 end
 
+--- Safely decodes a JSON string into a Lua table, enforcing size limits.
 local function decodeJsonTable(value: any, label: string): (any?, string?)
 	if type(value) ~= "string" then
 		return nil, label .. " must be a JSON string"
@@ -144,6 +159,7 @@ local function decodeJsonTable(value: any, label: string): (any?, string?)
 	return decoded, nil
 end
 
+--- Ensures a decoded tags array is valid and within engine limits.
 local function validateTags(decoded: any): (boolean, string?)
 	if type(decoded) ~= "table" then
 		return false, "Invalid JSON tags"
@@ -172,6 +188,7 @@ local function validateTags(decoded: any): (boolean, string?)
 	return true, nil
 end
 
+--- Executes a single patch against the mapped Studio instance.
 local function applyPatch(patch: Patch): (boolean, string?)
 	local obj = getRegisteredObject(patch.token)
 	if not obj then
@@ -323,6 +340,8 @@ local function applyPatch(patch: Patch): (boolean, string?)
 			return false, "MeshPart has no parent"
 		end
 
+		-- Yield briefly before creating MeshPart to prevent Studio crashing from rapid mesh creation calls
+		task.wait()
 		local createOk, createdPart = pcall(function()
 			return AssetService:CreateMeshPartAsync(targetMeshUri, {
 				CollisionFidelity = meshObj.CollisionFidelity,
@@ -334,6 +353,11 @@ local function applyPatch(patch: Patch): (boolean, string?)
 		if createOk and createdPart and createdPart:IsA("BasePart") then
 			newPart = createdPart :: BasePart
 		else
+			logToPlugin(
+				"[Warning] [ISpooferMotion] AssetService:CreateMeshPartAsync failed for "
+					.. meshObj.Name
+					.. ". Falling back to Part+SpecialMesh (note: mesh physics/collisions will be degraded)."
+			)
 			local fallbackPart = Instance.new("Part")
 			local specialMesh = Instance.new("SpecialMesh")
 			specialMesh.MeshId = targetMeshUri
@@ -394,6 +418,10 @@ local function applyPatch(patch: Patch): (boolean, string?)
 	return false, "Unsupported patch action: " .. tostring(patch.action)
 end
 
+--- Processes a full batch of replacement instructions from the daemon.
+---
+--- Wraps the entire operation in a ChangeHistoryService recording so the user
+--- can hit Ctrl+Z to undo all the spoofed assets at once if they want.
 local function applyPatches(patches: any)
 	if patchRunning then
 		logToPlugin("[Warning] Patch batch already running")
@@ -407,7 +435,7 @@ local function applyPatches(patches: any)
 		logToPlugin(
 			"[Warning] Large patch batch: "
 				.. tostring(#patches)
-				.. " patches - processing in chunks"
+				.. " patches - processing will yield frequently"
 		)
 	end
 	if scanRunning then

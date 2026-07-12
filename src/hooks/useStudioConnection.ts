@@ -20,8 +20,14 @@ const readCachedStudioPlaceId = () => {
   }
 };
 
+/**
+ * Maintains the heartbeat connection between the React frontend and Roblox Studio.
+ *
+ * Implements exponential backoff when Studio is closed, and immediately ramps up
+ * polling when the user switches focus back to the app. Also caches the last known
+ * Place ID in LocalStorage so the UI doesn't look empty during brief disconnects.
+ */
 export function useStudioConnection() {
-  // Polls plugin bridge port to verify Studio connection.
   const [studioConnected, setStudioConnected] = useState(false);
   const [scanStatus, setScanStatus] = useState<ScanStatus | null>(null);
   const [studioPlaceId, setStudioPlaceId] = useState(readCachedStudioPlaceId);

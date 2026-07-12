@@ -26,6 +26,7 @@ export const ExplorerTreeNode = memo(function ExplorerTreeNode({
   setPreviewingAnimation,
   activeAssetFilters,
   playingAudioId,
+  initialExpanded = false,
 }: {
   node: RbxInstance;
   level: number;
@@ -38,9 +39,10 @@ export const ExplorerTreeNode = memo(function ExplorerTreeNode({
   setPreviewingAnimation: (value: { id: string; name: string } | null) => void;
   activeAssetFilters: string[];
   playingAudioId: string | null;
+  initialExpanded?: boolean;
 }) {
   const { t } = useLanguage();
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(initialExpanded);
   const [expandedAssetKey, setExpandedAssetKey] = useState<string | null>(null);
 
   const matchesFilter = (type: string) =>

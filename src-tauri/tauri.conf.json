@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "ISpooferMotion",
-  "version": "2.2.1",
+  "version": "2.3.0",
   "identifier": "ISpooferMotion-V2",
   "build": {
     "frontendDist": "../dist",
@@ -50,7 +50,9 @@
   "bundle": {
     "active": true,
     "createUpdaterArtifacts": true,
-    "resources": ["../dist-plugin/ISpooferMotion.rbxmx"],
+    "resources": [
+      "../dist-plugin/ISpooferMotion.rbxmx"
+    ],
     "windows": {
       "nsis": {
         "installerIcon": "assets/app_icon.ico",
@@ -68,12 +70,14 @@
   "plugins": {
     "deep-link": {
       "desktop": {
-        "schemes": ["ispoofermotion"]
+        "schemes": [
+          "ispoofermotion"
+        ]
       }
     },
     "updater": {
       "endpoints": [
-        "https://github.com/codycon/ISpooferMotion-V2/releases/latest/download/latest.json"
+        "https://github.com/ISpooferMotion/ISpooferMotion-V2/releases/latest/download/latest.json"
       ],
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDM4MzdCNUNFNjEwQTk5Q0QKUldUTm1RcGh6clUzT0hxaXlYR3BFK0tIck5jTDFrelgweFVaUDNHSG92TnpBWmJFTFd6MFQvdlYK"
     }

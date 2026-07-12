@@ -41,26 +41,39 @@ pub async fn save_renderer_settings(
 #[specta::specta]
 pub async fn load_profile_secrets(app: AppHandle) -> crate::error::Result<AnyValue> {
     // Load user secrets, applying migration from plaintext to the OS keyring if required.
-    if let Ok(entry) = get_secrets_keyring_entry() {
-        if let Ok(password) = entry.get_password() {
-            if let Ok(value) = serde_json::from_str(&password) {
-                return Ok(AnyValue(value));
-            }
+    let password_result = tokio::task::spawn_blocking(|| {
+        if let Ok(entry) = get_secrets_keyring_entry() {
+            entry.get_password().ok()
+        } else {
+            None
+        }
+    })
+    .await
+    .unwrap_or(None);
+
+    if let Some(password) = password_result {
+        if let Ok(value) = serde_json::from_str(&password) {
+            return Ok(AnyValue(value));
         }
     }
+
     let path = get_profile_secrets_path(&app)?;
     if !path.exists() {
         return Ok(AnyValue(Value::Object(serde_json::Map::new())));
     }
     let legacy_secrets = read_json_file(&path).await;
     if legacy_secrets.is_object() {
-        let entry = get_secrets_keyring_entry()?;
         let json_str = serde_json::to_string(&legacy_secrets)?;
-        entry.set_password(&json_str).map_err(|error| {
-            crate::error::AppError::Custom(format!(
-                "Failed to migrate secrets into credential store: {error}"
-            ))
-        })?;
+        tokio::task::spawn_blocking(move || {
+            let entry = get_secrets_keyring_entry()?;
+            entry.set_password(&json_str).map_err(|error| {
+                crate::error::AppError::Custom(format!(
+                    "Failed to migrate secrets into credential store: {error}"
+                ))
+            })
+        })
+        .await
+        .map_err(|e| crate::error::AppError::Custom(e.to_string()))??;
         let _ = tokio::fs::remove_file(path).await;
     }
     Ok(AnyValue(legacy_secrets))
@@ -105,13 +118,17 @@ pub async fn save_profile_secrets(
         all_secrets = data.clone();
     }
 
-    let entry = get_secrets_keyring_entry()?;
     let json_str = serde_json::to_string(&all_secrets)?;
-    entry.set_password(&json_str).map_err(|error| {
-        crate::error::AppError::Custom(format!(
-            "Failed to save secrets to credential store: {error}"
-        ))
-    })?;
+    tokio::task::spawn_blocking(move || {
+        let entry = get_secrets_keyring_entry()?;
+        entry.set_password(&json_str).map_err(|error| {
+            crate::error::AppError::Custom(format!(
+                "Failed to save secrets to credential store: {error}"
+            ))
+        })
+    })
+    .await
+    .map_err(|e| crate::error::AppError::Custom(e.to_string()))??;
 
     let path = get_profile_secrets_path(&app)?;
     let _ = tokio::fs::remove_file(path).await;
@@ -125,22 +142,13 @@ pub async fn clear_profile_secrets(
     app: AppHandle,
     _profile_id: Option<String>,
 ) -> crate::error::Result<bool> {
-    if let Ok(entry) = get_secrets_keyring_entry() {
-        let _ = entry.delete_credential();
-    }
+    let _ = tokio::task::spawn_blocking(|| {
+        if let Ok(entry) = get_secrets_keyring_entry() {
+            let _ = entry.delete_credential();
+        }
+    })
+    .await;
     let path = get_profile_secrets_path(&app)?;
     let _ = tokio::fs::remove_file(path).await;
     Ok(true)
-}
-
-use validator::Validate;
-
-#[derive(serde::Deserialize, specta::Type, Validate)]
-pub struct ProfileRequest {
-    #[serde(rename = "autoDetect")]
-    pub auto_detect: Option<bool>,
-    pub cookie: Option<String>,
-    #[serde(rename = "groupId")]
-    #[validate(length(min = 1))]
-    pub group_id: Option<String>,
 }

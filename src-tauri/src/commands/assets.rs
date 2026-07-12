@@ -1,3 +1,5 @@
+//! Commands for fetching and parsing Roblox inventory assets and thumbnails.
+
 #![allow(clippy::too_many_lines)]
 use reqwest::header::{HeaderMap, HeaderValue, COOKIE, USER_AGENT};
 use serde::{Deserialize, Serialize};
@@ -42,29 +44,28 @@ pub struct FetchAssetsResponse {
     pub items: Vec<AssetExplorerItem>,
 }
 
-// Normalize legacy asset type names for API compatibility.
+/// Normalizes legacy asset type names for compatibility with the Roblox Inventory API.
+///
+/// For example, mapping "Decal" to "Image".
 fn map_asset_types(types: Option<Vec<String>>) -> String {
-    let mut mapped = Vec::new();
-    let default_types = vec![
-        "Animation".to_string(),
-        "Audio".to_string(),
-        "Image".to_string(),
-        "Model".to_string(),
-    ];
-    let input_types = types.unwrap_or(default_types);
+    let input_types: Vec<String> = types.unwrap_or_else(|| {
+        vec!["Animation".to_string(), "Audio".to_string(), "Image".to_string(), "Model".to_string()]
+    });
 
-    for t in input_types {
+    let mut mapped: Vec<&str> = Vec::new();
+    for t in &input_types {
         let normalized = match t.as_str() {
             "Images" | "Decal" => "Image",
             other => other,
         };
-        if !mapped.contains(&normalized.to_string()) {
-            mapped.push(normalized.to_string());
+        if !mapped.contains(&normalized) {
+            mapped.push(normalized);
         }
     }
     mapped.join(",")
 }
 
+/// Paginated fetch of a user or group's public inventory from Roblox.
 #[tauri::command]
 #[specta::specta]
 pub async fn fetch_assets(
@@ -256,13 +257,14 @@ pub async fn fetch_assets(
             thumbnail_url,
             creator_type: creator_type.clone(),
             creator_id: query.creator_id.clone(),
-            is_moderated: false,
+            is_moderated: false, // already filtered above
         });
     }
 
     Ok(FetchAssetsResponse { total: enriched.len(), items: enriched })
 }
 
+/// Grabs the 420x420 PNG thumbnail for a specific asset ID directly from Roblox.
 #[tauri::command]
 #[specta::specta]
 pub async fn fetch_roblox_thumbnail(asset_id: String) -> crate::error::Result<Option<String>> {
@@ -290,6 +292,9 @@ pub async fn fetch_roblox_thumbnail(asset_id: String) -> crate::error::Result<Op
     Ok(None)
 }
 
+/// Downloads the raw binary or XML representation of a Roblox animation asset.
+///
+/// Converts binary-format animations (`<roblox!`) into readable XML text before returning.
 #[tauri::command]
 #[specta::specta]
 pub async fn fetch_animation_xml(
@@ -302,13 +307,9 @@ pub async fn fetch_animation_xml(
     let client = crate::utils::get_http_client();
     let mut req = client.get(&url).header(USER_AGENT, "ISpooferMotion/AnimPreview");
 
-    let mut actual_cookie_header = None;
+    let mut actual_cookie_header: Option<String> = None;
     if let Some(cookie_val) = &cookie {
-        let cookie_header = if cookie_val.starts_with(".ROBLOSECURITY=") {
-            cookie_val.clone()
-        } else {
-            format!(".ROBLOSECURITY={cookie_val}")
-        };
+        let cookie_header = crate::utils::build_roblox_cookie_header(cookie_val);
         actual_cookie_header = Some(cookie_header.clone());
         req = req.header(COOKIE, cookie_header);
     }

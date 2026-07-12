@@ -87,9 +87,13 @@ pub fn find_studio_process() -> Option<u32> {
     for (sys_pid, process) in sys.processes() {
         if process.name().to_string_lossy().as_ref() == "RobloxStudioBeta.exe" {
             let pid_u32 = sys_pid.as_u32();
+            // Re-check the cache inside the write lock to prevent a TOCTOU race
+            // between two concurrent callers doing the same scan simultaneously.
             if let Ok(mut guard) = STUDIO_CACHE.get_or_init(|| std::sync::RwLock::new(None)).write()
             {
-                *guard = Some(CachedStudio { pid: pid_u32, hwnd: std::ptr::null_mut() });
+                if guard.as_ref().map_or(true, |c| c.pid != pid_u32) {
+                    *guard = Some(CachedStudio { pid: pid_u32, hwnd: std::ptr::null_mut() });
+                }
             }
             return Some(pid_u32);
         }
@@ -369,6 +373,9 @@ pub async fn scan_and_replace_multiple_strings(
     if replacements.is_empty() {
         return Ok(HashMap::new());
     }
+    if pid == 0 {
+        return Err("Invalid PID: 0 is not a valid process identifier.".into());
+    }
 
     let res = tokio::task::spawn_blocking(move || {
         let mut results = HashMap::new();
@@ -377,12 +384,16 @@ pub async fn scan_and_replace_multiple_strings(
             validate_asset_id_pair(target, replacement)?;
         }
 
-        if let Some(studio_pid) = find_studio_process() {
-            if studio_pid != pid {
-                return Err(format!(
-                    "Security error: PID {pid} does not match Roblox Studio process ({studio_pid})"
-                ));
-            }
+        // Security check: the supplied PID must match the cached Studio process.
+        // Perform a fresh scan if the cache is cold rather than silently skipping
+        // validation - this prevents the frontend from targeting arbitrary processes.
+        let studio_pid = find_studio_process().ok_or_else(|| {
+            format!("Security error: could not verify that PID {pid} belongs to Roblox Studio. Ensure Studio is running.")
+        })?;
+        if studio_pid != pid {
+            return Err(format!(
+                "Security error: PID {pid} does not match Roblox Studio process ({studio_pid})"
+            ));
         }
 
         let process_handle = Arc::new(open_process_for_memory(pid)?);
@@ -397,17 +408,19 @@ pub async fn scan_and_replace_multiple_strings(
             utf16_count: AtomicUsize,
         }
 
-        let mut data_items = Vec::new();
+        let mut data_items = Vec::with_capacity(replacements.len());
         for (target, replacement) in replacements {
+            let target_bytes = target.as_bytes().to_vec();
+            let target_utf16_bytes: Vec<u8> =
+                target.encode_utf16().flat_map(u16::to_le_bytes).collect();
+            let replacement_utf16_bytes: Vec<u8> =
+                replacement.encode_utf16().flat_map(u16::to_le_bytes).collect();
             data_items.push(ReplacementData {
-                target: target.clone(),
-                target_bytes: target.as_bytes().to_vec(),
+                target,
+                target_bytes,
                 replacement_bytes: replacement.as_bytes().to_vec(),
-                target_utf16_bytes: target.encode_utf16().flat_map(u16::to_le_bytes).collect(),
-                replacement_utf16_bytes: replacement
-                    .encode_utf16()
-                    .flat_map(u16::to_le_bytes)
-                    .collect(),
+                target_utf16_bytes,
+                replacement_utf16_bytes,
                 utf8_count: AtomicUsize::new(0),
                 utf16_count: AtomicUsize::new(0),
             });
@@ -484,7 +497,9 @@ pub async fn scan_and_replace_multiple_strings(
             while region_offset < region.region_size {
                 let primary_size =
                     MEMORY_SCAN_CHUNK_SIZE.min(region.region_size.saturating_sub(region_offset));
-                let prefix_size = 2.min(region_offset);
+                // Prefix must cover the full overlap window so cross-chunk matches
+                // are never missed regardless of the longest pattern length.
+                let prefix_size = chunk_overlap.min(region_offset);
                 let read_offset = region_offset - prefix_size;
                 let read_size = (prefix_size + primary_size + chunk_overlap)
                     .min(region.region_size.saturating_sub(read_offset));

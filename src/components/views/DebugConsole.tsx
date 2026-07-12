@@ -26,6 +26,12 @@ interface DebugConsoleProps {
   onClose: () => void;
 }
 
+/**
+ * An overlaid developer console that intercepts and displays all `addDebugLog` calls.
+ *
+ * Very useful for diagnosing issues in production builds where the standard
+ * WebView inspector isn't available to the end user. Includes filtering by log level and source.
+ */
 export default function DebugConsole({ isOpen, onClose }: DebugConsoleProps) {
   const { t } = useLanguage();
   const logs = useLogs();

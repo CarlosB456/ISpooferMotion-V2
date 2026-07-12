@@ -81,9 +81,13 @@ interface SpooferState {
   setAssetMetadataMap: (val: Record<string, { name: string; type: string }>) => void;
 }
 
-// Ephemeral state for the active spoofing job, asset explorer, and studio integration.
-// Kept separate from config store as it doesn't need to be persisted to localStorage.
-// Wiped on app restart.
+/**
+ * Ephemeral state manager for the active spoofing job, asset explorer, and Studio integration.
+ *
+ * Kept strictly separate from the config store because none of this data needs to be
+ * persisted to disk. It tracks live IPC events, progress bars, and temporary session data,
+ * wiping itself clean on every app restart.
+ */
 export const useSpooferStore = create<SpooferState>((set) => ({
   rootInstances: [],
   setRootInstances: (val) =>
@@ -189,6 +193,13 @@ export const useSpooferStore = create<SpooferState>((set) => ({
   setAssetMetadataMap: (val) => set({ assetMetadataMap: val }),
 }));
 
+/**
+ * Dispatches a set of generated asset IDs to either the Studio Plugin Bridge or
+ * directly into Studio's memory, depending on user settings.
+ *
+ * This is the final step of the spoofing pipeline. It translates our successful
+ * web API uploads into actual game modifications.
+ */
 export const applyReplacements = async (replacements: Record<string, string>) => {
   if (!isTauriRuntime()) return;
   const { config } = useConfigStore.getState();

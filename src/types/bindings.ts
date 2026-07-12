@@ -4,10 +4,13 @@ import { invoke as __TAURI_INVOKE } from '@tauri-apps/api/core';
 
 /** Commands */
 export const commands = {
+  /**
+   *  Takes raw Roblox XML (`<roblox!>...`) containing a `KeyframeSequence`
+   *  and converts it into a `RobloxAnimationClip` for the frontend.
+   */
   parseAnimationData: (xml: string) =>
     typedError<
       {
-        loop_anim: boolean;
         loop: boolean;
         priority: number;
         duration: number | null;
@@ -15,10 +18,17 @@ export const commands = {
       } | null,
       string
     >(__TAURI_INVOKE('parse_animation_data', { xml })),
+  /**  Paginated fetch of a user or group's public inventory from Roblox. */
   fetchAssets: (query: FetchAssetsRequest) =>
     typedError<FetchAssetsResponse, AppError>(__TAURI_INVOKE('fetch_assets', { query })),
+  /**  Grabs the 420x420 PNG thumbnail for a specific asset ID directly from Roblox. */
   fetchRobloxThumbnail: (assetId: string) =>
     typedError<string | null, AppError>(__TAURI_INVOKE('fetch_roblox_thumbnail', { assetId })),
+  /**
+   *  Downloads the raw binary or XML representation of a Roblox animation asset.
+   *
+   *  Converts binary-format animations (`<roblox!`) into readable XML text before returning.
+   */
   fetchAnimationXml: (assetId: string, cookie: string | null) =>
     typedError<string | null, AppError>(__TAURI_INVOKE('fetch_animation_xml', { assetId, cookie })),
   getCookieFromRobloxStudio: (userId: string | null) =>
@@ -52,16 +62,37 @@ export const commands = {
   validateOpencloudApiKey: (key: string) =>
     typedError<boolean, AppError>(__TAURI_INVOKE('validate_opencloud_api_key', { key })),
   getAuthMetadata: () => typedError<string, AppError>(__TAURI_INVOKE('get_auth_metadata')),
+  /**
+   *  Destroys the splashscreen window and spawns the main frameless React window.
+   *
+   *  This avoids the ugly white flash during React initialization.
+   */
   closeSplashscreen: () => __TAURI_INVOKE<void>('close_splashscreen'),
+  /**
+   *  Automatically installs or updates the ISpooferMotion Luau plugin in Studio's local plugins folder.
+   *
+   *  The `.rbxmx` plugin file is bundled into the Tauri binary at compile-time.
+   *  When the app boots, this copies it directly into `%LOCALAPPDATA%\Roblox\Plugins`.
+   */
   syncRobloxPlugin: () => typedError<boolean, AppError>(__TAURI_INVOKE('sync_roblox_plugin')),
+  /**  Opens the application's config directory in the native file explorer. */
   openDataFolder: () => typedError<boolean, AppError>(__TAURI_INVOKE('open_data_folder')),
+  /**  Deletes all cached data (like downloaded thumbnails and audio files). */
   clearAppCache: () => typedError<boolean, AppError>(__TAURI_INVOKE('clear_app_cache')),
+  /**
+   *  Downloads an audio asset from Roblox to the local cache and returns its path.
+   *
+   *  The frontend uses this to stream audio via HTML5 `<audio>` since we can't
+   *  reliably bypass Roblox's CORS policies directly in the browser context.
+   */
   playRobloxAudio: (assetId: string, cookie: string | null, enableCache: boolean | null) =>
     typedError<string, AppError>(
       __TAURI_INVOKE('play_roblox_audio', { assetId, cookie, enableCache }),
     ),
+  /**  Triggers a native desktop notification. */
   showNotification: (options: NotificationOptions) =>
     typedError<boolean, AppError>(__TAURI_INVOKE('show_notification', { options })),
+  /**  Spawns a detached native terminal window that tails the latest log file. */
   openDevConsole: () => typedError<boolean, AppError>(__TAURI_INVOKE('open_dev_console')),
   windowMinimize: () => __TAURI_INVOKE<void>('window_minimize'),
   windowClose: () => __TAURI_INVOKE<void>('window_close'),
@@ -104,29 +135,52 @@ export const commands = {
     typedError<string, AppError>(__TAURI_INVOKE('save_profile_secrets', { data })),
   clearProfileSecrets: (profileId: string | null) =>
     typedError<boolean, AppError>(__TAURI_INVOKE('clear_profile_secrets', { profileId })),
+  /**  Reads the job history JSON from disk so the frontend can populate the history tab. */
   getJobs: () => typedError<string, AppError>(__TAURI_INVOKE('get_jobs')),
+  /**  Removes a specific job entry from the persistent history file. */
   deleteJob: (jobId: string) =>
     typedError<boolean, AppError>(__TAURI_INVOKE('delete_job', { jobId })),
+  /**
+   *  Opens a specific job's text log file in the native OS text editor.
+   *
+   *  Contains path traversal protection to prevent malicious UI requests from
+   *  opening arbitrary system files.
+   */
   openJobLog: (logPath: string) =>
     typedError<boolean, AppError>(__TAURI_INVOKE('open_job_log', { logPath })),
+  /**
+   *  Queries Roblox to resolve the creator of a batch of assets, emitting progress
+   *  events to the UI so the user isn't staring at a frozen loading screen.
+   */
   resolveAssetCreators: (assets: ResolverAsset[], cookie: string) =>
     typedError<ResolverAsset[], AppError>(
       __TAURI_INVOKE('resolve_asset_creators', { assets, cookie }),
     ),
+  /**  Queries Roblox to filter out false-positive numeric IDs found inside scripts. */
   resolveScriptReferences: (assetIds: string[]) =>
     typedError<{ [key in string]: string }, AppError>(
       __TAURI_INVOKE('resolve_script_references', { assetIds }),
     ),
+  /**  Validates if parsed asset IDs actually exist and what category they belong to. */
   validateAssetIds: (assetIds: string[]) =>
     typedError<{ [key in string]: string }, AppError>(
       __TAURI_INVOKE('validate_asset_ids', { assetIds }),
     ),
+  /**  Pings Roblox to check for availability before proceeding with API calls. */
   checkRobloxApiStatus: () =>
     typedError<boolean, AppError>(__TAURI_INVOKE('check_roblox_api_status')),
+  /**  Writes the React frontend's current state to disk. */
   saveSession: (session: string) =>
     typedError<null, AppError>(__TAURI_INVOKE('save_session', { session })),
+  /**  Reads the previously saved UI state from disk. */
   loadSession: () => typedError<string | null, AppError>(__TAURI_INVOKE('load_session')),
+  /**  Wipes the saved UI state, usually called during logout or when the user resets the app. */
   clearSession: () => typedError<null, AppError>(__TAURI_INVOKE('clear_session')),
+  /**
+   *  Reads a local Roblox place or model file and extracts all spoofable assets.
+   *
+   *  Supports both XML (`.rbxlx`, `.rbxmx`) and binary (`.rbxl`, `.rbxm`) formats.
+   */
   parsePlaceFile: (filePath: string) =>
     typedError<PlaceParseResult, string>(__TAURI_INVOKE('parse_place_file', { filePath })),
   findStudioProcess: () => __TAURI_INVOKE<number | null>('find_studio_process'),
@@ -191,12 +245,26 @@ export const commands = {
     typedError<string | null, AppError>(
       __TAURI_INVOKE('find_asset_by_name', { cookie, assetType, name, groupId }),
     ),
+  /**
+   *  Dispatches a mapping of original asset IDs to spoofed asset IDs directly into Roblox Studio.
+   *
+   *  Tries to use the high-performance memory bridge first. If the plugin isn't connected
+   *  to the bridge, it falls back to a direct local HTTP POST.
+   */
   pushToStudio: (replacementsMap: string, pluginPort: string | null) =>
     typedError<string, AppError>(__TAURI_INVOKE('push_to_studio', { replacementsMap, pluginPort })),
+  /**
+   *  Toggles whether the plugin should skip checking if the user actually owns the assets.
+   *
+   *  This is used during testing or offline spoofing scenarios.
+   */
   setBridgeSkipOwnedCheck: (skipOwned: boolean) =>
     __TAURI_INVOKE<boolean>('set_bridge_skip_owned_check', { skipOwned }),
+  /**  Returns the ephemeral port the bridge server successfully bound to. */
   getPluginBridgePort: () => __TAURI_INVOKE<number | null>('get_plugin_bridge_port'),
+  /**  Checks if the Studio plugin has polled the daemon recently. */
   getStudioHealthStatus: () => __TAURI_INVOKE<string>('get_studio_health_status'),
+  /**  Returns the current state of asset discovery for the frontend UI. */
   getStudioAssetSnapshots: () => __TAURI_INVOKE<string>('get_studio_asset_snapshots'),
 };
 
@@ -207,6 +275,13 @@ export type ApiKeyOwnerDetectResult = {
   message: string;
 };
 
+/**
+ *  Centralized application error enum.
+ *
+ *  This type is exported to the frontend via Specta and serialized into a structured
+ *  JSON string containing both a user-facing message and debug details. It wraps
+ *  common underlying errors (IO, Network, JSON) to avoid scattered `.unwrap()` calls.
+ */
 export type AppError = string;
 
 export type AssetExplorerItem = {
@@ -299,8 +374,8 @@ export type ResolverAsset = {
   creatorType: string | null;
 };
 
+/**  The root structure of a Roblox animation containing all keyframes. */
 export type RobloxAnimationClip = {
-  loop_anim: boolean;
   loop: boolean;
   priority: number;
   duration: number | null;
@@ -312,11 +387,13 @@ export type RobloxGroup = {
   name: string;
 };
 
+/**  A specific moment in time within an animation clip. */
 export type RobloxKeyframe = {
   time: number | null;
   poses: RobloxPose[];
 };
 
+/**  Represents a single joint/bone's transform at a specific point in time. */
 export type RobloxPose = {
   name: string;
   position: [number | null, number | null, number | null];

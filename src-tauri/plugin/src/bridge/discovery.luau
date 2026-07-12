@@ -2,10 +2,19 @@
 --!nolint
 -- luacheck: ignore
 ---@diagnostic disable: undefined-global, unused-local, unused-function, lowercase-global
+--- Handles finding the active desktop daemon instance.
+---
+--- The desktop app binds to an ephemeral port to avoid collisions. We scan
+--- the localhost port range (`PORT_START` to `PORT_END`) and pick the daemon
+--- that was started most recently.
 local function responseLooksLikeAppHealth(decoded: any): boolean
 	return type(decoded) == "table" and decoded.app == "ISpooferMotion"
 end
 
+--- Sweeps the known port range looking for the desktop daemon.
+---
+--- If we already have a `BASE_URL`, we probe it first to save time on
+--- reconnects before falling back to a full port scan.
 local function discoverServer(): (boolean, boolean)
 	local newestUrl = nil
 	local newestStartedAt = -1

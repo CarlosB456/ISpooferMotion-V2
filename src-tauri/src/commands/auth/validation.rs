@@ -21,16 +21,23 @@ pub async fn fetch_csrf_token_internal(
 ) -> crate::error::Result<String> {
     // Retrieve a fresh CSRF token from the logout endpoint response headers.
     let url = "https://auth.roblox.com/v2/logout";
-    let cookie_header_str = if cookie.starts_with(".ROBLOSECURITY=") {
-        cookie.clone()
+
+    // Format and sanitize cookie header to prevent CRLF injection
+    let cookie_val = cookie.trim().replace(['\r', '\n'], "");
+    let cookie_header_str = if cookie_val.starts_with(".ROBLOSECURITY=") {
+        cookie_val
     } else {
-        format!(".ROBLOSECURITY={cookie}")
+        format!(".ROBLOSECURITY={cookie_val}")
     };
 
-    let client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(15)).build()?;
+    let client = crate::utils::get_http_client();
 
     let mut headers = HeaderMap::new();
-    headers.insert(COOKIE, HeaderValue::from_str(&cookie_header_str)?);
+    headers.insert(
+        COOKIE,
+        HeaderValue::from_str(&cookie_header_str)
+            .map_err(|e| crate::error::AppError::Custom(format!("Invalid cookie header: {e}")))?,
+    );
     headers.insert(USER_AGENT, HeaderValue::from_static(ROBLOX_USER_AGENT));
 
     let res = client.post(url).headers(headers).send().await.map_err(|e| {

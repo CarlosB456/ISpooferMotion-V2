@@ -2,6 +2,14 @@ import { invoke } from '@tauri-apps/api/core';
 import { check } from '@tauri-apps/plugin-updater';
 import { relaunch } from '@tauri-apps/plugin-process';
 
+/**
+ * Orchestrates the startup splash screen sequence.
+ *
+ * 1. Checks the GitHub Releases API for Tauri bundle updates.
+ * 2. Prompts the user to download or skip if an update is found.
+ * 3. Triggers the Rust backend to silently copy the `.rbxmx` plugin to Studio.
+ * 4. Kills the splash window and boots the main React app.
+ */
 async function runSplashFlow() {
   const statusText = document.getElementById('status-text');
 
@@ -23,7 +31,7 @@ async function runSplashFlow() {
     // Continue even if update fails
   }
 
-  if (update && update.available !== false) {
+  if (update?.available === true) {
     console.log(`Update available: ${update.version}`);
     if (statusText) {
       statusText.innerText = `Update v${update.version} is available`;
@@ -66,7 +74,7 @@ async function runSplashFlow() {
               downloaded += event.data.chunkLength;
               if (statusText && contentLength > 0) {
                 const percent = Math.round((downloaded / contentLength) * 100);
-                statusText.innerText = `Downloading update: ${percent}%`;
+                statusText.innerText = `Downloading app & plugin bundle: ${percent}%`;
               }
               break;
             case 'Finished':
@@ -77,7 +85,7 @@ async function runSplashFlow() {
 
         console.log('Update installed, restarting...');
         if (statusText) {
-          statusText.innerText = 'Restarting...';
+          statusText.innerText = 'Restarting to apply update...';
         }
         await relaunch();
         return; // App will restart, no need to continue
@@ -89,7 +97,7 @@ async function runSplashFlow() {
   }
 
   if (statusText) {
-    statusText.innerText = 'Syncing Roblox plugin...';
+    statusText.innerText = 'Installing plugin to Roblox...';
   }
 
   try {

@@ -20,6 +20,13 @@ const DebugConsole = lazy(() => import('./components/views/DebugConsole'));
 const SettingsView = lazy(() => import('./components/views/SettingsView'));
 const SpoofingView = lazy(() => import('./components/views/SpoofingView'));
 
+/**
+ * The root component of the ISpooferMotion React application.
+ *
+ * This orchestrates the main layout frame: the Titlebar, Sidebar, StatusBar,
+ * and the main content router that flips between Spoofing, Activity, and Settings.
+ * It also mounts floating overlays like the Debug Console and Asset Explorer.
+ */
 export default function App() {
   const { t } = useLanguage();
   const { config, updateConfig } = useConfig();

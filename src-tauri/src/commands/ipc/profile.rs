@@ -1,5 +1,15 @@
 use super::{build_roblox_cookie_header, AppHandle, COOKIE, USER_AGENT};
-use crate::commands::ipc::secrets::ProfileRequest;
+use validator::Validate;
+
+#[derive(serde::Deserialize, specta::Type, Validate)]
+pub struct ProfileRequest {
+    #[serde(rename = "autoDetect")]
+    pub auto_detect: Option<bool>,
+    pub cookie: Option<String>,
+    #[serde(rename = "groupId")]
+    #[validate(length(min = 1))]
+    pub group_id: Option<String>,
+}
 use crate::commands::AnyValue;
 use serde_json::Value;
 
@@ -56,10 +66,45 @@ pub async fn get_roblox_profile(
         return Ok(AnyValue(Value::Null));
     };
 
-    let avatar_resp = client.get(format!(
+    let avatar_future = client.get(format!(
         "https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds={user_id}&size=150x150&format=Png&isCircular=true"
-    ))
-    .send().await;
+    )).send();
+
+    let group_future = async {
+        if let Some(gid) = &group_id {
+            if let Ok(g_resp) =
+                client.get(format!("https://groups.roblox.com/v1/groups/{gid}")).send().await
+            {
+                if let Ok(g_data) = g_resp.json::<Value>().await {
+                    let g_name = g_data
+                        .get("name")
+                        .and_then(|n| n.as_str())
+                        .unwrap_or("Unknown Group")
+                        .to_string();
+
+                    let g_icon_url = if let Ok(icon_resp) = client.get(format!(
+                        "https://thumbnails.roblox.com/v1/groups/icons?groupIds={gid}&size=150x150&format=Png&isCircular=true"
+                    )).send().await {
+                        let icon_data: Value = icon_resp.json().await.unwrap_or(Value::Null);
+                        icon_data.get("data").and_then(|d| d.as_array()).and_then(|arr| arr.first())
+                            .and_then(|item| item.get("imageUrl")).and_then(|u| u.as_str())
+                            .unwrap_or("").to_string()
+                    } else {
+                        String::new()
+                    };
+
+                    return serde_json::json!({
+                        "id": gid,
+                        "name": g_name,
+                        "iconUrl": g_icon_url
+                    });
+                }
+            }
+        }
+        Value::Null
+    };
+
+    let (avatar_resp, group_info) = tokio::join!(avatar_future, group_future);
 
     let avatar_url = if let Ok(resp) = avatar_resp {
         let data: Value = resp.json().await.unwrap_or(Value::Null);
@@ -73,34 +118,6 @@ pub async fn get_roblox_profile(
     } else {
         String::new()
     };
-
-    let mut group_info = Value::Null;
-    if let Some(gid) = &group_id {
-        if let Ok(g_resp) =
-            client.get(format!("https://groups.roblox.com/v1/groups/{gid}")).send().await
-        {
-            if let Ok(g_data) = g_resp.json::<Value>().await {
-                let g_name = g_data.get("name").and_then(|n| n.as_str()).unwrap_or("Unknown Group");
-
-                let g_icon_url = if let Ok(icon_resp) = client.get(format!(
-                    "https://thumbnails.roblox.com/v1/groups/icons?groupIds={gid}&size=150x150&format=Png&isCircular=true"
-                )).send().await {
-                    let icon_data: Value = icon_resp.json().await.unwrap_or(Value::Null);
-                    icon_data.get("data").and_then(|d| d.as_array()).and_then(|arr| arr.first())
-                        .and_then(|item| item.get("imageUrl")).and_then(|u| u.as_str())
-                        .unwrap_or("").to_string()
-                } else {
-                    String::new()
-                };
-
-                group_info = serde_json::json!({
-                    "id": gid,
-                    "name": g_name,
-                    "iconUrl": g_icon_url
-                });
-            }
-        }
-    }
 
     Ok(AnyValue(serde_json::json!({
         "user": {
@@ -121,26 +138,29 @@ pub async fn fetch_audio_quota(
     auto_detect: Option<bool>,
     context: Option<AnyValue>,
 ) -> crate::error::Result<AnyValue> {
-    let mut cookie_val = cookie.unwrap_or_default();
+    let mut cookie_val = cookie
+        .filter(|c| !c.is_empty())
+        .or_else(|| {
+            context
+                .as_ref()
+                .and_then(|ctx| ctx.0.get("cookie"))
+                .and_then(|c| c.as_str())
+                .filter(|c| !c.is_empty())
+                .map(ToString::to_string)
+        })
+        .unwrap_or_default();
 
-    if cookie_val.is_empty() {
-        if let Some(ctx) = &context {
-            cookie_val = ctx.0.get("cookie").and_then(|c| c.as_str()).unwrap_or("").to_string();
-            if cookie_val.is_empty()
-                && ctx.0.get("autoDetect").and_then(serde_json::Value::as_bool).unwrap_or(false)
-            {
-                match crate::commands::auth::get_cookie_from_auto_detect(None).await {
-                    Ok(Some(c)) => cookie_val = c,
-                    _ => return Ok(AnyValue(serde_json::json!({"error": "No cookie provided"}))),
-                }
-            }
-        }
-    }
+    let should_auto_detect = auto_detect.unwrap_or_else(|| {
+        context
+            .as_ref()
+            .and_then(|ctx| ctx.0.get("autoDetect"))
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(false)
+    });
 
-    if cookie_val.is_empty() && auto_detect.unwrap_or(false) {
-        match crate::commands::auth::get_cookie_from_auto_detect(None).await {
-            Ok(Some(c)) => cookie_val = c,
-            _ => return Ok(AnyValue(serde_json::json!({"error": "No cookie provided"}))),
+    if cookie_val.is_empty() && should_auto_detect {
+        if let Ok(Some(c)) = crate::commands::auth::get_cookie_from_auto_detect(None).await {
+            cookie_val = c;
         }
     }
 

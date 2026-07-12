@@ -35,12 +35,20 @@ fn is_valid_video(head: &[u8]) -> bool {
         || head.starts_with(MAGIC_WEBM_MKV)
 }
 
-fn is_valid_model(head: &[u8], head_text: &str) -> bool {
-    head_text.contains("<roblox")
+fn contains_ignore_ascii_case(haystack: &[u8], needle: &[u8]) -> bool {
+    haystack.windows(needle.len()).any(|w| w.eq_ignore_ascii_case(needle))
+}
+
+fn starts_with_ignore_ascii_case(haystack: &[u8], needle: &[u8]) -> bool {
+    haystack.len() >= needle.len() && haystack[..needle.len()].eq_ignore_ascii_case(needle)
+}
+
+fn is_valid_model(head: &[u8]) -> bool {
+    contains_ignore_ascii_case(head, b"<roblox")
         || head.starts_with(b"version ")
         || head.starts_with(b"v ")
         || head.starts_with(b"CSGPHS")
-        || (head_text.starts_with('{') && !head_text.contains("\"error"))
+        || (head.starts_with(b"{") && !contains_ignore_ascii_case(head, b"\"error"))
 }
 
 pub async fn validate_downloaded_payload(
@@ -61,13 +69,15 @@ pub async fn validate_downloaded_payload(
     let trimmed_start =
         valid_bytes.iter().position(|byte| !byte.is_ascii_whitespace()).unwrap_or(0);
     let head = &valid_bytes[trimmed_start..];
-    let head_text = String::from_utf8_lossy(head).to_ascii_lowercase();
-    if head_text.starts_with("<!doctype html")
-        || head_text.starts_with("<html")
-        || head_text.starts_with("{\"errors\"")
-        || head_text.starts_with("{\"error\"")
-        || (head_text.starts_with("<?xml") && !head_text.contains("<roblox"))
-        || (head_text.starts_with("<error") && !head_text.contains("<roblox"))
+
+    if starts_with_ignore_ascii_case(head, b"<!doctype html")
+        || starts_with_ignore_ascii_case(head, b"<html")
+        || starts_with_ignore_ascii_case(head, b"{\"errors\"")
+        || starts_with_ignore_ascii_case(head, b"{\"error\"")
+        || (starts_with_ignore_ascii_case(head, b"<?xml")
+            && !contains_ignore_ascii_case(head, b"<roblox"))
+        || (starts_with_ignore_ascii_case(head, b"<error")
+            && !contains_ignore_ascii_case(head, b"<roblox"))
     {
         return Err("Downloaded asset response was an error page, not usable asset content.".into());
     }
@@ -95,7 +105,7 @@ pub async fn validate_downloaded_payload(
             }
         }
         "mesh" | "animation" | "plugin" | "model" => {
-            if is_valid_model(head, &head_text) {
+            if is_valid_model(head) {
                 Ok(())
             } else {
                 Err("Downloaded asset was not a recognized Roblox model format.".into())

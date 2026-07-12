@@ -119,6 +119,13 @@ const cframeToMatrix4InPlace = (cf: number[], target: THREE.Matrix4) =>
 const toMat4InPlace = (r: number[], target: THREE.Matrix4) =>
   target.set(r[0], r[1], r[2], 0, r[3], r[4], r[5], 0, r[6], r[7], r[8], 0, 0, 0, 0, 1);
 
+/**
+ * A full hardware-accelerated 3D viewport for previewing Roblox animations.
+ *
+ * Uses Three.js to parse and render Roblox's raw XML animation keyframes in real-time.
+ * Reconstructs the R6 or R15 bone hierarchy, interpolates CFrames manually to match
+ * Roblox's internal easing styles, and wraps it all in a React Portal.
+ */
 export default function AnimationPreview({ assetId, assetName, onClose }: AnimationPreviewProps) {
   const { t } = useLanguage();
   const mountRef = useRef<HTMLDivElement>(null);

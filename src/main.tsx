@@ -12,14 +12,21 @@ import { StudioConnectionProvider } from './contexts/StudioConnectionContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 
 const savedTheme = localStorage.getItem('theme') || 'dark';
-// Force theme early to prevent light mode flash on load.
+// Forces the saved theme into the DOM before React even boots up.
+// This prevents a blinding white flash of unstyled content on startup.
 if (savedTheme === 'dark') {
   document.documentElement.classList.add('dark');
 } else {
   document.documentElement.classList.remove('dark');
 }
 
-// Prevents native tooltips from overlapping custom UI tooltips.
+/**
+ * Strips native HTML `title` attributes globally via a MutationObserver.
+ *
+ * We use a custom tooltip component (`@codycon/ism-library`) for all hover states.
+ * If native titles are left intact, the browser's ugly default yellow tooltip
+ * will render directly over our styled tooltips, ruining the premium feel.
+ */
 function TitleAttributeGuard({ children }: { children: React.ReactNode }) {
   React.useEffect(() => {
     const clearTitles = (root: ParentNode) => {

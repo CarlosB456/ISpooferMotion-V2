@@ -1,3 +1,8 @@
+//! Manages the persistent history of spoofing jobs (runs).
+//!
+//! Stores history in a JSON file locally and strips all sensitive credentials
+//! (like cookies or API keys) before writing anything to disk.
+
 use crate::commands::AnyValue;
 use serde_json::Value;
 use std::path::PathBuf;
@@ -18,23 +23,27 @@ fn get_jobs_path(app: &AppHandle) -> crate::error::Result<PathBuf> {
     Ok(dir.join("job-history.json"))
 }
 
-// Redact cookies and API keys prior to saving job history.
-fn sanitize_job(job: &mut Value) {
+fn sanitize_job(job: &mut Value) -> bool {
+    let mut dirty = false;
     if let Some(config) = job.get_mut("config").and_then(Value::as_object_mut) {
-        config.remove("cookie");
-        config.remove("apiKey");
-        config.remove("api_key");
+        dirty |= config.remove("cookie").is_some();
+        dirty |= config.remove("apiKey").is_some();
+        dirty |= config.remove("api_key").is_some();
     }
+    dirty
 }
 
-fn sanitize_job_history(jobs: &mut Value) {
+fn sanitize_job_history(jobs: &mut Value) -> bool {
+    let mut dirty = false;
     if let Some(entries) = jobs.as_array_mut() {
         for job in entries {
-            sanitize_job(job);
+            dirty |= sanitize_job(job);
         }
     }
+    dirty
 }
 
+/// Reads the job history JSON from disk so the frontend can populate the history tab.
 #[tauri::command]
 #[specta::specta]
 pub async fn get_jobs(app: AppHandle) -> crate::error::Result<AnyValue> {
@@ -44,14 +53,13 @@ pub async fn get_jobs(app: AppHandle) -> crate::error::Result<AnyValue> {
     if !jobs.is_array() {
         jobs = Value::Array(vec![]);
     }
-    let original = jobs.clone();
-    sanitize_job_history(&mut jobs);
-    if jobs != original {
+    if sanitize_job_history(&mut jobs) {
         write_json_file(&path, &jobs).await?;
     }
     Ok(AnyValue(jobs))
 }
 
+/// Removes a specific job entry from the persistent history file.
 #[tauri::command]
 #[specta::specta]
 pub async fn delete_job(app: AppHandle, job_id: String) -> crate::error::Result<bool> {
@@ -69,7 +77,10 @@ pub async fn delete_job(app: AppHandle, job_id: String) -> crate::error::Result<
     Ok(true)
 }
 
-// Append job to history file, capping at 250 entries.
+/// Appends a new spoofing job to the JSON history file.
+///
+/// Keeps the file from growing infinitely by capping it at 250 entries.
+/// Automatically strips any credentials from the payload before writing to disk.
 pub(super) async fn persist_job(app: &AppHandle, job: Value) -> crate::error::Result<bool> {
     let _guard = job_mutex().lock().await;
     let path = get_jobs_path(app)?;
@@ -87,6 +98,10 @@ pub(super) async fn persist_job(app: &AppHandle, job: Value) -> crate::error::Re
     Ok(true)
 }
 
+/// Opens a specific job's text log file in the native OS text editor.
+///
+/// Contains path traversal protection to prevent malicious UI requests from
+/// opening arbitrary system files.
 #[tauri::command]
 #[specta::specta]
 pub async fn open_job_log(app: AppHandle, log_path: String) -> crate::error::Result<bool> {
@@ -100,6 +115,6 @@ pub async fn open_job_log(app: AppHandle, log_path: String) -> crate::error::Res
     }
     use tauri_plugin_opener::OpenerExt;
     let _ =
-        app.opener().open_path(canonical_log_path.to_string_lossy().to_string(), None::<String>);
+        app.opener().open_path(canonical_log_path.to_string_lossy().into_owned(), None::<String>);
     Ok(true)
 }

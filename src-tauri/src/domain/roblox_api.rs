@@ -1,3 +1,9 @@
+//! Interfaces with the Roblox web API for asset resolution and verification.
+//!
+//! Because ISpooferMotion needs to spoof assets across the entire platform, we have
+//! to constantly query Roblox's endpoints to figure out what type of asset an ID is,
+//! who created it, and if it even exists. This module wraps those undocumented endpoints.
+
 use crate::commands::spoofer::{wait_rate_limit, RateLimitBucket};
 use crate::utils::build_roblox_cookie_header;
 use reqwest::header::{
@@ -9,6 +15,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Semaphore;
 
+/// Spoofs standard browser headers so Roblox does not immediately block our requests.
 fn build_roblox_auth_headers(cookie: &HeaderValue) -> HeaderMap {
     let mut headers = HeaderMap::new();
     headers.insert(COOKIE, cookie.clone());
@@ -21,18 +28,96 @@ fn build_roblox_auth_headers(cookie: &HeaderValue) -> HeaderMap {
     headers
 }
 
+/// Grabs a fresh CSRF token from the Roblox catalog endpoint.
+///
+/// Most authenticated Roblox endpoints require a CSRF token. The standard way to get
+/// one is to intentionally send a bad POST request, read the `x-csrf-token` header
+/// from the 403 response, and use that for the real request.
 async fn fetch_csrf_token(client: &reqwest::Client) -> String {
-    if let Ok(res) = client
-        .post("https://catalog.roblox.com/v1/catalog/items/details")
-        .header("Content-Length", "0")
-        .send()
-        .await
-    {
-        if let Some(token) = res.headers().get("x-csrf-token") {
-            return token.to_str().unwrap_or_default().to_string();
+    for _ in 0..2 {
+        if let Ok(res) = client
+            .post("https://catalog.roblox.com/v1/catalog/items/details")
+            .header("Content-Length", "0")
+            .send()
+            .await
+        {
+            if let Some(token) = res.headers().get("x-csrf-token") {
+                return token.to_str().unwrap_or_default().to_string();
+            }
         }
     }
     String::new()
+}
+
+/// Resolves a batch of asset IDs by hitting the public catalog endpoint.
+///
+/// We use this to quickly categorize hundreds of IDs at once (Mesh vs Image vs Audio)
+/// instead of hitting the individual details endpoint for every single asset.
+async fn resolve_via_catalog(
+    client: &reqwest::Client,
+    asset_ids: &[String],
+    map_unknowns: bool,
+) -> HashMap<String, String> {
+    let mut resolved = HashMap::new();
+    let csrf_token = fetch_csrf_token(client).await;
+    if csrf_token.is_empty() {
+        return resolved;
+    }
+
+    let chunks = asset_ids.chunks(120);
+    for chunk in chunks {
+        let items: Vec<_> = chunk
+            .iter()
+            .filter_map(|id| {
+                id.parse::<u64>()
+                    .ok()
+                    .map(|id_num| serde_json::json!({ "itemType": "Asset", "id": id_num }))
+            })
+            .collect();
+
+        if items.is_empty() {
+            continue;
+        }
+
+        let payload = serde_json::json!({ "items": items });
+        let req = client
+            .post("https://catalog.roblox.com/v1/catalog/items/details")
+            .header("x-csrf-token", &csrf_token)
+            .header("Content-Type", "application/json")
+            .header("Accept", "application/json")
+            .json(&payload);
+
+        if let Ok(res) = req.send().await {
+            if let Ok(json) = res.json::<serde_json::Value>().await {
+                if let Some(data) = json.get("data").and_then(|v| v.as_array()) {
+                    for item in data {
+                        if let (Some(id), Some(type_id)) = (
+                            item.get("id").and_then(serde_json::Value::as_u64),
+                            item.get("assetType").and_then(serde_json::Value::as_u64),
+                        ) {
+                            let category = match type_id {
+                                24 => Some("animation"),
+                                3 => Some("sound"),
+                                1 | 11 | 13 | 2 | 21 | 22 | 38 => Some("image"),
+                                40 | 43 | 17 | 12 => Some("mesh"),
+                                _ => {
+                                    if map_unknowns {
+                                        Some("unknown")
+                                    } else {
+                                        None
+                                    }
+                                }
+                            };
+                            if let Some(cat) = category {
+                                resolved.insert(id.to_string(), cat.to_string());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    resolved
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, specta::Type)]
@@ -80,10 +165,11 @@ pub struct RobloxAssetAuthResponse {
     pub name: Option<String>,
 }
 
+/// Hits the user-auth API to find out exactly who created a specific asset.
 async fn resolve_single_asset_creator<F, C>(
     mut asset: ResolverAsset,
     sem: Arc<Semaphore>,
-    cli: Arc<reqwest::Client>,
+    cli: reqwest::Client,
     cookie_value: Arc<HeaderValue>,
     prog_clone: Arc<F>,
     cookie_cb_clone: Arc<C>,
@@ -178,6 +264,8 @@ where
     (asset, msg, success)
 }
 
+/// Takes a list of raw assets, drops those we already know the creator for,
+/// and concurrently fetches the rest from Roblox.
 pub async fn resolve_asset_creators<F, C>(
     assets: Vec<ResolverAsset>,
     cookie: String,
@@ -193,16 +281,9 @@ where
         return Err("Missing or invalid ROBLOSECURITY cookie".into());
     }
 
-    let mut needs_resolution = Vec::new();
-    let mut resolved_assets = Vec::new();
-
-    for asset in assets {
-        if asset.creator.as_deref() == Some("Unknown") || asset.creator.is_none() {
-            needs_resolution.push(asset);
-        } else {
-            resolved_assets.push(asset);
-        }
-    }
+    let (needs_resolution, mut resolved_assets): (Vec<_>, Vec<_>) = assets
+        .into_iter()
+        .partition(|a| a.creator.as_deref() == Some("Unknown") || a.creator.is_none());
 
     let total = needs_resolution.len();
     if total == 0 {
@@ -210,36 +291,28 @@ where
     }
 
     let client = reqwest::Client::builder().timeout(Duration::from_secs(10)).build()?;
-    let cookie_header_value = HeaderValue::from_str(&cookie_header)?;
+    let cookie_header_value = Arc::new(HeaderValue::from_str(&cookie_header)?);
 
     let semaphore = Arc::new(Semaphore::new(8));
-    let client = Arc::new(client);
-    let cookie_header_value = Arc::new(cookie_header_value);
-
     let on_progress = Arc::new(on_progress);
     let on_cookie = Arc::new(on_cookie);
 
-    let mut tasks = Vec::new();
+    let mut tasks = Vec::with_capacity(needs_resolution.len());
 
     for asset in needs_resolution {
-        let sem = Arc::clone(&semaphore);
-        let cli = Arc::clone(&client);
-        let cookie_value = Arc::clone(&cookie_header_value);
-        let prog_clone = Arc::clone(&on_progress);
-        let cookie_cb_clone = Arc::clone(&on_cookie);
-
         tasks.push(tokio::spawn(resolve_single_asset_creator(
-            asset.clone(),
-            sem,
-            cli,
-            cookie_value,
-            prog_clone,
-            cookie_cb_clone,
+            asset,
+            Arc::clone(&semaphore),
+            client.clone(),
+            Arc::clone(&cookie_header_value),
+            Arc::clone(&on_progress),
+            Arc::clone(&on_cookie),
         )));
     }
 
     let results = futures::future::join_all(tasks).await;
-    for (index, (asset, msg, success)) in results.into_iter().flatten().enumerate() {
+    for (index, res) in results.into_iter().flatten().enumerate() {
+        let (asset, msg, success) = res;
         on_progress(ResolverProgress {
             resolved: index + 1,
             total,
@@ -269,6 +342,11 @@ pub struct ScriptRefProgress {
     pub resolved_category: Option<String>,
 }
 
+/// Resolves raw numeric IDs extracted from script source code.
+///
+/// Because scripts often contain random numbers that are not actually asset IDs,
+/// this validates them against the catalog and the batch asset delivery endpoints
+/// to filter out false positives.
 pub async fn resolve_script_references<F>(
     asset_ids: Vec<String>,
     on_progress: F,
@@ -276,76 +354,17 @@ pub async fn resolve_script_references<F>(
 where
     F: Fn(ScriptRefProgress) + Send + Sync + 'static,
 {
-    let client = Arc::new(reqwest::Client::builder().timeout(Duration::from_secs(5)).build()?);
-    let mut resolved_map = HashMap::new();
     let total = asset_ids.len();
-
     if total == 0 {
-        return Ok(resolved_map);
+        return Ok(HashMap::new());
     }
 
-    let csrf_token = fetch_csrf_token(&client).await;
+    let client = reqwest::Client::builder().timeout(Duration::from_secs(5)).build()?;
+    let mut resolved_map = resolve_via_catalog(&client, &asset_ids, false).await;
 
-    let mut remaining_ids = asset_ids.clone();
-
-    if !csrf_token.is_empty() {
-        let chunks = asset_ids.chunks(120);
-        for chunk in chunks {
-            let items: Vec<serde_json::Value> = chunk
-                .iter()
-                .filter_map(|id| {
-                    if let Ok(id_num) = id.parse::<u64>() {
-                        Some(serde_json::json!({
-                            "itemType": "Asset",
-                            "id": id_num
-                        }))
-                    } else {
-                        None
-                    }
-                })
-                .collect();
-
-            if items.is_empty() {
-                continue;
-            }
-
-            let payload = serde_json::json!({ "items": items });
-            let req = client
-                .post("https://catalog.roblox.com/v1/catalog/items/details")
-                .header("x-csrf-token", &csrf_token)
-                .header("Content-Type", "application/json")
-                .header("Accept", "application/json")
-                .json(&payload);
-
-            if let Ok(res) = req.send().await {
-                if let Ok(json) = res.json::<serde_json::Value>().await {
-                    if let Some(data) = json.get("data").and_then(|v| v.as_array()) {
-                        for item in data {
-                            if let (Some(id), Some(type_id)) = (
-                                item.get("id").and_then(serde_json::Value::as_u64),
-                                item.get("assetType").and_then(serde_json::Value::as_u64),
-                            ) {
-                                let category = match type_id {
-                                    24 => Some("animation"),
-                                    3 => Some("sound"),
-                                    1 | 11 | 13 | 2 | 21 | 22 | 38 => Some("image"),
-                                    40 | 43 | 17 | 12 => Some("mesh"),
-                                    _ => None,
-                                };
-                                if let Some(cat) = category {
-                                    resolved_map.insert(id.to_string(), cat.to_string());
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
+    let mut remaining_ids = asset_ids;
     remaining_ids.retain(|id| !resolved_map.contains_key(id));
 
-    let on_progress = Arc::new(on_progress);
     let mut resolved_count = total - remaining_ids.len();
 
     on_progress(ScriptRefProgress {
@@ -373,6 +392,7 @@ where
             crate::commands::spoofer::RateLimitBucket::AssetResolve,
         )
         .await;
+
         if let Ok(resp) = client
             .post("https://assetdelivery.roblox.com/v2/assets/batch")
             .header("Content-Type", "application/json")
@@ -389,9 +409,8 @@ where
 
                         if let Some(errors) = item.get("errors").and_then(|v| v.as_array()) {
                             if errors.iter().any(|e| {
-                                e.get("code").and_then(serde_json::Value::as_u64) == Some(404)
-                                    || e.get("code").and_then(serde_json::Value::as_u64)
-                                        == Some(401)
+                                let code = e.get("code").and_then(serde_json::Value::as_u64);
+                                code == Some(404) || code == Some(401) || code == Some(403)
                             }) {
                                 is_false_positive = true;
                             }
@@ -416,10 +435,13 @@ where
                             }
                         }
 
-                        if is_false_positive {
-                            resolved_map
-                                .insert(request_id.to_string(), "false_positive".to_string());
-                        } else if let Some(cat) = &category {
+                        let final_cat = if is_false_positive {
+                            Some("false_positive".to_string())
+                        } else {
+                            category
+                        };
+
+                        if let Some(cat) = &final_cat {
                             resolved_map.insert(request_id.to_string(), cat.clone());
                         }
 
@@ -428,11 +450,7 @@ where
                             resolved: resolved_count,
                             total,
                             asset_id: request_id.to_string(),
-                            resolved_category: if is_false_positive {
-                                Some("false_positive".to_string())
-                            } else {
-                                category
-                            },
+                            resolved_category: final_cat,
                         });
                     }
                 }
@@ -443,81 +461,34 @@ where
     Ok(resolved_map)
 }
 
+/// Confirms that scraped asset IDs actually exist on Roblox and determines their type.
+///
+/// Falls back to the slow economy details endpoint for assets that the catalog
+/// refuses to resolve (like off-sale meshes or private decals).
 pub async fn validate_asset_ids(
     asset_ids: Vec<String>,
 ) -> crate::error::Result<HashMap<String, String>> {
-    let client = Arc::new(reqwest::Client::builder().timeout(Duration::from_secs(5)).build()?);
-    let mut result_map: HashMap<String, String> = HashMap::new();
-
     if asset_ids.is_empty() {
+        return Ok(HashMap::new());
+    }
+
+    let client = reqwest::Client::builder().timeout(Duration::from_secs(5)).build()?;
+    let mut result_map = resolve_via_catalog(&client, &asset_ids, true).await;
+
+    let mut remaining_ids = asset_ids;
+    remaining_ids.retain(|id| !result_map.contains_key(id));
+
+    if remaining_ids.is_empty() {
         return Ok(result_map);
     }
 
-    let csrf_token = fetch_csrf_token(&client).await;
-
-    let mut remaining_ids = asset_ids.clone();
-
-    if !csrf_token.is_empty() {
-        let chunks = asset_ids.chunks(120);
-        for chunk in chunks {
-            let items: Vec<serde_json::Value> = chunk
-                .iter()
-                .filter_map(|id| {
-                    if let Ok(id_num) = id.parse::<u64>() {
-                        Some(serde_json::json!({
-                            "itemType": "Asset",
-                            "id": id_num
-                        }))
-                    } else {
-                        None
-                    }
-                })
-                .collect();
-
-            if items.is_empty() {
-                continue;
-            }
-
-            let payload = serde_json::json!({ "items": items });
-            let req = client
-                .post("https://catalog.roblox.com/v1/catalog/items/details")
-                .header("x-csrf-token", &csrf_token)
-                .header("Content-Type", "application/json")
-                .header("Accept", "application/json")
-                .json(&payload);
-
-            if let Ok(res) = req.send().await {
-                if let Ok(json) = res.json::<serde_json::Value>().await {
-                    if let Some(data) = json.get("data").and_then(|v| v.as_array()) {
-                        for item in data {
-                            if let (Some(id), Some(type_id)) = (
-                                item.get("id").and_then(serde_json::Value::as_u64),
-                                item.get("assetType").and_then(serde_json::Value::as_u64),
-                            ) {
-                                let category = match type_id {
-                                    24 => "animation",
-                                    3 => "sound",
-                                    1 | 11 | 13 | 2 | 21 | 22 | 38 => "image",
-                                    40 | 43 | 17 | 12 => "mesh",
-                                    _ => "unknown",
-                                };
-                                result_map.insert(id.to_string(), category.to_string());
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    remaining_ids.retain(|id| !result_map.contains_key(id));
-
     let semaphore = Arc::new(Semaphore::new(12));
-    let mut tasks = Vec::new();
+    let mut tasks = Vec::with_capacity(remaining_ids.len());
 
     for asset_id in remaining_ids {
         let sem = Arc::clone(&semaphore);
-        let cli = Arc::clone(&client);
+        let cli = client.clone();
+
         tasks.push(tokio::spawn(async move {
             let Ok(_permit) = sem.acquire().await else {
                 return (asset_id, "unknown".to_string());
@@ -534,11 +505,13 @@ pub async fn validate_asset_ids(
                     crate::commands::spoofer::RateLimitBucket::AssetResolve,
                 )
                 .await;
+
                 if let Ok(resp) = cli.get(&url).send().await {
-                    if resp.status().as_u16() == 429 {
+                    let status = resp.status().as_u16();
+                    if status == 429 {
                         continue;
                     }
-                    if resp.status().as_u16() == 404 {
+                    if status == 404 || status == 401 || status == 403 {
                         return (asset_id, "false_positive".to_string());
                     }
                     if resp.status().is_success() {

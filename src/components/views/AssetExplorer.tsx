@@ -132,6 +132,13 @@ const VALID_ROOT_SERVICES = new Set([
   'StudioSession',
 ]);
 
+/**
+ * The core visual component for browsing parsed Roblox places or live Studio sessions.
+ *
+ * Maps our internal `RbxInstance` tree structure into a collapsible UI.
+ * Handles drag-and-drop of `.rbxl` files and delegates the heavy lifting of parsing
+ * back to the Tauri backend to keep the React thread unblocked.
+ */
 export default function AssetExplorer({ isOpen, setIsOpen, onScanReceived }: AssetExplorerProps) {
   const { t } = useLanguage();
   const [parseState, setParseState] = useState<ParseProgress | null>(null);
@@ -704,6 +711,7 @@ export default function AssetExplorer({ isOpen, setIsOpen, onScanReceived }: Ass
                       setPreviewingAnimation={setPreviewingAnimation}
                       activeAssetFilters={activeAssetFilters}
                       playingAudioId={playingAudioId}
+                      initialExpanded={true}
                     />
                   ))}
                 </div>

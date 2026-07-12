@@ -6,6 +6,12 @@ import { useLanguage } from '../../contexts/LanguageContext';
 import DebugSection from './settings/DebugSection';
 import GeneralSection from './settings/GeneralSection';
 
+/**
+ * Container view for all user-configurable settings.
+ *
+ * Settings are instantly saved to disk via Tauri and synchronized to the `ConfigContext`
+ * so other components can reactively update when things like "upload audio" or "language" change.
+ */
 export default function SettingsView() {
   const { t } = useLanguage();
 

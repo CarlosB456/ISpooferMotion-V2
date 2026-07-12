@@ -5,6 +5,12 @@ import { useLanguage } from '../../contexts/LanguageContext';
 import { useStudioConnectionState } from '../../contexts/StudioConnectionContext';
 import { cn } from '../../utils/cn';
 
+/**
+ * Global status bar anchored to the bottom of the window.
+ *
+ * Displays the real-time connection status with the Roblox Studio plugin bridge
+ * so the user knows if it's safe to start a spoofing job.
+ */
 export default function StatusBar() {
   const { t } = useLanguage();
   const { studioConnected } = useStudioConnectionState();

@@ -1,3 +1,5 @@
+//! Commands that bridge the gap between the Tauri app and the Roblox Studio plugin.
+
 pub(crate) fn parse_replacements_map(
     replacements_map: &crate::commands::AnyValue,
 ) -> Vec<serde_json::Value> {
@@ -30,9 +32,12 @@ pub(crate) fn parse_replacements_map(
         .unwrap_or_default()
 }
 
+/// Dispatches a mapping of original asset IDs to spoofed asset IDs directly into Roblox Studio.
+///
+/// Tries to use the high-performance memory bridge first. If the plugin isn't connected
+/// to the bridge, it falls back to a direct local HTTP POST.
 #[tauri::command]
 #[specta::specta]
-// Send finalized asset mappings to the Roblox Studio plugin. Returns "ok" or an error string.
 pub async fn push_to_studio(
     replacements_map: crate::commands::AnyValue,
     plugin_port: Option<String>,
@@ -53,7 +58,7 @@ pub async fn push_to_studio(
     log::warn!("push_to_studio: internal bridge unavailable, trying direct HTTP fallback");
     let port = plugin_port.and_then(|value| value.parse::<u16>().ok()).unwrap_or(14285);
     let url = format!("http://127.0.0.1:{port}/replace-ids");
-    let send_result = reqwest::Client::new()
+    let send_result = crate::utils::get_http_client()
         .post(&url)
         .json(&serde_json::json!({ "mappings": mappings }))
         .send()

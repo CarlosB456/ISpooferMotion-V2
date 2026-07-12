@@ -1,16 +1,16 @@
-use std::fs::File;
-use std::io::Read;
 use std::path::Path;
+use tokio::fs::File;
+use tokio::io::AsyncReadExt;
 
 pub struct PayloadMeta {
     pub file_type: String,
     pub extension: String,
 }
 
-pub fn inspect_payload(path: &Path) -> crate::error::Result<PayloadMeta> {
-    let mut file = File::open(path).map_err(|e| format!("Failed to open payload: {e}"))?;
+pub async fn inspect_payload(path: &Path) -> crate::error::Result<PayloadMeta> {
+    let mut file = File::open(path).await.map_err(|e| format!("Failed to open payload: {e}"))?;
     let mut buffer = [0u8; 512];
-    let bytes_read = file.read(&mut buffer).unwrap_or(0);
+    let bytes_read = file.read(&mut buffer).await.unwrap_or(0);
     let sample = &buffer[..bytes_read];
 
     // Detect HTML/XML error pages

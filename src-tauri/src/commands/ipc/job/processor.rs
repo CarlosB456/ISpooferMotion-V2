@@ -1,40 +1,98 @@
 use futures::stream::{self, StreamExt};
 use std::collections::{HashMap, HashSet};
+use std::fs::{File, OpenOptions};
+use std::io::Write;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
+use tauri::{AppHandle, Emitter, Manager};
 
 use super::state::{begin_spoofer_job, finish_spoofer_job, wait_if_paused};
 use super::types::{AssetDetails, SpooferActionRequest};
 use crate::commands::ipc::{append_log_entry, logging, redact_log_message};
-use std::fs::OpenOptions;
-use std::io::Write;
-use tauri::{AppHandle, Emitter, Manager};
 
-// Parse comma-separated Place IDs and select the first valid numeric ID.
-fn first_valid_place_id(raw: Option<&str>) -> Option<String> {
-    raw.unwrap_or_default()
-        .split(|character: char| character == ',' || character.is_whitespace())
-        .map(str::trim)
-        .find(|candidate| !candidate.is_empty() && candidate.chars().all(|c| c.is_ascii_digit()))
-        .map(std::string::ToString::to_string)
+struct JobContext {
+    job_id: String,
+    cookie: String,
+    api_key: String,
+    group_id: Option<String>,
+    upload_types: Vec<String>,
+    account_id: Option<String>,
+    forced_place_ids: Vec<String>,
+    safe_place_name: String,
+    place_name_raw: String,
+    base_downloads_dir: std::path::PathBuf,
+    universe_id: Option<String>,
+    csrf_token: String,
+    downloads_root: String,
+    excluded_users: HashSet<String>,
+    excluded_groups: HashSet<String>,
+    proxy_url: Option<String>,
+    batch_urls: HashMap<String, String>,
+    batch_metadata: HashMap<String, AssetDetails>,
+    enable_archive_recovery: bool,
+
+    // Shared tracking state
+    success_count: AtomicUsize,
+    skip_count: AtomicUsize,
+    fail_count: AtomicUsize,
+    interrupted: AtomicBool,
+
+    // Thread-safe caches & outputs
+    creator_place_ids_cache: dashmap::DashMap<String, Vec<String>>,
+    replacements: dashmap::DashMap<String, serde_json::Value>,
+    asset_results: Mutex<Vec<serde_json::Value>>,
+    log_file: Mutex<Option<File>>,
+
+    // External handles
+    client: reqwest::Client,
+    app: AppHandle,
 }
 
-// Extract all numeric Place IDs from a comma-separated string.
-fn valid_place_ids(raw: Option<&str>) -> Vec<String> {
-    let mut ids = Vec::new();
-    for candidate in raw
-        .unwrap_or_default()
-        .split(|character: char| character == ',' || character.is_whitespace())
-        .map(str::trim)
-    {
-        if candidate.is_empty() || !candidate.chars().all(|c| c.is_ascii_digit()) {
-            continue;
+impl JobContext {
+    fn log(&self, msg: &str, level: &str) {
+        let _ = append_log_entry(&self.app, level, "spoofer", msg);
+        let timestamp = chrono::Local::now().format("%Y-%m-%d %H:%M:%S");
+        let formatted =
+            format!("[{}] [{}] {}", timestamp, level.to_uppercase(), redact_log_message(msg));
+
+        if let Ok(mut lock) = self.log_file.lock() {
+            if let Some(file) = lock.as_mut() {
+                let _ = writeln!(file, "{formatted}");
+            }
         }
-        if !ids.iter().any(|existing| existing == candidate) {
-            ids.push(candidate.to_string());
+
+        let _ = self.app.emit(
+            "spoofer-log",
+            serde_json::json!({
+                "message": msg,
+                "level": level
+            }),
+        );
+    }
+
+    fn record_result(&self, result: serde_json::Value) {
+        if let Ok(mut results) = self.asset_results.lock() {
+            results.push(result);
+        }
+    }
+}
+
+fn valid_place_ids(raw: Option<&str>) -> Vec<String> {
+    let Some(raw_str) = raw else { return vec![] };
+    let mut ids = Vec::new();
+    for candidate in raw_str.split(|c: char| c == ',' || c.is_whitespace()).map(str::trim) {
+        if !candidate.is_empty() && candidate.chars().all(|c| c.is_ascii_digit()) {
+            let cand_str = candidate.to_string();
+            if !ids.contains(&cand_str) {
+                ids.push(cand_str);
+            }
         }
     }
     ids
+}
+
+fn first_valid_place_id(raw: Option<&str>) -> Option<String> {
+    valid_place_ids(raw).into_iter().next()
 }
 
 fn numeric_value_to_string(value: &serde_json::Value) -> Option<String> {
@@ -136,145 +194,84 @@ pub async fn process_spoofer_action(
     app: AppHandle,
     data: SpooferActionRequest,
 ) -> crate::error::Result<()> {
-    // Initialize job state tracking and logging directories.
     let start_time = chrono::Utc::now();
-    let job_id = format!("{}", chrono::Utc::now().timestamp_millis());
+    let job_id = format!("{}", start_time.timestamp_millis());
     let app_data_dir = app.path().app_data_dir()?;
     let logs_dir = app_data_dir.join("ispoofer_logs");
     std::fs::create_dir_all(&logs_dir)?;
     logging::cleanup_logs_dir(&logs_dir);
 
-    let user_download_path = data.download_path.clone();
-    let base_downloads_dir = if let Some(dp) = user_download_path.filter(|s| !s.trim().is_empty()) {
-        std::path::PathBuf::from(dp)
-    } else {
-        app_data_dir.join("downloads")
-    };
+    let base_downloads_dir =
+        if let Some(dp) = data.download_path.as_deref().filter(|s| !s.trim().is_empty()) {
+            std::path::PathBuf::from(dp)
+        } else {
+            app_data_dir.join("downloads")
+        };
     tokio::fs::create_dir_all(&base_downloads_dir).await?;
 
     let place_name_raw = data.place_name.clone().unwrap_or_else(|| "UnknownPlace".to_string());
-
     let safe_place_name =
         place_name_raw.replace(|c: char| !c.is_alphanumeric() && c != ' ' && c != '-', "_");
 
     begin_spoofer_job(&job_id)?;
+    let job_log_path = logs_dir.join(format!("job-{job_id}.txt")).to_string_lossy().to_string();
     let _ = app.emit(
         "spoofer-started",
-        serde_json::json!({ "jobId": job_id, "logFilePath": logs_dir.join(format!("job-{job_id}.txt")).to_string_lossy() }),
+        serde_json::json!({ "jobId": job_id, "logFilePath": job_log_path }),
     );
-    let job_log_path = logs_dir.join(format!("job-{job_id}.txt")).to_string_lossy().to_string();
-    let enable_archive_recovery = data.enable_archive_recovery.unwrap_or(false);
 
-    let job_log_path_clone = job_log_path.clone();
-    let emit_job_log = |app: &AppHandle, msg: &str, level: &str| {
-        let _ = append_log_entry(app, level, "spoofer", msg);
-        if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(&job_log_path_clone)
-        {
-            let _ = writeln!(
-                file,
-                "[{}] [{}] {}",
-                chrono::Local::now().format("%Y-%m-%d %H:%M:%S"),
-                level.to_uppercase(),
-                redact_log_message(msg)
-            );
+    let log_file = OpenOptions::new().create(true).append(true).open(&job_log_path).ok();
+
+    // Provide a minimal temporary context just for early logging before the full JobContext is built.
+    let proxy_url = data.proxy_url.clone();
+    let temp_log_file = Mutex::new(log_file);
+    let temp_log = |msg: &str, level: &str| {
+        let _ = append_log_entry(&app, level, "spoofer", msg);
+        let timestamp = chrono::Local::now().format("%Y-%m-%d %H:%M:%S");
+        let formatted =
+            format!("[{}] [{}] {}", timestamp, level.to_uppercase(), redact_log_message(msg));
+        if let Ok(mut lock) = temp_log_file.lock() {
+            if let Some(file) = lock.as_mut() {
+                let _ = writeln!(file, "{formatted}");
+            }
         }
-        let _ = app.emit(
-            "spoofer-log",
-            serde_json::json!({
-                "message": msg,
-                "level": level
-            }),
-        );
+        let _ = app.emit("spoofer-log", serde_json::json!({ "message": msg, "level": level }));
     };
 
-    emit_job_log(&app, "Starting spoofer job...", "info");
+    temp_log("Starting spoofer job...", "info");
 
-    let proxy_url = data.proxy_url.clone();
     if let Some(url) = proxy_url.as_deref().filter(|s| !s.trim().is_empty()) {
-        emit_job_log(&app, &format!("Using HTTP proxy: {}", url), "info");
+        temp_log(&format!("Using HTTP proxy: {url}"), "info");
     }
-    let client = Arc::new(crate::utils::get_http_client_with_proxy(proxy_url.as_deref()));
+    let client = crate::utils::get_http_client_with_proxy(proxy_url.as_deref());
 
-    let assets_str = data.assets.unwrap_or_default();
-    let cookie = data.cookie.unwrap_or_default();
-    let api_key = data.api_key.unwrap_or_default();
-    let group_id = data.group_id.clone();
-    let upload_types = data.upload_types.clone().unwrap_or_else(|| {
-        vec!["animation".into(), "audio".into(), "image".into(), "mesh".into(), "script_ref".into()]
-    });
-    let concurrent_enabled = data.concurrent.unwrap_or(false);
-    // Enforce concurrency limits to manage memory and API load.
-    let max_concurrency =
-        data.max_concurrency.unwrap_or(if concurrent_enabled { 100 } else { 5 }).clamp(1, 100)
-            as usize;
-    crate::commands::spoofer::configure_adaptive_concurrency(max_concurrency);
-    let skip_owned = data.skip_owned.unwrap_or(false);
-    let preserve_metadata = data.preserve_metadata.unwrap_or(true);
-    let mut excluded_users =
-        crate::commands::spoofer::parse_excluded_id_list(data.excluded_user_ids.as_deref());
-    excluded_users.insert("1".to_string());
-    let excluded_groups =
-        crate::commands::spoofer::parse_excluded_id_list(data.excluded_group_ids.as_deref());
-    let skip_existing_replacements = data.skip_existing_replacements.unwrap_or(true);
-    let existing_replacements: HashMap<String, String> = data
-        .existing_replacements
-        .and_then(|value| value.0.as_object().cloned())
-        .map(|entries| {
-            entries
-                .into_iter()
-                .filter_map(|(key, value)| {
-                    value.as_str().map(|replacement| (key, replacement.to_string()))
-                })
-                .collect()
-        })
-        .unwrap_or_default();
-    let account = data.account.unwrap_or_else(|| {
-        crate::commands::AnyValue(serde_json::json!({
-            "id": "unknown",
-            "name": "Unknown",
-            "avatarUrl": ""
-        }))
-    });
-    let account_id = selected_account_id(&account.0);
-    let group = data.group;
+    let cookie = data.cookie.clone().unwrap_or_default();
+    let api_key = data.api_key.clone().unwrap_or_default();
 
-    // Validate that a cookie was provided.
     if cookie.trim().len() < 50 {
-        emit_job_log(&app, "A valid Roblox cookie is required before spoofing.", "error");
-        let _ = app.emit(
-            "spoofer-result",
-            serde_json::json!({"success": false, "output": "Missing Roblox cookie", "jobId": job_id, "logFilePath": job_log_path}),
-        );
+        temp_log("A valid Roblox cookie is required before spoofing.", "error");
+        let _ = app.emit("spoofer-result", serde_json::json!({"success": false, "output": "Missing Roblox cookie", "jobId": job_id, "logFilePath": job_log_path}));
         finish_spoofer_job(&job_id);
         return Ok(());
     }
 
     if api_key.trim().len() < 20 {
-        emit_job_log(
-            &app,
-            "An Open Cloud API key is required before spoofing. Create one with Assets read/write access for the selected creator.",
-            "error",
-        );
-        let _ = app.emit(
-            "spoofer-result",
-            serde_json::json!({"success": false, "output": "Missing Open Cloud API key", "jobId": job_id, "logFilePath": job_log_path}),
-        );
+        temp_log("An Open Cloud API key is required before spoofing. Create one with Assets read/write access for the selected creator.", "error");
+        let _ = app.emit("spoofer-result", serde_json::json!({"success": false, "output": "Missing Open Cloud API key", "jobId": job_id, "logFilePath": job_log_path}));
         finish_spoofer_job(&job_id);
         return Ok(());
     }
 
+    let assets_str = data.assets.clone().unwrap_or_default();
     let mut parsed_assets: Vec<(String, String, Option<String>, Option<String>)> = Vec::new();
     if let Ok(arr) = serde_json::from_str::<Vec<serde_json::Value>>(&assets_str) {
         for val in arr {
             if let (Some(id), Some(t)) =
                 (val.get("id").and_then(|v| v.as_str()), val.get("type").and_then(|v| v.as_str()))
             {
-                let raw_value = val
-                    .get("rawValue")
-                    .and_then(|v| v.as_str())
-                    .map(std::string::ToString::to_string);
-                let name =
-                    val.get("name").and_then(|v| v.as_str()).map(std::string::ToString::to_string);
+                let raw_value =
+                    val.get("rawValue").and_then(|v| v.as_str()).map(ToString::to_string);
+                let name = val.get("name").and_then(|v| v.as_str()).map(ToString::to_string);
                 parsed_assets.push((id.to_string(), t.to_string(), raw_value, name));
             }
         }
@@ -300,17 +297,28 @@ pub async fn process_spoofer_action(
     }
 
     if parsed_assets.is_empty() {
-        emit_job_log(&app, "No valid numeric asset IDs found in input.", "error");
-        let _ = app.emit(
-            "spoofer-result",
-            serde_json::json!({"success": false, "output": "No valid IDs", "jobId": job_id, "logFilePath": job_log_path}),
-        );
+        temp_log("No valid numeric asset IDs found in input.", "error");
+        let _ = app.emit("spoofer-result", serde_json::json!({"success": false, "output": "No valid IDs", "jobId": job_id, "logFilePath": job_log_path}));
         finish_spoofer_job(&job_id);
         return Ok(());
     }
 
-    // Deduplicate the asset list to prevent redundant spoofing operations.
-    let mut deduped_assets: Vec<(String, String, Option<String>, Option<String>)> = Vec::new();
+    let skip_existing_replacements = data.skip_existing_replacements.unwrap_or(true);
+    let existing_replacements: HashMap<String, String> = data
+        .existing_replacements
+        .as_ref()
+        .and_then(|value| value.0.as_object().cloned())
+        .map(|entries| {
+            entries
+                .into_iter()
+                .filter_map(|(key, value)| {
+                    value.as_str().map(|replacement| (key, replacement.to_string()))
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let mut deduped_assets = Vec::new();
     let mut seen_asset_ids = HashSet::new();
     for (asset_id, asset_type, raw_value, name) in parsed_assets {
         if !seen_asset_ids.insert(asset_id.clone()) {
@@ -324,43 +332,21 @@ pub async fn process_spoofer_action(
     parsed_assets = deduped_assets;
 
     if parsed_assets.is_empty() {
-        emit_job_log(
-            &app,
-            "No assets left to process after deduplication and replacement filters.",
-            "warn",
-        );
-        let _ = app.emit(
-            "spoofer-result",
-            serde_json::json!({
-                "success": true,
-                "output": "Nothing to process",
-                "jobId": job_id,
-                "logFilePath": job_log_path,
-                "replacements": {},
-                "assetResults": []
-            }),
-        );
+        temp_log("No assets left to process after deduplication and replacement filters.", "warn");
+        let _ = app.emit("spoofer-result", serde_json::json!({"success": true, "output": "Nothing to process", "jobId": job_id, "logFilePath": job_log_path, "replacements": {}, "assetResults": []}));
         finish_spoofer_job(&job_id);
         return Ok(());
     }
 
-    let asset_ids: Vec<String> = parsed_assets.iter().map(|(id, _, _, _)| id.clone()).collect();
-    emit_job_log(&app, &format!("Found {} asset(s) to process.", parsed_assets.len()), "info");
     let total = parsed_assets.len();
+    temp_log(&format!("Found {total} asset(s) to process."), "info");
+
     let forced_place_ids = valid_place_ids(data.force_place_ids.as_deref());
     let forced_place_id = first_valid_place_id(data.force_place_ids.as_deref());
     if let Some(place_id) = forced_place_id.as_deref() {
-        emit_job_log(
-            &app,
-            &format!("Using forced Place ID {place_id} for asset delivery."),
-            "info",
-        );
+        temp_log(&format!("Using forced Place ID {place_id} for asset delivery."), "info");
     } else {
-        emit_job_log(
-            &app,
-            "No forced Place ID specified; candidate Place IDs will be automatically resolved from asset creators.",
-            "info",
-        );
+        temp_log("No forced Place ID specified; candidate Place IDs will be automatically resolved from asset creators.", "info");
     }
 
     let universe_id = if let Some(place_id) = forced_place_id.clone() {
@@ -368,32 +354,15 @@ pub async fn process_spoofer_action(
     } else {
         None
     };
-    if let Some(ref universe_id) = universe_id {
-        emit_job_log(
-            &app,
-            &format!("Resolved universe {universe_id} for post-upload asset permissions."),
-            "info",
-        );
+    if let Some(ref uid) = universe_id {
+        temp_log(&format!("Resolved universe {uid} for post-upload asset permissions."), "info");
     }
 
-    let csrf_token = Arc::new(Mutex::new(
-        crate::commands::auth::get_csrf_token(app.clone(), cookie.clone())
-            .await
-            .unwrap_or_default(),
-    ));
-    let downloads_root = base_downloads_dir.to_string_lossy().to_string();
-    let upload_group_id = group_id.as_deref();
+    let csrf_token = crate::commands::auth::get_csrf_token(app.clone(), cookie.clone())
+        .await
+        .unwrap_or_default();
 
-    let success_count = Arc::new(AtomicUsize::new(0));
-    let skip_count = Arc::new(AtomicUsize::new(0));
-    let fail_count = Arc::new(AtomicUsize::new(0));
-    let interrupted = Arc::new(AtomicBool::new(false));
-    let replacements = Arc::new(dashmap::DashMap::new());
-    let asset_results = Arc::new(Mutex::new(Vec::new()));
-    let creator_place_ids_cache = Arc::new(dashmap::DashMap::<String, Vec<String>>::new());
-
-    let mut batch_urls = std::collections::HashMap::new();
-    // Resolve download URLs in a batch request for efficiency.
+    let mut batch_urls = HashMap::new();
     let batch_assets =
         parsed_assets.iter().map(|(id, t, _, _)| (id.clone(), t.clone())).collect::<Vec<_>>();
     if let Ok(urls) = crate::commands::spoofer::batch_get_download_urls_for_assets(
@@ -404,26 +373,22 @@ pub async fn process_spoofer_action(
     )
     .await
     {
-        emit_job_log(
-            &app,
+        temp_log(
             &format!("Successfully resolved {} download URLs via batch endpoint.", urls.len()),
             "info",
         );
         batch_urls = urls;
     } else {
-        emit_job_log(&app, "Failed to resolve download URLs via batch endpoint. Falling back to individual resolution.", "warn");
+        temp_log("Failed to resolve download URLs via batch endpoint. Falling back to individual resolution.", "warn");
     }
 
-    let batch_urls = Arc::new(batch_urls);
-
-    let initial_csrf = csrf_token.lock().map(|t| t.clone()).unwrap_or_default();
-    let mut batch_metadata = std::collections::HashMap::new();
+    let mut batch_metadata = HashMap::new();
+    let preserve_metadata = data.preserve_metadata.unwrap_or(true);
+    let asset_ids: Vec<String> = parsed_assets.iter().map(|(id, _, _, _)| id.clone()).collect();
     if preserve_metadata {
-        emit_job_log(&app, "Fetching asset metadata in batch...", "info");
-        batch_metadata =
-            batch_fetch_asset_details(&asset_ids, &cookie, &initial_csrf, &client).await;
-        emit_job_log(
-            &app,
+        temp_log("Fetching asset metadata in batch...", "info");
+        batch_metadata = batch_fetch_asset_details(&asset_ids, &cookie, &csrf_token, &client).await;
+        temp_log(
             &format!(
                 "Successfully resolved metadata for {} assets via batch endpoint.",
                 batch_metadata.len()
@@ -431,100 +396,118 @@ pub async fn process_spoofer_action(
             "info",
         );
     }
-    let batch_metadata = Arc::new(batch_metadata);
 
+    let concurrent_enabled = data.concurrent.unwrap_or(false);
+    let max_concurrency =
+        data.max_concurrency.unwrap_or(if concurrent_enabled { 100 } else { 5 }).clamp(1, 100)
+            as usize;
+    crate::commands::spoofer::configure_adaptive_concurrency(max_concurrency);
+
+    let mut excluded_users =
+        crate::commands::spoofer::parse_excluded_id_list(data.excluded_user_ids.as_deref());
+    excluded_users.insert("1".to_string());
+    let excluded_groups =
+        crate::commands::spoofer::parse_excluded_id_list(data.excluded_group_ids.as_deref());
+
+    let account = data.account.clone().unwrap_or_else(|| {
+        crate::commands::AnyValue(
+            serde_json::json!({"id": "unknown", "name": "Unknown", "avatarUrl": ""}),
+        )
+    });
+
+    let log_file_extracted = temp_log_file.into_inner().unwrap_or(None);
+
+    let ctx = Arc::new(JobContext {
+        job_id: job_id.clone(),
+        cookie,
+        api_key,
+        group_id: data.group_id.clone(),
+        upload_types: data.upload_types.clone().unwrap_or_else(|| {
+            vec![
+                "animation".into(),
+                "audio".into(),
+                "image".into(),
+                "mesh".into(),
+                "script_ref".into(),
+            ]
+        }),
+        account_id: selected_account_id(&account.0),
+        forced_place_ids,
+        safe_place_name,
+        place_name_raw,
+        base_downloads_dir: base_downloads_dir.clone(),
+        universe_id,
+        csrf_token,
+        downloads_root: base_downloads_dir.to_string_lossy().to_string(),
+        excluded_users,
+        excluded_groups,
+        proxy_url,
+        batch_urls,
+        batch_metadata,
+        enable_archive_recovery: data.enable_archive_recovery.unwrap_or(false),
+        success_count: AtomicUsize::new(0),
+        skip_count: AtomicUsize::new(0),
+        fail_count: AtomicUsize::new(0),
+        interrupted: AtomicBool::new(false),
+        creator_place_ids_cache: dashmap::DashMap::new(),
+        replacements: dashmap::DashMap::new(),
+        asset_results: Mutex::new(Vec::new()),
+        log_file: Mutex::new(log_file_extracted),
+        client,
+        app: app.clone(),
+    });
+
+    let skip_owned = data.skip_owned.unwrap_or(false);
     let stream = stream::iter(parsed_assets.into_iter().enumerate());
-    // Process assets concurrently within the specified limits.
+
     stream
         .for_each_concurrent(max_concurrency, |(i, (asset_id, asset_type, raw_value, asset_name))| {
-            let app = app.clone();
-            let job_id = job_id.clone();
-            let cookie = cookie.clone();
-            let api_key = api_key.clone();
-            let group_id = group_id.clone();
-            let upload_types = upload_types.clone();
-            let account_id = account_id.clone();
-            let upload_group_id = upload_group_id.map(std::string::ToString::to_string);
-            let forced_place_ids = forced_place_ids.clone();
-            let batch_urls = Arc::clone(&batch_urls);
-            let creator_place_ids_cache = Arc::clone(&creator_place_ids_cache);
-            let replacements = Arc::clone(&replacements);
-            let asset_results = Arc::clone(&asset_results);
-            let batch_metadata = Arc::clone(&batch_metadata);
-            let success_count = Arc::clone(&success_count);
-            let skip_count = Arc::clone(&skip_count);
-            let fail_count = Arc::clone(&fail_count);
-            let interrupted = Arc::clone(&interrupted);
-            let safe_place_name = safe_place_name.clone();
-            let place_name_raw = place_name_raw.clone();
-            let base_downloads_dir = base_downloads_dir.clone();
-            let universe_id = universe_id.clone();
-            let csrf_token = Arc::clone(&csrf_token);
-            let downloads_root = downloads_root.clone();
-            let excluded_users = excluded_users.clone();
-            let excluded_groups = excluded_groups.clone();
-            let proxy_url = proxy_url.clone();
-            let client = Arc::clone(&client);
+            let ctx = Arc::clone(&ctx);
 
             async move {
-                let exact_name = batch_metadata
+                let exact_name = ctx.batch_metadata
                     .get(&asset_id)
                     .map(|d| d.name.clone())
-                    .or_else(|| {
-                        asset_name.clone().filter(|n| {
-                            n != "Unknown" && n != "Animations" && !n.starts_with("Asset ")
-                        })
-                    })
+                    .or_else(|| asset_name.clone().filter(|n| n != "Unknown" && n != "Animations" && !n.starts_with("Asset ")))
                     .or_else(|| asset_name.clone())
                     .unwrap_or_else(|| format!("Asset {asset_id}"));
 
                 let _adaptive_permit = crate::commands::spoofer::acquire_adaptive_permit().await;
-                if interrupted.load(Ordering::Relaxed) {
+                if ctx.interrupted.load(Ordering::Relaxed) {
                     return;
                 }
-                if let Err(e) = wait_if_paused(&job_id).await {
-                    let _ = append_log_entry(&app, "warn", "spoofer", &e.to_string());
-                    interrupted.store(true, Ordering::Relaxed);
+                if let Err(e) = wait_if_paused(&ctx.job_id).await {
+                    let _ = append_log_entry(&ctx.app, "warn", "spoofer", &e.to_string());
+                    ctx.interrupted.store(true, Ordering::Relaxed);
                     return;
                 }
 
-                let _ = app.emit(
+                let _ = ctx.app.emit(
                     "spoofer-progress",
-                    serde_json::json!({ "jobId": job_id, "current": i + 1, "total": total }),
+                    serde_json::json!({ "jobId": ctx.job_id, "current": i + 1, "total": total }),
                 );
 
                 if crate::commands::spoofer::should_skip_asset_for_spoofing(
-                    app.clone(),
+                    ctx.app.clone(),
                     &asset_id,
-                    &cookie,
+                    &ctx.cookie,
                     skip_owned,
-                    account_id.as_deref(),
-                    upload_group_id.as_deref(),
-                    &excluded_users,
-                    &excluded_groups,
+                    ctx.account_id.as_deref(),
+                    ctx.group_id.as_deref(),
+                    &ctx.excluded_users,
+                    &ctx.excluded_groups,
                 )
                 .await
                 {
-                    skip_count.fetch_add(1, Ordering::Relaxed);
-                    if let Ok(mut results) = asset_results.lock() {
-                        results.push(serde_json::json!({
-                            "id": asset_id.clone(),
-                            "name": exact_name.clone(),
-                            "type": asset_type.clone(),
-                            "success": true,
-                            "skipped": true,
-                            "reason": "filtered"
-                        }));
-                    }
+                    ctx.skip_count.fetch_add(1, Ordering::Relaxed);
+                    ctx.record_result(serde_json::json!({
+                        "id": asset_id, "name": exact_name, "type": asset_type, "success": true, "skipped": true, "reason": "filtered"
+                    }));
                     return;
                 }
 
-                let msg = format!("Processing asset {} ({}/{})", asset_id, i + 1, total);
-                let _ = append_log_entry(&app, "info", "spoofer", &msg);
-                let _ =
-                    app.emit("spoofer-log", serde_json::json!({ "message": msg, "level": "info" }));
+                ctx.log(&format!("Processing asset {asset_id} ({}/{})", i + 1, total), "info");
 
-                // Map internal type names to Open Cloud API expected values.
                 let mapped_type_name = match asset_type.as_str() {
                     "audio" => "Audio",
                     "mesh" => "Mesh",
@@ -544,8 +527,7 @@ pub async fn process_spoofer_action(
                     _ => "Assets",
                 };
 
-                let downloads_dir =
-                    base_downloads_dir.join(&safe_place_name).join(folder_type_name);
+                let downloads_dir = ctx.base_downloads_dir.join(&ctx.safe_place_name).join(folder_type_name);
                 let _ = tokio::fs::create_dir_all(&downloads_dir).await;
 
                 let file_ext = if mapped_type_name == "Audio" {
@@ -557,78 +539,39 @@ pub async fn process_spoofer_action(
                 } else {
                     "rbxm"
                 };
-                let file_path = downloads_dir
-                    .join(format!("{asset_id}.{file_ext}"))
-                    .to_string_lossy()
-                    .to_string();
+                let file_path = downloads_dir.join(format!("{asset_id}.{file_ext}")).to_string_lossy().to_string();
 
-                let direct_url =
-                    if asset_type == "plugin" { None } else { batch_urls.get(&asset_id).cloned() };
-                let place_ids_for_download = if forced_place_ids.is_empty() {
-                    match crate::commands::spoofer::get_asset_creator_for_asset(
-                        app.clone(),
-                        asset_id.clone(),
-                        cookie.clone(),
-                    )
-                    .await
-                    {
+                let direct_url = if asset_type == "plugin" { None } else { ctx.batch_urls.get(&asset_id).cloned() };
+                let place_ids_for_download = if ctx.forced_place_ids.is_empty() {
+                    match crate::commands::spoofer::get_asset_creator_for_asset(ctx.app.clone(), asset_id.clone(), ctx.cookie.clone()).await {
                         Ok((creator_type, creator_id)) => {
                             let cache_key = format!("{creator_type}:{creator_id}");
-                            let cached =
-                                creator_place_ids_cache.get(&cache_key).map(|v| v.value().clone());
-                            if let Some(ids) = cached {
+                            if let Some(ids) = ctx.creator_place_ids_cache.get(&cache_key).map(|v| v.value().clone()) {
                                 ids
                             } else {
                                 if let Ok(ids) = crate::commands::spoofer::get_place_id_from_creator(
-                                    app.clone(),
-                                    creator_type.clone(),
-                                    creator_id.clone(),
-                                    cookie.clone(),
-                                    Some(100),
-                                    Some(place_name_raw.clone()),
-                                )
-                                .await
-                                {
+                                    ctx.app.clone(), creator_type.clone(), creator_id.clone(), ctx.cookie.clone(), Some(100), Some(ctx.place_name_raw.clone())
+                                ).await {
                                     if !ids.is_empty() {
-                                        let msg = format!(
-                                            "Found {} candidate Place ID(s) for {} {}.",
-                                            ids.len(),
-                                            creator_type,
-                                            creator_id
-                                        );
-                                        let _ = append_log_entry(&app, "info", "spoofer", &msg);
-                                        let _ = app.emit(
-                                            "spoofer-log",
-                                            serde_json::json!({ "message": msg, "level": "info" }),
-                                        );
+                                        ctx.log(&format!("Found {} candidate Place ID(s) for {} {}.", ids.len(), creator_type, creator_id), "info");
                                     }
-                                    creator_place_ids_cache.insert(cache_key, ids.clone());
+                                    ctx.creator_place_ids_cache.insert(cache_key, ids.clone());
                                     ids
                                 } else {
                                     let mut fallback_ids = Vec::new();
-                                    if let Some(uid) = account_id.clone() {
+                                    if let Some(uid) = ctx.account_id.clone() {
                                         if uid != creator_id {
                                             if let Ok(ids) = crate::commands::spoofer::get_place_id_from_creator(
-                                                app.clone(),
-                                                "user".to_string(),
-                                                uid.clone(),
-                                                cookie.clone(),
-                                                Some(100),
-                                                Some(place_name_raw.clone()),
+                                                ctx.app.clone(), "user".to_string(), uid.clone(), ctx.cookie.clone(), Some(100), Some(ctx.place_name_raw.clone())
                                             ).await {
                                                 fallback_ids = ids;
                                             }
                                         }
                                     }
                                     if !fallback_ids.is_empty() {
-                                        let msg = format!(
-                                            "Asset creator has no valid places. Fell back to {} candidate Place ID(s) from your account.",
-                                            fallback_ids.len()
-                                        );
-                                        let _ = append_log_entry(&app, "info", "spoofer", &msg);
-                                        let _ = app.emit("spoofer-log", serde_json::json!({ "message": msg, "level": "info" }));
+                                        ctx.log(&format!("Asset creator has no valid places. Fell back to {} candidate Place ID(s) from your account.", fallback_ids.len()), "info");
                                     }
-                                    creator_place_ids_cache.insert(cache_key, fallback_ids.clone());
+                                    ctx.creator_place_ids_cache.insert(cache_key, fallback_ids.clone());
                                     fallback_ids
                                 }
                             }
@@ -636,255 +579,104 @@ pub async fn process_spoofer_action(
                         Err(_) => Vec::new(),
                     }
                 } else {
-                    forced_place_ids.clone()
-                };
-                let place_id_arg = if place_ids_for_download.is_empty() {
-                    None
-                } else {
-                    Some(place_ids_for_download.join(","))
+                    ctx.forced_place_ids.clone()
                 };
 
+                let place_id_arg = if place_ids_for_download.is_empty() { None } else { Some(place_ids_for_download.join(",")) };
                 let mut remove_download_file = false;
+
                 let dl_res = if asset_type == "raw_keyframe_sequence" {
                     if let Some(raw_xml) = &raw_value {
                         let full_xml = format!("<roblox xmlns:xmime=\"http://www.w3.org/2005/05/xmlmime\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:noNamespaceSchemaLocation=\"http://www.roblox.com/roblox.xsd\" version=\"4\">\n{}\n</roblox>", raw_xml);
                         if let Err(e) = tokio::fs::write(&file_path, full_xml).await {
                             Err(crate::error::AppError::Io(e))
                         } else {
-                            Ok(crate::commands::spoofer::DownloadResult {
-                                success: true,
-                                file_path: Some(file_path.clone()),
-                                error: None,
-                            })
+                            Ok(crate::commands::spoofer::DownloadResult { success: true, file_path: Some(file_path.clone()), error: None })
                         }
                     } else {
                         Err(crate::error::AppError::Custom("Cannot spoof KeyframeSequences from binary .rbxl files. Please save the place as .rbxlx or use the Studio Plugin instead.".into()))
                     }
                 } else {
                     crate::commands::spoofer::download_animation_asset_with_progress(
-                        app.clone(),
-                        direct_url,
-                        cookie.clone(),
-                        file_path.clone(),
-                        format!("dl_{asset_id}"),
-                        exact_name.clone(),
-                        asset_id.clone(),
-                        Some(asset_type.clone()),
-                        place_id_arg,
-                        enable_archive_recovery,
-                        proxy_url.clone(),
-                    )
-                    .await
+                        ctx.app.clone(), direct_url, ctx.cookie.clone(), file_path.clone(), format!("dl_{asset_id}"), exact_name.clone(), asset_id.clone(), Some(asset_type.clone()), place_id_arg, ctx.enable_archive_recovery, ctx.proxy_url.clone()
+                    ).await
                 };
 
                 match dl_res {
                     Ok(res) if res.success => {
-                        let download_only = asset_type == "script_ref"
-                            || !upload_types.contains(&asset_type)
-                            || asset_type == "plugin";
+                        let download_only = asset_type == "script_ref" || !ctx.upload_types.contains(&asset_type) || asset_type == "plugin";
                         if download_only {
-                            success_count.fetch_add(1, Ordering::Relaxed);
-                            skip_count.fetch_add(1, Ordering::Relaxed);
-                            if let Ok(mut results) = asset_results.lock() {
-                                results.push(serde_json::json!({
-                                    "id": asset_id.clone(),
-                                    "name": exact_name.clone(),
-                                    "type": asset_type.clone(),
-                                    "success": true
-                                }));
-                            }
+                            ctx.success_count.fetch_add(1, Ordering::Relaxed);
+                            ctx.skip_count.fetch_add(1, Ordering::Relaxed);
+                            ctx.record_result(serde_json::json!({ "id": asset_id, "name": exact_name, "type": asset_type, "success": true }));
                             return;
                         }
 
-                        if interrupted.load(Ordering::Relaxed) {
+                        if ctx.interrupted.load(Ordering::Relaxed) {
                             return;
                         }
 
-                        let upload_user_id =
-                            if group_id.is_none() { account_id.clone() } else { None };
-                        if group_id.is_none() && upload_user_id.is_none() {
-                            fail_count.fetch_add(1, Ordering::Relaxed);
-                            if let Ok(mut results) = asset_results.lock() {
-                                results.push(serde_json::json!({
-                                    "id": asset_id.clone(),
-                                    "name": exact_name.clone(),
-                                    "type": asset_type.clone(),
-                                    "success": false,
-                                    "stage": "upload",
-                                    "errorReason": "No valid user ID"
-                                }));
-                            }
+                        let upload_user_id = if ctx.group_id.is_none() { ctx.account_id.clone() } else { None };
+                        if ctx.group_id.is_none() && upload_user_id.is_none() {
+                            ctx.fail_count.fetch_add(1, Ordering::Relaxed);
+                            ctx.record_result(serde_json::json!({ "id": asset_id, "name": exact_name, "type": asset_type, "success": false, "stage": "upload", "errorReason": "No valid user ID" }));
                             return;
                         }
 
-                        let mut details = batch_metadata.get(&asset_id).cloned();
+                        let mut details = ctx.batch_metadata.get(&asset_id).cloned();
                         if details.is_none() {
-                            details = fetch_asset_details(&asset_id, &cookie, &client).await;
+                            details = fetch_asset_details(&asset_id, &ctx.cookie, &ctx.client).await;
                         }
-                        let details = details.unwrap_or_else(|| AssetDetails {
-                            name: exact_name.clone(),
-                            description: "Uploaded by ISpooferMotion.".to_string(),
-                        });
-
-                        let final_description = if preserve_metadata {
-                            details.description
-                        } else {
-                            "Uploaded by ISpooferMotion.".to_string()
-                        };
-
-                        let current_csrf_token =
-                            csrf_token.lock().map(|t| t.clone()).unwrap_or_default();
+                        let details = details.unwrap_or_else(|| AssetDetails { name: exact_name.clone(), description: "Uploaded by ISpooferMotion.".to_string() });
+                        let final_description = if preserve_metadata { details.description } else { "Uploaded by ISpooferMotion.".to_string() };
 
                         let up_res = crate::commands::spoofer::publish_asset_with_progress(
-                            app.clone(),
-                            file_path.clone(),
-                            details.name,
-                            final_description,
-                            cookie.clone(),
-                            current_csrf_token.clone(),
-                            group_id.clone(),
-                            format!("up_{asset_id}"),
-                            Some(mapped_type_name.to_string()),
-                            Some(api_key.clone()),
-                            upload_user_id,
-                            false,
-                            Some(asset_id.clone()),
-                            universe_id.clone(),
-                            Some(downloads_root.clone()),
-                            proxy_url.clone(),
-                        )
-                        .await;
+                            ctx.app.clone(), file_path.clone(), details.name, final_description, ctx.cookie.clone(), ctx.csrf_token.clone(), ctx.group_id.clone(), format!("up_{asset_id}"), Some(mapped_type_name.to_string()), Some(ctx.api_key.clone()), upload_user_id, false, Some(asset_id.clone()), ctx.universe_id.clone(), Some(ctx.downloads_root.clone()), ctx.proxy_url.clone()
+                        ).await;
 
                         match up_res {
                             Ok(up) if up.success => {
                                 let new_id = up.asset_id.unwrap_or_default();
-                                let msg = format!("Upload successful! New ID: {new_id}");
-                                let _ = append_log_entry(&app, "success", "spoofer", &msg);
-                                let _ = app.emit(
-                                    "spoofer-log",
-                                    serde_json::json!({ "message": msg, "level": "success" }),
-                                );
-
-                                replacements.insert(
-                                    asset_id.clone(),
-                                    serde_json::Value::String(new_id.clone()),
-                                );
-                                if let Ok(mut results) = asset_results.lock() {
-                                    results.push(serde_json::json!({
-                                        "id": asset_id.clone(),
-                                        "name": exact_name.clone(),
-                                        "type": asset_type.clone(),
-                                        "success": true,
-                                        "newId": new_id
-                                    }));
-                                }
-                                success_count.fetch_add(1, Ordering::Relaxed);
+                                ctx.log(&format!("Upload successful! New ID: {new_id}"), "success");
+                                ctx.replacements.insert(asset_id.clone(), serde_json::Value::String(new_id.clone()));
+                                ctx.record_result(serde_json::json!({ "id": asset_id, "name": exact_name, "type": asset_type, "success": true, "newId": new_id }));
+                                ctx.success_count.fetch_add(1, Ordering::Relaxed);
                                 remove_download_file = true;
                             }
                             Ok(up) => {
-                                fail_count.fetch_add(1, Ordering::Relaxed);
+                                ctx.fail_count.fetch_add(1, Ordering::Relaxed);
                                 let err_msg = up.error.unwrap_or_default();
-                                let msg = format!("Upload failed for {asset_id}: {err_msg}");
-                                let _ = append_log_entry(&app, "error", "spoofer", &msg);
-                                let _ = app.emit(
-                                    "spoofer-log",
-                                    serde_json::json!({ "message": msg, "level": "error" }),
-                                );
-                                if let Ok(mut results) = asset_results.lock() {
-                                    results.push(serde_json::json!({
-                                        "id": asset_id.clone(),
-                                        "name": exact_name.clone(),
-                                        "type": asset_type.clone(),
-                                        "success": false,
-                                        "stage": "upload",
-                                        "errorReason": err_msg
-                                    }));
-                                }
+                                ctx.log(&format!("Upload failed for {asset_id}: {err_msg}"), "error");
+                                ctx.record_result(serde_json::json!({ "id": asset_id, "name": exact_name, "type": asset_type, "success": false, "stage": "upload", "errorReason": err_msg }));
                             }
                             Err(e) => {
-                                fail_count.fetch_add(1, Ordering::Relaxed);
-                                let msg = format!("Upload error for {asset_id}: {e}");
-                                let _ = append_log_entry(&app, "error", "spoofer", &msg);
-                                let _ = app.emit(
-                                    "spoofer-log",
-                                    serde_json::json!({ "message": msg, "level": "error" }),
-                                );
-                                if let Ok(mut results) = asset_results.lock() {
-                                    results.push(serde_json::json!({
-                                        "id": asset_id.clone(),
-                                        "name": exact_name.clone(),
-                                        "type": asset_type.clone(),
-                                        "success": false,
-                                        "stage": "upload",
-                                        "errorReason": e.to_string()
-                                    }));
-                                }
+                                ctx.fail_count.fetch_add(1, Ordering::Relaxed);
                                 let e_str = e.to_string();
+                                ctx.log(&format!("Upload error for {asset_id}: {e_str}"), "error");
+                                ctx.record_result(serde_json::json!({ "id": asset_id, "name": exact_name, "type": asset_type, "success": false, "stage": "upload", "errorReason": e_str }));
                                 if e_str.contains("403 Forbidden") || e_str.contains("401 Unauthorized") {
-                                    interrupted.store(true, Ordering::Relaxed);
+                                    ctx.interrupted.store(true, Ordering::Relaxed);
                                 }
                             }
                         }
                     }
                     Ok(res) => {
-                        fail_count.fetch_add(1, Ordering::Relaxed);
+                        ctx.fail_count.fetch_add(1, Ordering::Relaxed);
                         let err_msg = res.error.unwrap_or_default();
-                        // Roblox-side "asset is private/blocked" responses aren't bugs in this app
-                        // and shouldn't read like crashes. Log them as warnings with friendlier copy.
-                        let is_upstream_inaccessible = err_msg.contains("Permission Denied")
-                            || err_msg.contains("Asset is private")
-                            || err_msg.contains("copylocked")
-                            || err_msg.contains("Conflict: Asset delivery blocked")
-                            || err_msg.contains("Not Found: Asset");
+                        let is_upstream_inaccessible = err_msg.contains("Permission Denied") || err_msg.contains("Asset is private") || err_msg.contains("copylocked") || err_msg.contains("Conflict: Asset delivery blocked") || err_msg.contains("Not Found: Asset");
                         let (level, msg) = if is_upstream_inaccessible {
-                            let reason = if err_msg.contains("Not Found") {
-                                "missing or invalid"
-                            } else if err_msg.contains("Conflict") {
-                                "blocked by Roblox"
-                            } else {
-                                "private or copylocked"
-                            };
-                            (
-                                "warn",
-                                format!("Skipped {asset_id} ({reason}) - Roblox refused the download."),
-                            )
+                            let reason = if err_msg.contains("Not Found") { "missing or invalid" } else if err_msg.contains("Conflict") { "blocked by Roblox" } else { "private or copylocked" };
+                            ("warn", format!("Skipped {asset_id} ({reason}) - Roblox refused the download."))
                         } else {
                             ("error", format!("Download failed for {asset_id}: {err_msg}"))
                         };
-                        let _ = append_log_entry(&app, level, "spoofer", &msg);
-                        let _ = app.emit(
-                            "spoofer-log",
-                            serde_json::json!({ "message": msg, "level": level }),
-                        );
-                        if let Ok(mut results) = asset_results.lock() {
-                            results.push(serde_json::json!({
-                                "id": asset_id.clone(),
-                                "name": exact_name.clone(),
-                                "type": asset_type.clone(),
-                                "success": false,
-                                "stage": "download",
-                                "errorReason": err_msg
-                            }));
-                        }
+                        ctx.log(&msg, level);
+                        ctx.record_result(serde_json::json!({ "id": asset_id, "name": exact_name, "type": asset_type, "success": false, "stage": "download", "errorReason": err_msg }));
                     }
                     Err(e) => {
-                        fail_count.fetch_add(1, Ordering::Relaxed);
-                        let msg = format!("Download error for {asset_id}: {e}");
-                        let _ = append_log_entry(&app, "error", "spoofer", &msg);
-                        let _ = app.emit(
-                            "spoofer-log",
-                            serde_json::json!({ "message": msg, "level": "error" }),
-                        );
-                        if let Ok(mut results) = asset_results.lock() {
-                            results.push(serde_json::json!({
-                                "id": asset_id.clone(),
-                                "name": exact_name.clone(),
-                                "type": asset_type.clone(),
-                                "success": false,
-                                "stage": "download",
-                                "errorReason": e.to_string()
-                            }));
-                        }
+                        ctx.fail_count.fetch_add(1, Ordering::Relaxed);
+                        ctx.log(&format!("Download error for {asset_id}: {e}"), "error");
+                        ctx.record_result(serde_json::json!({ "id": asset_id, "name": exact_name, "type": asset_type, "success": false, "stage": "download", "errorReason": e.to_string() }));
                     }
                 }
 
@@ -895,11 +687,10 @@ pub async fn process_spoofer_action(
         })
         .await;
 
-    // Summarize job execution and clean up state.
-    let success = success_count.load(Ordering::Relaxed);
-    let skipped = skip_count.load(Ordering::Relaxed);
-    let failed = fail_count.load(Ordering::Relaxed);
-    let interrupted_flag = interrupted.load(Ordering::Relaxed);
+    let success = ctx.success_count.load(Ordering::Relaxed);
+    let skipped = ctx.skip_count.load(Ordering::Relaxed);
+    let failed = ctx.fail_count.load(Ordering::Relaxed);
+    let interrupted_flag = ctx.interrupted.load(Ordering::Relaxed);
 
     let completed_successfully = !interrupted_flag && failed == 0;
     let status = if completed_successfully {
@@ -913,9 +704,9 @@ pub async fn process_spoofer_action(
     let end_time = chrono::Utc::now();
     let duration_ms = (end_time - start_time).num_milliseconds().max(0);
 
-    let final_asset_results = asset_results.lock().map(|r| r.clone()).unwrap_or_default();
+    let final_asset_results = ctx.asset_results.lock().map(|r| r.clone()).unwrap_or_default();
     let final_replacements: serde_json::Map<String, serde_json::Value> =
-        replacements.iter().map(|kv| (kv.key().clone(), kv.value().clone())).collect();
+        ctx.replacements.iter().map(|kv| (kv.key().clone(), kv.value().clone())).collect();
 
     let job = serde_json::json!({
         "id": job_id.clone(),
@@ -924,30 +715,25 @@ pub async fn process_spoofer_action(
         "endTime": end_time.to_rfc3339(),
         "durationMs": duration_ms,
         "account": account,
-        "group": group,
+        "group": data.group,
         "assetResults": final_asset_results,
         "config": {
             "assets": asset_ids.join(","),
-            "groupId": group_id.clone(),
+            "groupId": data.group_id,
             "spoofSounds": data.spoof_sounds.unwrap_or(false),
-            "uploadTypes": upload_types.clone(),
-            "placeName": data.place_name.clone()
+            "uploadTypes": ctx.upload_types,
+            "placeName": data.place_name
         },
         "logFilePath": job_log_path.clone()
     });
     if let Err(error) = crate::commands::jobs::persist_job(&app, job).await {
-        emit_job_log(&app, &format!("Could not save spoofing job history: {error}"), "error");
+        ctx.log(&format!("Could not save spoofing job history: {error}"), "error");
     }
 
-    let summary = format!(
-        "Total Assets: {total}
-Successful: {success} (Skipped Uploads: {skipped})
-Failed: {failed}"
-    );
-    emit_job_log(&app, &summary, if completed_successfully { "success" } else { "warn" });
+    let summary = format!("Total Assets: {total}\nSuccessful: {success} (Skipped Uploads: {skipped})\nFailed: {failed}");
+    ctx.log(&summary, if completed_successfully { "success" } else { "warn" });
     if !final_replacements.is_empty() {
-        emit_job_log(
-            &app,
+        ctx.log(
             "Auto-replacement queued! Don't forget to save your place in Studio afterwards.",
             "info",
         );
@@ -959,7 +745,7 @@ Failed: {failed}"
             "success": completed_successfully,
             "partial": !completed_successfully && success > 0,
             "replacements": final_replacements,
-            "output": format!("Processed {}/{} assets.", success, total),
+            "output": format!("Processed {success}/{total} assets."),
             "jobId": job_id,
             "logFilePath": job_log_path,
             "assetResults": final_asset_results
@@ -970,7 +756,6 @@ Failed: {failed}"
     let is_download_only = data.upload_types.as_ref().is_some_and(|types| {
         types.contains(&"download".to_string()) && !types.contains(&"upload".to_string())
     });
-
     if is_download_only {
         use tauri_plugin_opener::OpenerExt;
         let _ = tokio::fs::create_dir_all(&base_downloads_dir).await;
@@ -1006,7 +791,7 @@ mod tests {
         assert_eq!(ids.len(), 3);
         assert_eq!(ids[0], "123");
         assert_eq!(ids[1], "456");
-        assert_eq!(ids[2], "789"); // 456 deduplicated
+        assert_eq!(ids[2], "789");
     }
 
     #[test]

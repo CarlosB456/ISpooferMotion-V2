@@ -5,6 +5,13 @@ import { useEffect, useState } from 'react';
 
 import { isTauriRuntime } from '../../utils/tauriRuntime';
 
+/**
+ * Security overlay that protects the UI from being silently screenshotted.
+ *
+ * It listens to Tauri IPC events fired by our native keyboard/process hooks. If a
+ * screenshot hotkey is pressed or a screen recording tool (like OBS) is detected,
+ * this instantly spikes opacity to overlay a repeating watermark pattern.
+ */
 export default function WatermarkEngine() {
   const [version, setVersion] = useState<string>('Unknown');
   const [riskLevel, setRiskLevel] = useState<'low' | 'high'>('low');

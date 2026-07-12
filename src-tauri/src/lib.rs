@@ -1,3 +1,8 @@
+//! The core ISpooferMotion application library.
+//!
+//! This module registers all Tauri commands, initializes plugins, sets up global state,
+//! and bootstraps both the React frontend and the background Studio polling daemon.
+
 pub mod api_dump;
 pub mod commands;
 pub mod domain;
@@ -7,7 +12,10 @@ pub mod utils;
 
 use tauri::Manager;
 
-// Register backend commands for frontend invocation.
+/// Generates the Specta type bindings for frontend-to-backend commands.
+///
+/// Specta inspects the signatures of these commands at compile time and generates
+/// a `bindings.ts` file so the React frontend has strongly-typed RPC calls.
 macro_rules! specta_commands {
     () => {
         tauri_specta::collect_commands![
@@ -95,6 +103,11 @@ macro_rules! specta_commands {
     };
 }
 
+/// Initializes and runs the Tauri application lifecycle.
+///
+/// This sets up global crash handlers, initializes Specta types (if in debug mode),
+/// registers plugins, starts the local IPC daemon for Roblox Studio, and finally
+/// launches the webview.
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // Export TypeScript bindings during debug builds.

@@ -10,7 +10,12 @@ type StudioConnectionContextValue = {
 
 const StudioConnectionContext = createContext<StudioConnectionContextValue | undefined>(undefined);
 
-// Global state indicating successful connection to the Roblox Studio plugin.
+/**
+ * Global context tracking the IPC connection state with the Roblox Studio Plugin.
+ *
+ * Exposes the active `scanStatus` and the exact `studioPlaceId` we are currently
+ * hooked into, allowing any component to react to Studio connecting or disconnecting.
+ */
 export const StudioConnectionProvider: React.FC<{
   children: React.ReactNode;
 }> = ({ children }) => {

@@ -1,10 +1,14 @@
+//! Parses local `.rbxl` and `.rbxm` files directly without needing Roblox Studio open.
+//!
+//! Exposes a command that reads a local file using `rbx_dom_weak`, walks the tree,
+//! and extracts any property that looks like an asset ID so the user can spoof
+//! an entire place file offline.
+
 use rbx_dom_weak::types::Variant;
 use rbx_dom_weak::WeakDom;
 use serde::Serialize;
 
-use std::fs::File;
 use std::io::BufReader;
-use std::path::Path;
 
 #[derive(Debug, Serialize, Clone, specta::Type)]
 pub struct ParsedAssetRef {
@@ -128,23 +132,9 @@ fn process_instance(
                     rbx_dom_weak::types::ContentType::Uri(uri) => uri.clone(),
                     _ => String::new(),
                 },
-                Variant::SharedString(s) => String::from_utf8_lossy(s.data()).to_string(),
-                _ => {
-                    let dbg = format!("{:?}", prop_value);
-                    if let Some(start) = dbg.find('"') {
-                        if let Some(end) = dbg.rfind('"') {
-                            if start < end {
-                                dbg[start + 1..end].to_string()
-                            } else {
-                                continue;
-                            }
-                        } else {
-                            continue;
-                        }
-                    } else {
-                        continue;
-                    }
-                }
+                Variant::SharedString(s) => String::from_utf8_lossy(s.data()).into_owned(),
+                // All other variant types cannot carry an asset URL; skip them.
+                _ => continue,
             };
 
             if let Some(asset_id) = extract_asset_id(&raw_val_str) {
@@ -176,15 +166,20 @@ fn process_instance(
     }
 }
 
+/// Reads a local Roblox place or model file and extracts all spoofable assets.
+///
+/// Supports both XML (`.rbxlx`, `.rbxmx`) and binary (`.rbxl`, `.rbxm`) formats.
 #[tauri::command]
 #[specta::specta]
 pub fn parse_place_file(file_path: String) -> Result<PlaceParseResult, String> {
-    let path = Path::new(&file_path);
-    if !path.exists() {
-        return Err("File does not exist".into());
-    }
-
-    let file = File::open(path).map_err(|e| e.to_string())?;
+    let path = std::path::Path::new(&file_path);
+    let file = std::fs::File::open(path).map_err(|e| {
+        if e.kind() == std::io::ErrorKind::NotFound {
+            "File does not exist".to_string()
+        } else {
+            e.to_string()
+        }
+    })?;
     let mut reader = BufReader::new(file);
 
     let ext = path.extension().unwrap_or_default().to_str().unwrap_or_default().to_lowercase();

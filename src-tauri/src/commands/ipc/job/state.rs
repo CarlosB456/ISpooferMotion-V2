@@ -67,3 +67,61 @@ pub fn update_spoofer_control(job_id: &str, update: impl FnOnce(&mut SpooferCont
     update(&mut control);
     true
 }
+
+#[cfg(test)]
+mod tests {
+    #![allow(clippy::unwrap_used)]
+    use super::*;
+
+    #[tokio::test]
+    async fn test_spoofer_job_lifecycle() {
+        // Ensure state is clean before we start (in case other tests ran)
+        {
+            *spoofer_control().lock().unwrap() = SpooferControl::default();
+        }
+
+        let job_id = "test_job_123";
+
+        // Begin job
+        assert!(begin_spoofer_job(job_id).is_ok());
+
+        // Attempting to begin another job should fail
+        assert!(begin_spoofer_job("another_job").is_err());
+
+        // Update control to pause
+        assert!(update_spoofer_control(job_id, |c| c.paused = true));
+
+        // Verify paused state
+        let is_paused = spoofer_control().lock().unwrap().paused;
+        assert!(is_paused);
+
+        // Finish job
+        finish_spoofer_job(job_id);
+
+        // State should be reset
+        let is_active = spoofer_control().lock().unwrap().active_job_id.is_some();
+        assert!(!is_active);
+
+        // Attempting to begin should now work
+        assert!(begin_spoofer_job("job_456").is_ok());
+        finish_spoofer_job("job_456");
+    }
+
+    #[tokio::test]
+    async fn test_update_invalid_job_id() {
+        {
+            *spoofer_control().lock().unwrap() = SpooferControl::default();
+        }
+
+        assert!(begin_spoofer_job("job_1").is_ok());
+
+        // Try to update a different job ID
+        assert!(!update_spoofer_control("job_2", |c| c.paused = true));
+
+        // State should remain unpaused
+        let is_paused = spoofer_control().lock().unwrap().paused;
+        assert!(!is_paused);
+
+        finish_spoofer_job("job_1");
+    }
+}

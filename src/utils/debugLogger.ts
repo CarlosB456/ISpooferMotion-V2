@@ -77,7 +77,10 @@ function formatArg(arg: unknown): string {
   }
 }
 
-// Pipe log to internal state, console, and optional Rust backend.
+/**
+ * Injects a new log line into the in-memory circular buffer and optionally forwards
+ * it to the Rust backend (for disk persistence) and triggers desktop notifications.
+ */
 export function addDebugLog(
   level: LogLevel,
   args: unknown[],
@@ -167,6 +170,12 @@ export function clearDebugLogs() {
   state.listeners.forEach((listener) => listener([]));
 }
 
+/**
+ * Monkey-patches `console.log`, `console.warn`, etc. globally.
+ *
+ * This ensures that any standard React/library logs get funneled into our custom
+ * Debug Console view in the app UI, not just hidden away in the WebView inspector.
+ */
 function installDebugLogger() {
   const state = getState();
   if (state.patched) return;

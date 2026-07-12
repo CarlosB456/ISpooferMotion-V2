@@ -4,6 +4,12 @@ import { History, ScanLine, Settings } from 'lucide-react';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { cn } from '../../utils/cn';
 
+/**
+ * The primary navigation sidebar for the application.
+ *
+ * Controls routing between the Spoofing workspace, the Activity logs, and the global Settings.
+ * Uses Framer Motion for layout transitions when switching active tabs.
+ */
 export default function Sidebar({
   activeTab,
   onTabChange,

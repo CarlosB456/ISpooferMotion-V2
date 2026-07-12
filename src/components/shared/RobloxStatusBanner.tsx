@@ -7,9 +7,15 @@ interface RobloxStatusBannerProps {
   isVisible: boolean;
 }
 
+/**
+ * A persistent dropdown banner that alerts users to major Roblox API outages.
+ *
+ * Pops down using Framer Motion when the background ping job detects that Roblox
+ * servers are returning 500s or timing out, preventing users from getting confused
+ * by random spoofing failures.
+ */
 export function RobloxStatusBanner({ isVisible }: RobloxStatusBannerProps) {
   const { t } = useLanguage();
-  // Dropdown banner for Roblox API outages.
   return (
     <AnimatePresence>
       {isVisible && (

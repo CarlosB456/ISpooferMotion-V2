@@ -18,6 +18,12 @@ import { useLanguage } from '../../contexts/LanguageContext';
 import { queueSpoofRetry, type SpoofJob } from '../../utils/jobTypes';
 import { logIsm } from '../../utils/robloxProfiles';
 
+/**
+ * Renders the Job History and Activity pane.
+ *
+ * Pulls the persistent list of past spoofing jobs from the Rust backend and displays them
+ * in a reverse-chronological accordion. Allows users to retry failed assets or redo entire jobs.
+ */
 export default function ActivityView() {
   const { t } = useLanguage();
 

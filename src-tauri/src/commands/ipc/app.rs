@@ -74,13 +74,14 @@ pub fn get_runtime_info() -> AnyValue {
 #[specta::specta]
 pub fn open_external(app: AppHandle, url: String) -> crate::error::Result<bool> {
     // Validate the URL scheme before execution.
-    if url.starts_with("https://") || url.starts_with("http://") {
-        use tauri_plugin_opener::OpenerExt;
-        let _ = app.opener().open_url(url, None::<String>);
-        Ok(true)
-    } else {
-        Ok(false)
+    if let Ok(parsed) = reqwest::Url::parse(&url) {
+        if parsed.scheme() == "http" || parsed.scheme() == "https" {
+            use tauri_plugin_opener::OpenerExt;
+            let _ = app.opener().open_url(url, None::<String>);
+            return Ok(true);
+        }
     }
+    Ok(false)
 }
 
 #[tauri::command]

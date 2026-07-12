@@ -40,10 +40,20 @@ fn redact_json_value(value: &mut Value) {
         Value::Array(values) => values.iter_mut().for_each(redact_json_value),
         Value::Object(values) => {
             for (key, value) in values {
-                let normalized_key = key.to_ascii_lowercase().replace(['_', '-', ' '], "");
+                let mut buf = [0u8; 32];
+                let mut len = 0;
+                for c in key.chars().filter(|c| !matches!(c, '_' | '-' | ' ')) {
+                    if len >= buf.len() {
+                        len += 1;
+                        break;
+                    }
+                    buf[len] = c.to_ascii_lowercase() as u8;
+                    len += 1;
+                }
+
                 if matches!(
-                    normalized_key.as_str(),
-                    "cookie" | "roblosecurity" | "apikey" | "xapikey" | "secret" | "token"
+                    &buf[..std::cmp::min(len, 32)],
+                    b"cookie" | b"roblosecurity" | b"apikey" | b"xapikey" | b"secret" | b"token"
                 ) {
                     *value = Value::String("####".into());
                 } else {

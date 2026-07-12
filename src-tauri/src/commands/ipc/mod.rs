@@ -41,22 +41,33 @@ pub(super) async fn write_json_file(path: &PathBuf, value: &Value) -> crate::err
     tokio::fs::write(path, json_str).await.map_err(crate::error::AppError::from)
 }
 
+static REDACTION_ENV_VARS: OnceLock<Vec<String>> = OnceLock::new();
+
 // Redact sensitive information (usernames, paths) from logs.
 pub(super) fn redact_log_message(message: &str) -> String {
     let mut redacted = message.to_string();
-    for key in ["USERPROFILE", "HOME"] {
-        if let Ok(value) = std::env::var(key) {
-            if !value.is_empty() {
-                redacted = redacted.replace(&value, "####");
+
+    let env_vars = REDACTION_ENV_VARS.get_or_init(|| {
+        let mut vars = Vec::new();
+        for key in ["USERPROFILE", "HOME"] {
+            if let Ok(value) = std::env::var(key) {
+                if !value.is_empty() {
+                    vars.push(value);
+                }
             }
         }
-    }
-    for key in ["USERNAME", "USER"] {
-        if let Ok(value) = std::env::var(key) {
-            if value.len() > 2 {
-                redacted = redacted.replace(&value, "####");
+        for key in ["USERNAME", "USER"] {
+            if let Ok(value) = std::env::var(key) {
+                if value.len() > 2 {
+                    vars.push(value);
+                }
             }
         }
+        vars
+    });
+
+    for value in env_vars {
+        redacted = redacted.replace(value, "####");
     }
 
     let regexes = REDACTION_REGEXES.get_or_init(|| {

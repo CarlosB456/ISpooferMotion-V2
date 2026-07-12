@@ -111,8 +111,12 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
   },
 };
 
-// Merge saved config with defaults.
-// Prevents crashes if new settings are added in an update.
+/**
+ * Merges the saved configuration from disk with the application's default settings.
+ *
+ * This prevents crashes if new settings are added in an update by ensuring every
+ * expected key exists, while preserving whatever custom values the user already set.
+ */
 const mergeKnownKeys = <T extends Record<string, unknown>>(
   defaults: T,
   saved: Partial<T> | undefined,
@@ -126,7 +130,12 @@ const mergeKnownKeys = <T extends Record<string, unknown>>(
   return next;
 };
 
-// Prevents invalid UI sections if settings are removed or renamed.
+/**
+ * Sanitizes UI sections to prevent rendering invalid or removed config blocks.
+ *
+ * If a setting tab gets renamed or removed in an update, this strips it out
+ * and forces the UI back to a safe default.
+ */
 const mergeSections = (savedSections: unknown, defaultSections: string[]) => {
   if (!Array.isArray(savedSections)) return defaultSections;
   const next = savedSections.filter((section: string) => defaultSections.includes(section));
@@ -146,6 +155,13 @@ interface ConfigState {
   saveSecrets: () => Promise<void>;
 }
 
+/**
+ * The global configuration store.
+ *
+ * Manages user preferences, spoofing targets, and UI state. It automatically syncs
+ * secure credentials (like the .ROBLOSECURITY cookie) to the native OS keyring via Tauri,
+ * keeping them out of plaintext `localStorage`.
+ */
 export const useConfigStore = create<ConfigState>((set, get) => {
   // Load config from localstorage or fallback to defaults.
   const saved = localStorage.getItem('ISpooferMotion_Config');

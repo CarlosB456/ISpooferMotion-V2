@@ -2,6 +2,13 @@
 --!nolint
 -- luacheck: ignore
 ---@diagnostic disable: undefined-global, unused-local, unused-function, lowercase-global
+--- MeshPart replacement logic.
+---
+--- MeshParts cannot have their MeshId changed at runtime. To spoof them, we have to
+--- create an entirely new MeshPart (or a fallback Part with a SpecialMesh), copy all
+--- the properties over, move all children and joints, and then destroy the original.
+
+--- Copies all visual, physical, and behavioral properties from one part to another.
 local function copyMeshPartPropertiesInto(src: MeshPart, dst: BasePart, overrideTextureId: string?)
 	pcall(function()
 		dst.Name = src.Name
@@ -68,6 +75,7 @@ local function copyMeshPartPropertiesInto(src: MeshPart, dst: BasePart, override
 	end)
 end
 
+--- Re-wires a joint (like a Motor6D or Weld) to point to the new replacement part.
 local function rewritePartReference(obj: Instance, src: BasePart, dst: BasePart)
 	pcall(function()
 		local anyObj = obj :: any
@@ -83,6 +91,9 @@ local function rewritePartReference(obj: Instance, src: BasePart, dst: BasePart)
 	end)
 end
 
+--- Moves all children and descendants from the old part to the new part.
+---
+--- Also scans for any joints that were connected to the old part and re-wires them.
 local function moveMeshPartContentsInto(src: BasePart, dst: BasePart)
 	pcall(function()
 		src.Parent = nil
@@ -105,8 +116,32 @@ local function moveMeshPartContentsInto(src: BasePart, dst: BasePart)
 			rewritePartReference(descendant, src, dst)
 		end
 	end
+
+	local externalRefsDetected = false
+	pcall(function()
+		for _, part in ipairs(src:GetConnectedParts()) do
+			if
+				part ~= src
+				and part ~= dst
+				and not part:IsDescendantOf(dst)
+				and not part:IsDescendantOf(src)
+			then
+				externalRefsDetected = true
+				break
+			end
+		end
+	end)
+
+	if externalRefsDetected then
+		logToPlugin(
+			"[Warning] [ISpooferMotion] MeshPart replacement detected external constraints pointing to "
+				.. src.Name
+				.. ". Other external references (e.g. ObjectValues, Scripts) may also be broken."
+		)
+	end
 end
 
+--- Fully replaces a MeshPart's properties and contents into a destination part.
 local function copyMeshPartInto(src: MeshPart, dst: BasePart, overrideTextureId: string?)
 	copyMeshPartPropertiesInto(src, dst, overrideTextureId)
 	moveMeshPartContentsInto(src, dst)

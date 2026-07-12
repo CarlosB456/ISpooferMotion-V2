@@ -151,31 +151,50 @@ pub async fn write_download_response(
     };
 
     let mut stream = download_resp.bytes_stream();
+    let mut last_emit_bytes = downloaded;
+
     while let Some(chunk) = stream.next().await {
         let chunk = chunk.map_err(|e| e.to_string())?;
         file.write_all(&chunk).await?;
         downloaded += chunk.len() as u64;
-        if let Some(progress) =
-            total_length.and_then(|total| downloaded.checked_mul(100)?.checked_div(total))
-        {
-            let progress = progress.min(99);
-            if progress > last_progress {
-                last_progress = progress;
-                emit_transfer_update(
-                    app,
-                    TransferUpdate {
-                        id: transfer_id.clone(),
-                        progress: Some(progress),
-                        status: Some("downloading".into()),
-                        direction: Some("download".into()),
-                        name: None,
-                        original_asset_id: None,
-                        error: None,
-                        size: None,
-                        new_asset_id: None,
-                    },
-                );
+
+        if let Some(total) = total_length {
+            if let Some(progress) = downloaded.checked_mul(100).and_then(|d| d.checked_div(total)) {
+                let progress = progress.min(99);
+                if progress > last_progress {
+                    last_progress = progress;
+                    emit_transfer_update(
+                        app,
+                        TransferUpdate {
+                            id: transfer_id.clone(),
+                            progress: Some(progress),
+                            status: Some("downloading".into()),
+                            direction: Some("download".into()),
+                            name: None,
+                            original_asset_id: None,
+                            error: None,
+                            size: None,
+                            new_asset_id: None,
+                        },
+                    );
+                }
             }
+        } else if downloaded.saturating_sub(last_emit_bytes) >= 512 * 1024 {
+            last_emit_bytes = downloaded;
+            emit_transfer_update(
+                app,
+                TransferUpdate {
+                    id: transfer_id.clone(),
+                    progress: None,
+                    status: Some("downloading".into()),
+                    direction: Some("download".into()),
+                    name: None,
+                    original_asset_id: None,
+                    error: None,
+                    size: Some(downloaded),
+                    new_asset_id: None,
+                },
+            );
         }
     }
     file.flush().await?;
@@ -384,11 +403,18 @@ pub async fn batch_get_download_urls_for_assets(
                                 .or_else(|| e.get("Message"))
                                 .and_then(|m| m.as_str())
                                 .unwrap_or("");
+
+                            let contains_ci = |needle: &[u8]| {
+                                msg.as_bytes()
+                                    .windows(needle.len())
+                                    .any(|w| w.eq_ignore_ascii_case(needle))
+                            };
+
                             code == 403
                                 || msg.contains("403")
-                                || msg.to_lowercase().contains("not authorized")
-                                || msg.to_lowercase().contains("unauthorized")
-                                || msg.to_lowercase().contains("forbidden")
+                                || contains_ci(b"not authorized")
+                                || contains_ci(b"unauthorized")
+                                || contains_ci(b"forbidden")
                         });
 
                         if is_access_denied {
@@ -453,39 +479,29 @@ pub async fn batch_get_download_urls_for_assets(
                 })
                 .collect();
 
-            let send_with_ua = |ua: &'static str| {
-                let client = client.clone();
-                let cookie_header = cookie_header.clone();
-                let current_place_id_opt = current_place_id_opt.clone();
-                let pending_with_place = pending_with_place.clone();
-                async move {
-                    let mut req = client
-                        .post("https://assetdelivery.roblox.com/v2/assets/batch")
-                        .header(COOKIE, &cookie_header)
-                        .header(USER_AGENT, ua)
-                        .header("Content-Type", "application/json");
-                    if let Some(ref pid) = current_place_id_opt {
-                        req = crate::commands::spoofer::apply_roblox_game_context(
-                            req,
-                            Some(pid),
-                            None,
-                        );
-                    }
-                    tokio::time::timeout(
-                        Duration::from_secs(15),
-                        req.json(&pending_with_place).send(),
-                    )
-                    .await
-                }
-            };
-
             let mut chunk_urls = HashMap::new();
             let mut chunk_access_denied = std::collections::HashSet::new();
             let mut has_transient = false;
 
-            wait_rate_limit(RateLimitBucket::DownloadResolution).await;
             for ua in ["RobloxStudio/WinInet", "RobloxApp/WinInet", "Roblox/WinInet"] {
-                if let Ok(Ok(resp)) = send_with_ua(ua).await {
+                wait_rate_limit(RateLimitBucket::DownloadResolution).await;
+
+                let mut req = client
+                    .post("https://assetdelivery.roblox.com/v2/assets/batch")
+                    .header(COOKIE, &cookie_header)
+                    .header(USER_AGENT, ua)
+                    .header("Content-Type", "application/json");
+                if let Some(ref pid) = current_place_id_opt {
+                    req = crate::commands::spoofer::apply_roblox_game_context(req, Some(pid), None);
+                }
+
+                let send_result = tokio::time::timeout(
+                    Duration::from_secs(15),
+                    req.json(&pending_with_place).send(),
+                )
+                .await;
+
+                if let Ok(Ok(resp)) = send_result {
                     crate::utils::check_for_roblosecurity_update(&app, &resp, &cookie_header);
                     if resp.status().is_success() {
                         crate::commands::spoofer::record_adaptive_success();

@@ -11,8 +11,14 @@ export type StudioScanBundle = {
   scriptRefs: PluginAssetStore;
 };
 
+/**
+ * Continuously polls the local Tauri IPC bridge for new assets discovered by the Studio plugin.
+ *
+ * To prevent frying React with constant re-renders during heavy deep scans, this hook implements
+ * adaptive polling (2s when active, 10s when idle) and relies on a fast snapshot hash
+ * to determine if the payload actually changed before invoking `onComplete`.
+ */
 export function useStudioAssetPoll(
-  // Poll studio plugin bridge for new assets.
   studioConnected: boolean,
   onComplete: (bundle: StudioScanBundle) => void,
 ) {

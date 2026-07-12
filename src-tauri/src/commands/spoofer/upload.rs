@@ -294,7 +294,7 @@ pub async fn publish_asset_with_progress(
 
     let mut upload_kind = upload_kind_for_type(asset_type_name.as_deref());
 
-    match crate::commands::spoofer::inspector::inspect_payload(&canonical_file_path) {
+    match crate::commands::spoofer::inspector::inspect_payload(&canonical_file_path).await {
         Ok(meta) => {
             if meta.extension != "unknown" {
                 upload_kind.file_type = meta.file_type;
@@ -309,8 +309,8 @@ pub async fn publish_asset_with_progress(
     let file_name = format!("{}.{}", sanitize_filename(&name), upload_kind.extension);
     let _is_plugin = asset_type_name.as_deref() == Some("Plugin");
 
-    // Use Arc to make multipart body cloning O(1).
-    let mut fallback_buffer: Option<std::sync::Arc<Vec<u8>>> = None;
+    // Used for mutating file hashes to bypass 409 Conflicts. Populated lazily.
+    let mut fallback_buffer: Option<Vec<u8>> = None;
     let mut final_asset_id = None;
 
     {
@@ -395,14 +395,8 @@ pub async fn publish_asset_with_progress(
         for attempt in 0..300 {
             wait_rate_limit(RateLimitBucket::Upload).await;
 
-            if attempt == 0 && fallback_buffer.is_none() {
-                fallback_buffer =
-                    tokio::fs::read(&canonical_file_path).await.ok().map(std::sync::Arc::new);
-            }
-
             let file_part = if let Some(buf) = &fallback_buffer {
-                // Arc clone provides O(1) references during retries.
-                reqwest::multipart::Part::bytes(buf.as_ref().clone())
+                reqwest::multipart::Part::bytes(buf.clone())
                     .file_name(file_name.clone())
                     .mime_str(&file_type)?
             } else {
@@ -471,14 +465,12 @@ pub async fn publish_asset_with_progress(
             }
 
             if status_code == 409 {
-                if fallback_buffer.is_none() {
-                    fallback_buffer =
-                        tokio::fs::read(&canonical_file_path).await.ok().map(std::sync::Arc::new);
-                }
-                if let Some(arc_buf) = fallback_buffer.take() {
-                    // Get a mutable copy
-                    let mut mutable_buffer =
-                        std::sync::Arc::try_unwrap(arc_buf).unwrap_or_else(|a| a.as_ref().clone());
+                let mut mutable_buffer = if let Some(buf) = fallback_buffer.take() {
+                    buf
+                } else {
+                    tokio::fs::read(&canonical_file_path).await.map_err(|e| e.to_string())?
+                };
+                {
                     if file_type == "image/png" {
                         let scan_start = mutable_buffer.len().saturating_sub(64);
                         if let Some(iend_offset) = mutable_buffer[scan_start..]
@@ -569,7 +561,7 @@ pub async fn publish_asset_with_progress(
                         break;
                     }
                     // Store the mutated buffer back so the next retry uses the modified bytes
-                    fallback_buffer = Some(std::sync::Arc::new(mutable_buffer));
+                    fallback_buffer = Some(mutable_buffer);
                 }
                 continue;
             }

@@ -52,11 +52,11 @@ pub async fn download_animation_asset_with_progress(
     if !is_valid_numeric_id(&asset_id) {
         return Err("Invalid Roblox asset id.".into());
     }
-    if file_path.contains("..") {
+    let file_path_buf = std::path::PathBuf::from(&file_path);
+    if file_path_buf.components().any(|c| matches!(c, std::path::Component::ParentDir)) {
         return Err("Invalid file path: path traversal detected.".into());
     }
 
-    let file_path_buf = std::path::PathBuf::from(&file_path);
     if let Some(parent) = file_path_buf.parent() {
         tokio::fs::create_dir_all(parent)
             .await
@@ -233,7 +233,7 @@ pub async fn download_animation_asset_with_progress(
                 Ok(Ok(resp)) => resp,
                 Ok(Err(error)) => {
                     last_error = format!("Download request failed: {error}");
-                    if attempt < 9 {
+                    if attempt < 2 {
                         tokio::time::sleep(Duration::from_millis(1000 * (attempt + 1))).await;
                         continue;
                     }
@@ -241,7 +241,7 @@ pub async fn download_animation_asset_with_progress(
                 }
                 Err(_elapsed) => {
                     last_error = "Download request timed out.".to_string();
-                    if attempt < 9 {
+                    if attempt < 2 {
                         tokio::time::sleep(Duration::from_millis(1000 * (attempt + 1))).await;
                         continue;
                     }

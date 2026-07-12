@@ -2,20 +2,27 @@
 --!nolint
 -- luacheck: ignore
 ---@diagnostic disable: undefined-global, unused-local, unused-function, lowercase-global
+--- Extracts specific properties from instances during a scan pass.
+---
+--- It knows about special engine types (like HumanoidDescription or MaterialVariant)
+--- and handles bundling up their properties into the standard `Record` format.
 local MAX_RECORD_VALUE_BYTES: number = 1000000
 local MAX_RECORD_TEXT_VALUE_BYTES: number = 100000
 local recordKeys: { [string]: boolean } = {}
 local pendingRecordBytes: number = 0
 
+--- Resets the tracking state for unique records and pending bytes.
 local function resetScanRecordState()
 	recordKeys = {}
 	pendingRecordBytes = 0
 end
 
+--- Checks how many bytes of data we have queued up to send to the daemon.
 local function getPendingRecordBytes(): number
 	return pendingRecordBytes
 end
 
+--- Returns a safe class name, name, and full path for any instance without crashing.
 local function getSafeObjectMetadata(obj: Instance): (string, string, string)
 	local className = "Unknown"
 	local name = "Unknown"
@@ -36,6 +43,7 @@ local function getSafeObjectMetadata(obj: Instance): (string, string, string)
 	return className, name, fullName
 end
 
+--- Determines the maximum allowed byte size for a given property's value.
 local function getMaxRecordValueBytes(property: string): number
 	if property == "Source" then
 		return MAX_SCRIPT_SOURCE_BYTES
@@ -53,6 +61,7 @@ local function getMaxRecordValueBytes(property: string): number
 	return MAX_RECORD_VALUE_BYTES
 end
 
+--- Formats a property value and adds it to the current scan chunk if it looks valid.
 local function addRecord(
 	records: { Record },
 	obj: Instance,
@@ -98,6 +107,7 @@ local function addRecord(
 	return addedBytes
 end
 
+--- Sends the current batch of records to the daemon and clears the local queue.
 local function flushRecords(records: { Record }): boolean
 	if #records == 0 then
 		pendingRecordBytes = 0
@@ -110,6 +120,7 @@ local function flushRecords(records: { Record }): boolean
 	return ok
 end
 
+--- Reads a generic property and adds it to the record list if it exists.
 local function captureProperty(
 	records: { Record },
 	obj: Instance,
@@ -129,6 +140,7 @@ local function captureProperty(
 	end
 end
 
+--- Finds nested asset strings inside text properties.
 local function scanEmbeddedStringAssets(records: { Record }, obj: Instance)
 	for prop in pairs(EMBEDDED_ASSET_PROPS) do
 		local ok, val = pcall(function()
@@ -147,6 +159,7 @@ local function scanEmbeddedStringAssets(records: { Record }, obj: Instance)
 	end
 end
 
+--- Scans properties listed in the bundled API dump for string matches.
 local function scanBundledStringProperties(
 	records: { Record },
 	obj: Instance,
@@ -176,6 +189,7 @@ local function scanBundledStringProperties(
 	end
 end
 
+--- Hardcoded extraction logic for engine classes that need special handling.
 local function scanSpecialInstanceAssets(
 	records: { Record },
 	obj: Instance,

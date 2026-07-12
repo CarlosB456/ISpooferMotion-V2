@@ -2,6 +2,12 @@ import '@testing-library/jest-dom';
 import { vi } from 'vitest';
 import React from 'react';
 
+/**
+ * Global Vitest test environment configuration.
+ *
+ * Mocks out browser-native APIs (like matchMedia) and Tauri-specific
+ * native IPC calls so our React components can be unit tested headlessly.
+ */
 // Mock matchMedia
 Object.defineProperty(window, 'matchMedia', {
   writable: true,

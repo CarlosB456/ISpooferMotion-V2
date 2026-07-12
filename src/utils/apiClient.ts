@@ -2,6 +2,12 @@ import { addDebugLog } from './debugLogger';
 import { findPluginBridgePort } from './pluginBridge';
 import { isTauriRuntime } from './tauriRuntime';
 
+/**
+ * Safely fetches the current active Place ID from Studio when the Tauri bridge state isn't perfectly in sync.
+ *
+ * First checks local storage cache (updated by the heartbeat). If that fails, it manually
+ * pings the local Studio HTTP server directly as a last resort before giving up.
+ */
 export async function getStudioPlaceIdFallback(): Promise<string> {
   try {
     const cached = window.localStorage.getItem('ISpooferMotion_LastStudioPlaceId') || '';
@@ -29,6 +35,10 @@ export async function getStudioPlaceIdFallback(): Promise<string> {
   }
 }
 
+/**
+ * Wrapper for HTTP requests that automatically routes through Tauri's native networking layer
+ * if we're in the desktop app, or standard browser fetch if running in a webview debug environment.
+ */
 export async function fetchTelemetry(url: string, options?: RequestInit): Promise<Response> {
   if (isTauriRuntime()) {
     const { fetch: tauriFetch } = await import('@tauri-apps/plugin-http');

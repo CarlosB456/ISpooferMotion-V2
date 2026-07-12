@@ -1,5 +1,5 @@
 use super::is_valid_numeric_id;
-use futures::future::join_all;
+
 use reqwest::header::{COOKIE, USER_AGENT};
 use std::collections::HashSet;
 use tauri::AppHandle;
@@ -521,21 +521,19 @@ pub async fn attempt_social_graph_place_id_discovery(
         return vec![];
     }
 
-    let mut futures = vec![];
+    let mut tasks = vec![];
 
-    let mut spawn_games_fetch = |c_type: &str, c_id: u64| {
-        let ct = c_type.to_string();
-        let ch = cookie_header.to_string();
-        futures.push(tokio::spawn(async move { get_games_for_creator(&ct, c_id, &ch).await }));
+    let mut queue_games_fetch = |c_type: &str, c_id: u64| {
+        tasks.push((c_type.to_string(), c_id));
     };
 
-    spawn_games_fetch(&creator_type, creator_id);
+    queue_games_fetch(&creator_type, creator_id);
 
     if let Some(uid) = auth_user_id {
-        spawn_games_fetch("User", uid);
+        queue_games_fetch("User", uid);
         let groups = get_groups_for_user(uid, cookie_header).await;
         for (gid, _) in groups.into_iter().take(MAX_GROUP_CRAWL_LIMIT) {
-            spawn_games_fetch("Group", gid);
+            queue_games_fetch("Group", gid);
         }
     }
 
@@ -548,11 +546,11 @@ pub async fn attempt_social_graph_place_id_discovery(
         seen_owners.insert(creator_id);
 
         for (gid, owner_id) in groups.into_iter().take(MAX_GROUP_FRIEND_CRAWL_LIMIT) {
-            spawn_games_fetch("Group", gid);
+            queue_games_fetch("Group", gid);
 
             if let Some(oid) = owner_id {
                 if seen_owners.insert(oid) {
-                    spawn_games_fetch("User", oid);
+                    queue_games_fetch("User", oid);
                 }
             }
         }
@@ -560,13 +558,21 @@ pub async fn attempt_social_graph_place_id_discovery(
         let friends = get_friends_for_user(creator_id, cookie_header).await;
         for fid in friends.into_iter().take(MAX_FRIEND_CRAWL_LIMIT) {
             if seen_owners.insert(fid) {
-                spawn_games_fetch("User", fid);
+                queue_games_fetch("User", fid);
             }
         }
     }
 
-    let results = join_all(futures).await;
-    for places in results.into_iter().flatten() {
+    use futures::stream::{self, StreamExt};
+    let cookie_header_str = cookie_header.to_string();
+    let mut stream = stream::iter(tasks)
+        .map(|(ct, cid)| {
+            let ch = cookie_header_str.clone();
+            async move { get_games_for_creator(&ct, cid, &ch).await }
+        })
+        .buffer_unordered(3);
+
+    while let Some(places) = stream.next().await {
         for place in places {
             discovered_place_ids.insert(place);
 
@@ -685,7 +691,7 @@ pub fn expected_asset_type(asset_type: Option<&str>) -> Option<&'static str> {
 }
 
 pub fn push_unique_url(urls: &mut Vec<String>, url: String) {
-    if !urls.iter().any(|existing| existing == &url) {
+    if !urls.contains(&url) {
         urls.push(url);
     }
 }

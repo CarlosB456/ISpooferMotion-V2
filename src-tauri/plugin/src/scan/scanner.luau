@@ -1,8 +1,13 @@
+--!nolint UnknownGlobal
 --!nocheck
 --!nolint
 
 -- luacheck: ignore
 ---@diagnostic disable: undefined-global, unused-local, unused-function, lowercase-global
+--- Recursively crawls the DataModel looking for spoofable assets.
+---
+--- To keep Studio responsive and avoid memory spikes on massive places, the
+--- scanner yields frequently and streams records back to the daemon in chunks.
 local SCAN_CHUNK_BYTES: number = 1000000
 local SCAN_MAX_TAGS_PER_OBJECT: number = 100
 local SCAN_MAX_TAG_BYTES: number = 100
@@ -44,10 +49,12 @@ local ASSET_ID_NAME_HINTS: { string } = {
 	"templateid",
 }
 
+--- Removes special characters from a string so we can do fuzzy matching on names.
 local function compactName(value: string): string
 	return string.gsub(string.lower(value), "[%s_%-%./:]", "")
 end
 
+--- Checks if an instance name implies it probably holds an asset ID (e.g. "WeaponMesh").
 local function nameLooksLikeAssetSlot(value: string): boolean
 	local compact = compactName(value)
 
@@ -66,6 +73,7 @@ local function nameLooksLikeAssetSlot(value: string): boolean
 	return false
 end
 
+--- Scans all custom attributes on an instance for asset references.
 local function scanAttributeRecords(records: { Record }, obj: Instance)
 	local okAttrs, attrs = pcall(function()
 		return obj:GetAttributes()
@@ -98,6 +106,7 @@ local function scanAttributeRecords(records: { Record }, obj: Instance)
 	end
 end
 
+--- Validates that an array of tags is safe to process.
 local function validScannedTags(tags: any): boolean
 	if type(tags) ~= "table" or #tags == 0 or #tags > SCAN_MAX_TAGS_PER_OBJECT then
 		return false
@@ -112,6 +121,7 @@ local function validScannedTags(tags: any): boolean
 	return true
 end
 
+--- Scans CollectionService tags on an instance for asset references.
 local function scanTagRecords(records: { Record }, obj: Instance)
 	local okTags, tags = pcall(function()
 		return CollectionService:GetTags(obj)
@@ -146,6 +156,7 @@ local function scanTagRecords(records: { Record }, obj: Instance)
 	end
 end
 
+--- Scans StringValue and IntValue objects for asset references.
 local function scanValueObjectRecord(records: { Record }, obj: Instance)
 	if not (obj:IsA("StringValue") or obj:IsA("IntValue") or obj:IsA("NumberValue")) then
 		return
@@ -174,6 +185,7 @@ local function scanValueObjectRecord(records: { Record }, obj: Instance)
 	end
 end
 
+--- Extracts the source code from scripts so the daemon can rewrite raw IDs.
 local function scanScriptSourceRecord(records: { Record }, obj: Instance)
 	if not obj:IsA("LuaSourceContainer") or obj.ClassName == "CoreScript" then
 		return
@@ -210,6 +222,7 @@ end
 local FLUSH_MAX_RETRIES: number = 3
 local FLUSH_RETRY_WAIT: number = 1.5
 
+--- Attempts to push the current scan chunk to the daemon, retrying on failure.
 local function flushScanRecordsOrError(records: { Record })
 	for attempt = 1, FLUSH_MAX_RETRIES do
 		if flushRecords(records) then
@@ -231,6 +244,7 @@ local function flushScanRecordsOrError(records: { Record })
 	error("Could not send Studio scan records after " .. FLUSH_MAX_RETRIES .. " attempts")
 end
 
+--- Runs all property extractors against a single instance.
 local function processScannedObject(records: { Record }, obj: Instance)
 	scanAttributeRecords(records, obj)
 	scanTagRecords(records, obj)
@@ -257,12 +271,15 @@ local function processScannedObject(records: { Record }, obj: Instance)
 	scanEmbeddedStringAssets(records, obj)
 end
 
+--- Crawls all requested services in the DataModel to find assets.
 local function scanAssets(): ()
 	local bundledAssetClasses = countBundledClasses(ASSET_PROPERTIES)
 	local bundledStringClasses = countBundledClasses(STRING_SCAN_PROPERTIES)
 
 	if bundledAssetClasses == 0 then
-		logToPlugin("[Warning] ")
+		logToPlugin(
+			"[Warning] [ISpooferMotion] No API dump loaded (ASSET_PROPERTIES is empty). Fallback data was not shipped or fetch failed."
+		)
 	else
 		logToPlugin(
 			string.format(
@@ -294,7 +311,23 @@ local function scanAssets(): ()
 	local lastYieldTime = os.clock()
 	local lastProgressTime = 0
 
-	local function scanRecursive(obj: Instance, currentService: string)
+	local stack: { { obj: Instance, currentService: string } } = {}
+
+	for i = #SERVICES_TO_SCAN, 1, -1 do
+		local serviceName = SERVICES_TO_SCAN[i]
+		local ok, service = pcall(function()
+			return game:GetService(serviceName)
+		end)
+		if ok and service then
+			table.insert(stack, { obj = service, currentService = serviceName })
+		end
+	end
+
+	while #stack > 0 do
+		local current = table.remove(stack)
+		local obj = current.obj
+		local currentService = current.currentService
+
 		processed += 1
 		processScannedObject(records, obj)
 
@@ -310,7 +343,6 @@ local function scanAssets(): ()
 					scanning = true,
 					current_service = currentService,
 					scanned = processed,
-					total = processed,
 				})
 			end)
 			lastProgressTime = now
@@ -325,18 +357,9 @@ local function scanAssets(): ()
 			return obj:GetChildren()
 		end)
 		if ok and type(children) == "table" then
-			for _, child in ipairs(children) do
-				scanRecursive(child, currentService)
+			for i = #children, 1, -1 do
+				table.insert(stack, { obj = children[i], currentService = currentService })
 			end
-		end
-	end
-
-	for _, serviceName in ipairs(SERVICES_TO_SCAN) do
-		local ok, service = pcall(function()
-			return game:GetService(serviceName)
-		end)
-		if ok and service then
-			scanRecursive(service, serviceName)
 		end
 	end
 
@@ -390,6 +413,7 @@ local function scanAssets(): ()
 	end
 end
 
+--- Kicks off a full workspace scan, managing state locks and error handling.
 local function scan(): ()
 	if scanRunning then
 		logToPlugin("[Warning] Scan already running")

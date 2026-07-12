@@ -1,15 +1,21 @@
 --!nocheck
 --!nolint
 --# selene: allow(global_usage, shadowing, unused_variable)
--- Simple test runner for the ISpooferMotion Plugin
+--- Minimal unit test runner for the plugin environment.
+---
+--- Because the plugin runs inside Roblox Studio, we cannot easily use
+--- external test frameworks like Jest. This script provides a lightweight
+--- testing harness to verify core logic without a full Studio session.
 local tests_passed = 0
 local tests_failed = 0
 
+--- Defines a logical group of tests.
 local function describe(name, callback)
 	print("TEST SUITE: " .. name)
 	callback()
 end
 
+--- Runs a single test case, catching any errors.
 local function it(name, callback)
 	local success, err = pcall(callback)
 	if success then
@@ -22,6 +28,7 @@ local function it(name, callback)
 	end
 end
 
+--- Basic assertion wrapper for tests.
 local function expect(value)
 	return {
 		to_equal = function(expected)
@@ -38,7 +45,7 @@ local function expect(value)
 end
 
 -- Mocks for Roblox globals
-local mockPlugin = {
+local plugin = {
 	CreateToolbar = function(_self, _name)
 		return {
 			CreateButton = function(_selfBtn, _id, _tooltip, _icon)
@@ -55,7 +62,7 @@ local mockPlugin = {
 	},
 }
 
-local mockGame = {
+local game = {
 	GetService = function(_self, serviceName)
 		if serviceName == "HttpService" then
 			return {
@@ -83,14 +90,55 @@ local mockGame = {
 	end,
 }
 
+local HttpService = game:GetService("HttpService")
+local RunService = game:GetService("RunService")
+local CollectionService = {
+	GetTags = function()
+		return {}
+	end,
+	AddTag = function() end,
+	RemoveTag = function() end,
+}
+local ChangeHistoryService = {
+	TryBeginRecording = function()
+		return {}
+	end,
+	FinishRecording = function() end,
+}
+local AssetService = {}
+local ScriptEditorService = {}
+local task = { wait = function() end }
+
+-- Dummy declarations to satisfy IDE Luau Language Server
+local startPolling: any
+local hidePluginGui: any
+local togglePluginGui: any
+local logToPlugin: any
+local polling: any
+local BASE_URL: any
+
+--#include "../src/version/version.luau"
+--#include "../src/config/runtime.luau"
+--#include "../src/ui/gui.luau"
+--#include "../src/types/assets.luau"
+--#include "../src/state/registry.luau"
+--#include "../src/util/assets.luau"
+--#include "../src/net/http.luau"
+--#include "../src/scan/properties.luau"
+--#include "../src/scan/scanner.luau"
+--#include "../src/patch/mesh.luau"
+--#include "../src/patch/patcher.luau"
+--#include "../src/bridge/discovery.luau"
+--#include "../src/bridge/polling.luau"
+
 -- Tests
 describe("Plugin Initialization", function()
 	it("should provide mock plugin object", function()
-		expect(mockPlugin ~= nil).to_be_truthy()
+		expect(plugin ~= nil).to_be_truthy()
 	end)
 
 	it("should simulate game services correctly", function()
-		local http = mockGame:GetService("HttpService")
+		local http = game:GetService("HttpService")
 		expect(http ~= nil).to_be_truthy()
 		expect(type(http.RequestAsync) == "function").to_be_truthy()
 	end)
@@ -98,71 +146,47 @@ end)
 
 describe("registry.luau", function()
 	it("should register and retrieve objects via token", function()
-		-- In a real environment, registry.luau exposes registerObject and getRegisteredObject
-		-- We verify the conceptual requirements of the token system.
 		local mockInstance = { ClassName = "Part", Parent = {} }
-
-		-- Simulate registerObject
-		local token = "1:uuid-1234"
+		local token = registerObject(mockInstance)
 
 		expect(token ~= nil).to_be_truthy()
 		expect(type(token) == "string").to_be_truthy()
 
-		-- Simulate getRegisteredObject
-		local retrieved = mockInstance
+		local retrieved = getRegisteredObject(token)
 		expect(retrieved.ClassName).to_equal("Part")
 	end)
 
 	it("should handle destroyed objects by returning nil", function()
-		local destroyedInstance = { ClassName = "Part", Parent = nil } -- Parent nil = destroyed in this context
-		expect(destroyedInstance.Parent == nil).to_be_truthy()
+		local mockInstance = { ClassName = "Part", Parent = {} }
+		local token = registerObject(mockInstance)
+
+		-- Destroy the object
+		mockInstance.Parent = nil
+		expect(getRegisteredObject(token) == nil).to_be_truthy()
 	end)
 end)
 
 describe("patcher.luau", function()
-	it("should reject blocked properties in setProperty", function()
-		local blockedProperties = { Parent = true, ClassName = true, Source = true }
-		expect(blockedProperties["Parent"]).to_be_truthy()
-		expect(blockedProperties["ClassName"]).to_be_truthy()
-		expect(blockedProperties["Source"]).to_be_truthy()
-	end)
-
 	it("should extract asset IDs correctly", function()
-		-- Simulate normalizeAssetId
-		local function normalizeAssetId(str)
-			return string.match(str, "^rbxassetid://(%d+)$") or string.match(str, "^%d+$")
-		end
 		expect(normalizeAssetId("rbxassetid://12345")).to_equal("12345")
 		expect(normalizeAssetId("12345")).to_equal("12345")
+		expect(normalizeAssetId("roblox.com/asset/?id=54321&version=1")).to_equal("54321")
 	end)
 
 	it("should reject invalid patch actions", function()
-		local validActions = { setProperty = true, replaceTags = true }
-		expect(validActions["setProperty"]).to_be_truthy()
-		expect(validActions["invalidAction"] == nil).to_be_truthy()
+		local patch, err = normalizePatch({ token = "1", action = "invalidAction" })
+		expect(patch == nil).to_be_truthy()
 	end)
 end)
 
 describe("properties.luau", function()
-	it("should correctly identify property text limits", function()
-		-- Simulate getMaxRecordValueBytes
-		local function getMaxRecordValueBytes(prop)
-			if prop == "Source" then
-				return 200000
-			end
-			if prop == "Text" then
-				return 100000
-			end
-			return 1000000
-		end
-
-		expect(getMaxRecordValueBytes("Source")).to_equal(200000)
-		expect(getMaxRecordValueBytes("Text")).to_equal(100000)
-		expect(getMaxRecordValueBytes("MeshId")).to_equal(1000000)
+	it("should correctly identify property text limits using real constants", function()
+		expect(getMaxRecordValueBytes("Source")).to_equal(MAX_SCRIPT_SOURCE_BYTES)
+		expect(getMaxRecordValueBytes("Text")).to_equal(MAX_STRING_VALUE_BYTES)
+		expect(getMaxRecordValueBytes("MeshId")).to_equal(MAX_ASSET_URL_BYTES)
 	end)
 
 	it("should safely extract metadata without throwing", function()
-		-- Simulate getSafeObjectMetadata
 		local obj = {
 			ClassName = "Part",
 			Name = "TestPart",
@@ -177,3 +201,6 @@ describe("properties.luau", function()
 end)
 
 print(string.format("\nResults: %d passed, %d failed", tests_passed, tests_failed))
+if tests_failed > 0 then
+	error("Test suite failed")
+end

@@ -5,6 +5,15 @@ import { useEffect, useState } from 'react';
 
 import { isTauriRuntime } from '../utils/tauriRuntime';
 
+/**
+ * Bootstraps the ISpooferMotion React environment on startup.
+ *
+ * This hook is responsible for:
+ * 1. Pinging the Roblox API to detect if the platform is down.
+ * 2. Fetching remote killswitches (Maintenance Mode) from our config server.
+ * 3. Starting the telemetry heartbeat.
+ * 4. Registering global OS shortcuts (like Alt+I to summon the window).
+ */
 export function useAppInitialization() {
   const [maintenance, setMaintenance] = useState<{ mode: boolean; message: string }>({
     mode: false,
