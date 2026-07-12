@@ -73,8 +73,14 @@ mod tests {
     #![allow(clippy::unwrap_used)]
     use super::*;
 
+    static TEST_MUTEX: std::sync::OnceLock<std::sync::Mutex<()>> = std::sync::OnceLock::new();
+    fn test_mutex() -> &'static std::sync::Mutex<()> {
+        TEST_MUTEX.get_or_init(|| std::sync::Mutex::new(()))
+    }
+
     #[tokio::test]
     async fn test_spoofer_job_lifecycle() {
+        let _guard = test_mutex().lock().unwrap();
         // Ensure state is clean before we start (in case other tests ran)
         {
             *spoofer_control().lock().unwrap() = SpooferControl::default();
@@ -109,6 +115,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_update_invalid_job_id() {
+        let _guard = test_mutex().lock().unwrap();
         {
             *spoofer_control().lock().unwrap() = SpooferControl::default();
         }

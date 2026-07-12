@@ -182,11 +182,12 @@ local function createPluginGui()
 				.. "\n]]"
 			logScript.Parent = game:GetService("ServerStorage")
 
-			local success, err = pcall(function()
+			local exportSuccess, err = pcall(function()
+				-- selene: allow(deprecated)
 				plugin:OpenScript(logScript)
 			end)
 
-			if success then
+			if exportSuccess then
 				copyLogsButton.Text = "Exported!"
 			else
 				warn("ISpooferMotion Export Logs Failed: " .. tostring(err))
