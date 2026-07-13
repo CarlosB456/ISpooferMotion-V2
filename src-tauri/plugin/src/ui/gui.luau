@@ -370,6 +370,7 @@ local function createPluginGui()
 
 	runManualBtn.MouseButton1Click:Connect(function()
 		local txt = manualBox.Text
+		-- selene: allow(global_usage)
 		local _G_plugin = _G.ISpooferMotionPlugin
 		if _G_plugin and _G_plugin.runManualReplacements then
 			_G_plugin.runManualReplacements(txt)
