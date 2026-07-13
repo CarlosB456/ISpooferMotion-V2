@@ -74,7 +74,6 @@ bash scripts/init-submodules.sh
 bun install
 
 # Build the component library
-cd ISM-Library/packages/ui && bun install && bun run build && cd ../../..
 
 # Start the app in development mode
 bun run tauri:dev
@@ -97,7 +96,6 @@ cd ISpooferMotion-V2
 bun install
 
 # Build the component library
-cd ISM-Library/packages/ui && bun install && bun run build && cd ../../..
 
 # Start the app in development mode
 bun run tauri:dev

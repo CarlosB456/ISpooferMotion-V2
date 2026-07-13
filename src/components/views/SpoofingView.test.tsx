@@ -100,7 +100,6 @@ vi.mock('../../utils/jobTypes', () => ({
 }));
 vi.mock('../../utils/pluginBridge', () => ({}));
 
-// Child components (each deeply imports ism-library)
 vi.mock('./spoofing/SpoofingControls', () => ({
   SpoofingControls: () => <div data-testid="spoofing-controls">SpoofingControls</div>,
 }));

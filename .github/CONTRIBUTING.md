@@ -17,7 +17,6 @@ Thanks for taking the time to contribute. Here's everything you need to know to 
 git clone --recurse-submodules https://github.com/ISpooferMotion/ISpooferMotion-V2.git
 cd ISpooferMotion-V2
 bun install
-cd ISM-Library/packages/ui && bun install && bun run build && cd ../../..
 bun run tauri:dev
 ```
 
@@ -71,7 +70,6 @@ Individual commands if you need them:
 src/                   React frontend
 src-tauri/src/         Rust backend (Tauri commands, Studio bridge)
 src-tauri/plugin/      Luau Studio plugin source
-ISM-Library/           Shared component library (submodule)
 scripts/               Build and dev tooling
 ```
 

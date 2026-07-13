@@ -42,7 +42,6 @@ jobs:
           key: bun-${{ runner.os }}-${{ hashFiles('**/bun.lockb') }}
           restore-keys: bun-${{ runner.os }}-
       - run: bun install --frozen-lockfile
-      - run: cd ISM-Library/packages/ui && bun install --frozen-lockfile && bun run build
       - run: bun run typecheck
       - run: bun run lint
       - name: Install Selene
@@ -68,7 +67,6 @@ jobs:
           workspaces: src-tauri
           cache-on-failure: true
       - run: bun install --frozen-lockfile
-      - run: cd ISM-Library/packages/ui && bun install --frozen-lockfile && bun run build
       - run: bun run build:plugin
       - run: bun run rust:check
       - run: bun run rust:lint
@@ -208,8 +206,6 @@ jobs:
           workspaces: src-tauri
           cache-on-failure: true
 
-      - name: Build ISM-Library
-        run: cd ISM-Library/packages/ui && bun install --frozen-lockfile && bun run build
 
       - name: Normalize Tauri signing key
         shell: bash
@@ -301,8 +297,6 @@ jobs:
           key: bun-${{ runner.os }}-${{ hashFiles('**/bun.lockb') }}
           restore-keys: bun-${{ runner.os }}-
 
-      - name: Build ISM-Library
-        run: cd ISM-Library/packages/ui && bun install --frozen-lockfile && bun run build
 
       - name: Build plugin
         run: bun run build:plugin

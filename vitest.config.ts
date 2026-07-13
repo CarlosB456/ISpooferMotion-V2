@@ -12,13 +12,9 @@ export default mergeConfig(
       globals: true,
       include: ['src/**/*.test.{ts,tsx}'],
       exclude: ['node_modules', 'e2e', 'dist', '.idea', '.git', '.cache'],
-      alias: {
-        '@codycon/ism-library': resolve(__dirname, './ISM-Library/packages/ui/index.ts'),
-      },
+      alias: {},
       server: {
-        deps: {
-          inline: ['@codycon/ism-library', 'framer-motion'],
-        },
+        deps: {},
       },
     },
   }),

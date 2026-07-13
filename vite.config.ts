@@ -9,7 +9,6 @@ export default defineConfig(() => {
     resolve: {
       alias: {
         '@': resolve(__dirname, './src'),
-        '@codycon/ism-library': resolve(__dirname, './ISM-Library/packages/ui'),
         ...(process.env.VITE_WEB_PREVIEW === 'true'
           ? {
               '@tauri-apps/api/core': resolve(__dirname, './src/tauri-mock.ts'),

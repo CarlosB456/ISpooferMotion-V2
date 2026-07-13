@@ -12,4 +12,3 @@ Cleans up development state and caches (such as Tauri's webview data) before sta
 
 ## `init-submodules.sh`
 
-Initializes Git submodules like `ISM-Library`. Run this once after cloning if you didn't use `--recurse-submodules`.

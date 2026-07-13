@@ -12,7 +12,6 @@ export default tseslint.config(
       '**/dist-plugin/**',
       '**/src-tauri/**',
       '**/src/bindings.ts',
-      '**/ISM-Library/**',
     ],
   },
   {
