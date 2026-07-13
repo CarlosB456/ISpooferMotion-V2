@@ -88,6 +88,7 @@ pub async fn queue_replace_mappings_internal(mappings: Vec<Value>) -> bool {
     let mut guard = data.write().await;
     guard.stored_mappings = mappings;
     guard.stored_patches = patches;
+    guard.notify.notify_waiters();
     true
 }
 
@@ -247,7 +248,7 @@ pub async fn get_studio_health_status() -> AnyValue {
     let guard = data.read().await;
     let synced = guard
         .last_plugin_poll_time
-        // The plugin uses a 25-second long-poll on /poll, so the timestamp is only
+        // The plugin uses an 8-second long-poll on /poll, so the timestamp is only
         // refreshed at the START of each poll iteration - not while it's waiting.
         // A 3-second window causes the frontend to flash "disconnected" mid-poll.
         // 30s gives one full poll cycle + a safety margin.

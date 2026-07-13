@@ -1,4 +1,3 @@
-import { FormDropdown, FormInput } from '@codycon/ism-library';
 import { invoke } from '@tauri-apps/api/core';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ExternalLink, Loader2, ShieldCheck } from 'lucide-react';
@@ -13,6 +12,9 @@ import {
   mergeCachedUser,
   validateCookieProfile,
 } from '../../../utils/robloxProfiles';
+import { Input } from '../../ui/input';
+import { Label } from '../../ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select';
 
 type AuthStatus = 'idle' | 'loading' | 'success' | 'error';
 type ApiKeyOwnerDetectResult = {
@@ -137,6 +139,7 @@ export default function CredentialsSection() {
       if (result.ok) {
         setApiKeyStatus('success');
         logIsm('success', message, true);
+        void saveSecrets(); // Save API key on successful validation
       } else if (/invalid|unauthorized/i.test(message)) {
         setApiKeyStatus('error');
         logIsm('warn', message, true);
@@ -158,87 +161,70 @@ export default function CredentialsSection() {
 
   return (
     <div className="flex flex-col gap-4 w-full h-full">
-      <div className="flex items-center justify-between">
-        <motion.div initial={false} transition={{ duration: 0.3 }} className="flex-1">
-          <FormDropdown
-            label={
-              <span className="flex items-center gap-2">
-                {t('config.autoDetectCookie')}
-                <AnimatePresence>
-                  {authStatus === 'loading' && (
-                    <motion.div
-                      initial={{ opacity: 0, scale: 0.8 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      exit={{ opacity: 0, scale: 0.8 }}
-                    >
-                      <Loader2 size={14} className="animate-spin text-primary" />
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </span>
-            }
-            options={[
-              { value: 'none', label: t('explorer.disabled') },
-              { value: 'studio', label: t('explorer.robloxStudio') },
-              { value: 'browser', label: t('explorer.webBrowser') },
-            ]}
-            value={getCookieDetectionMode()}
-            onChange={handleCookieDetectionChange}
-            width="w-[200px]"
-          />
-        </motion.div>
+      <div className="flex flex-col gap-1.5 w-full">
+        <Label className="flex items-center gap-2">
+          {t('config.autoDetectCookie')}
+          <AnimatePresence>
+            {authStatus === 'loading' && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.8 }}
+              >
+                <Loader2 size={14} className="animate-spin text-primary" />
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </Label>
+        <Select
+          value={getCookieDetectionMode()}
+          onValueChange={(val) => {
+            if (val) handleCookieDetectionChange(val);
+          }}
+        >
+          <SelectTrigger className="w-50 h-9">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="none">{t('explorer.disabled')}</SelectItem>
+            <SelectItem value="studio">{t('explorer.robloxStudio')}</SelectItem>
+            <SelectItem value="browser">{t('explorer.webBrowser')}</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
-      <motion.div
-        initial={false}
-        animate={{
-          height: cookieReadOnly ? 0 : 'auto',
-          opacity: cookieReadOnly ? 0 : 1,
-          marginTop: cookieReadOnly ? 0 : 8,
-        }}
-        transition={{ duration: 0.2 }}
-        className="w-full overflow-hidden"
-      >
-        <FormInput
-          label={t('spoof.cookie')}
-          placeholder={
-            <AnimatePresence mode="wait">
-              <motion.span
-                key={cookieReadOnly ? 'readonly' : 'manual'}
-                initial={{ opacity: 0, y: -4 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 4 }}
-                transition={{ duration: 0.15 }}
-                className="block"
-              >
-                {cookieReadOnly
-                  ? t('config.autoDetectCookieReadonly')
-                  : t('config.pasteCookieManually')}
-              </motion.span>
-            </AnimatePresence>
-          }
+      <div className="w-full flex flex-col gap-1.5 mt-2">
+        <Label>{t('spoof.cookie')}</Label>
+        <Input
           type="password"
+          placeholder={
+            cookieReadOnly ? t('config.autoDetectCookieReadonly') : t('config.pasteCookieManually')
+          }
           readOnly={cookieReadOnly}
           value={cookieReadOnly ? '' : config.spoofing.cookie}
-          onChange={(value: string) => updateConfig('spoofing', 'cookie', value)}
-          className={cookieReadOnly ? 'opacity-60' : ''}
+          onChange={(e) => updateConfig('spoofing', 'cookie', e.target.value)}
+          className={cookieReadOnly ? 'opacity-60 h-9' : 'h-9'}
         />
-      </motion.div>
-      <FormInput
-        label={t('spoof.apiKey')}
-        placeholder={t('spoof.apiKeyPlaceholder')}
-        type="password"
-        value={config.spoofing.apiKey}
-        onChange={(value: string) => {
-          setApiKeyStatus('idle');
-          updateConfig('spoofing', 'apiKey', value);
-        }}
-        endContent={
-          <div className="flex items-center gap-1 h-10 px-3 -mr-3 bg-bg-base rounded-r-md border border-border-strong">
+      </div>
+
+      <div className="flex flex-col gap-1.5 w-full relative">
+        <Label>{t('spoof.apiKey')}</Label>
+        <div className="relative">
+          <Input
+            type="password"
+            placeholder={t('spoof.apiKeyPlaceholder')}
+            value={config.spoofing.apiKey}
+            onChange={(e) => {
+              setApiKeyStatus('idle');
+              updateConfig('spoofing', 'apiKey', e.target.value);
+            }}
+            className="pr-20 h-9"
+          />
+          <div className="absolute right-0 top-0 h-full flex items-center px-1">
             <button
               type="button"
               onClick={handleValidateApiKey}
-              className="p-1 rounded text-text-muted hover:text-primary transition-colors disabled:opacity-50"
+              className="p-1 rounded text-muted-foreground hover:text-primary transition-colors disabled:opacity-50"
               aria-label={t('common.apply')}
               title={t('misc.validateOpenCloudKey')}
               disabled={apiKeyStatus === 'loading'}
@@ -250,9 +236,9 @@ export default function CredentialsSection() {
                   size={16}
                   className={
                     apiKeyStatus === 'success'
-                      ? 'text-success'
+                      ? 'text-green-500'
                       : apiKeyStatus === 'error'
-                        ? 'text-danger'
+                        ? 'text-red-500'
                         : undefined
                   }
                 />
@@ -261,15 +247,15 @@ export default function CredentialsSection() {
             <button
               type="button"
               onClick={() => void handleOpenApiDashboard()}
-              className="p-1 rounded text-text-muted hover:text-primary transition-colors"
+              className="p-1 rounded text-muted-foreground hover:text-primary transition-colors"
               aria-label={t('spoof.openApiDashboard')}
               title={t('spoof.openApiDashboard')}
             >
               <ExternalLink size={16} />
             </button>
           </div>
-        }
-      />
+        </div>
+      </div>
     </div>
   );
 }

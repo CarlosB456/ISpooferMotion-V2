@@ -1,38 +1,59 @@
-import { ThemeProvider as UIThemeProvider, useThemeAccent } from '@codycon/ism-library';
 import type React from 'react';
-import { useEffect } from 'react';
+import { createContext, useContext, useEffect, useState } from 'react';
+
+type ThemeMode = 'light' | 'dark';
+
+interface ThemeContextType {
+  themeMode: ThemeMode;
+  setThemeMode: (mode: ThemeMode) => void;
+  accentColor: string;
+  setAccentColor: (color: string) => void;
+}
+
+const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [themeMode, setThemeMode] = useState<ThemeMode>(() => {
+    const saved = localStorage.getItem('theme');
+    if (saved === 'light' || saved === 'dark') return saved;
+    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  });
+
+  const [accentColor, setAccentColor] = useState<string>(() => {
+    return localStorage.getItem('accentColor') || '#7e57c2';
+  });
+
+  // Sync theme mode to DOM
+  useEffect(() => {
+    const root = document.documentElement;
+    if (themeMode === 'light') {
+      root.classList.remove('dark');
+      root.classList.add('light');
+    } else {
+      root.classList.remove('light');
+      root.classList.add('dark');
+    }
+    localStorage.setItem('theme', themeMode);
+  }, [themeMode]);
+
+  // Sync accent color to DOM
+  useEffect(() => {
+    const root = document.documentElement;
+    root.style.setProperty('--primary', accentColor);
+    localStorage.setItem('accentColor', accentColor);
+  }, [accentColor]);
+
   return (
-    <UIThemeProvider>
-      <ThemeSync />
+    <ThemeContext.Provider value={{ themeMode, setThemeMode, accentColor, setAccentColor }}>
       {children}
-    </UIThemeProvider>
+    </ThemeContext.Provider>
   );
 };
 
-const ThemeSync = () => {
-  const { themeMode } = useThemeAccent();
-
-  /**
-   * Syncs the Tailwind CSS dark mode class with the active theme state.
-   *
-   * We apply `dark` or `light` directly to the `documentElement` so tailwind variants
-   * instantly trigger without needing a full React re-render of the entire DOM tree.
-   */
-  useEffect(() => {
-    if (themeMode === 'light') {
-      document.documentElement.classList.remove('dark');
-      document.documentElement.classList.add('light');
-      localStorage.setItem('theme', 'light');
-    } else if (themeMode === 'dark') {
-      document.documentElement.classList.remove('light');
-      document.documentElement.classList.add('dark');
-      localStorage.setItem('theme', 'dark');
-    }
-  }, [themeMode]);
-
-  return null;
+export const useThemeAccent = (): ThemeContextType => {
+  const context = useContext(ThemeContext);
+  if (context === undefined) {
+    throw new Error('useThemeAccent must be used within a ThemeProvider');
+  }
+  return context;
 };
-
-export { useThemeAccent };

@@ -6,6 +6,7 @@ import ReactDOM from 'react-dom/client';
 
 import App from './App.tsx';
 import { ErrorBoundary } from './components/core/ErrorBoundary';
+import { TooltipProvider } from './components/ui/tooltip';
 import { ConfigProvider } from './contexts/ConfigContext';
 import { LanguageProvider } from './contexts/LanguageContext';
 import { StudioConnectionProvider } from './contexts/StudioConnectionContext';
@@ -23,7 +24,7 @@ if (savedTheme === 'dark') {
 /**
  * Strips native HTML `title` attributes globally via a MutationObserver.
  *
- * We use a custom tooltip component (`@codycon/ism-library`) for all hover states.
+ * We use a custom tooltip component for all hover states.
  * If native titles are left intact, the browser's ugly default yellow tooltip
  * will render directly over our styled tooltips, ruining the premium feel.
  */
@@ -66,11 +67,13 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
         <StudioConnectionProvider>
           <ThemeProvider>
             <TitleAttributeGuard>
-              <main className="text-text-primary bg-bg-base min-h-screen h-full font-sans transition-colors duration-300">
-                <ErrorBoundary>
-                  <App />
-                </ErrorBoundary>
-              </main>
+              <TooltipProvider>
+                <main className="text-text-primary bg-bg-base min-h-screen h-full font-sans transition-colors duration-300">
+                  <ErrorBoundary>
+                    <App />
+                  </ErrorBoundary>
+                </main>
+              </TooltipProvider>
             </TitleAttributeGuard>
           </ThemeProvider>
         </StudioConnectionProvider>

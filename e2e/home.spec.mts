@@ -3,6 +3,7 @@ import { createTauriTest } from '@srsholmes/tauri-playwright';
 
 const { test: tauriTest, expect: tauriExpect } = createTauriTest({
   cdpEndpoint: 'http://localhost:9222',
+  devUrl: 'http://localhost:5173',
 });
 
 test.describe('ISpooferMotion E2E', () => {

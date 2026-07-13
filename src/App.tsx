@@ -1,4 +1,3 @@
-import { IsmProvider } from '@codycon/ism-library';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ChevronLeft } from 'lucide-react';
 import { lazy, Suspense } from 'react';
@@ -40,7 +39,7 @@ export default function App() {
 
   if (maintenance.mode) {
     return (
-      <div className="flex flex-col items-center justify-center h-screen w-screen bg-bg-base text-text-primary p-8 text-center space-y-4 font-sans antialiased">
+      <div className="flex flex-col items-center justify-center h-screen w-screen bg-background text-foreground p-8 text-center space-y-4 font-sans antialiased">
         <div className="text-yellow-500 mb-4">
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -57,7 +56,7 @@ export default function App() {
           </svg>
         </div>
         <h1 className="text-3xl font-bold tracking-tight">{t('misc.maintenanceBreak')}</h1>
-        <p className="text-text-muted max-w-md">
+        <p className="text-muted-foreground max-w-md">
           {maintenance.message || t('misc.maintenanceDesc')}
         </p>
       </div>
@@ -65,88 +64,83 @@ export default function App() {
   }
 
   return (
-    <IsmProvider config={{ autoScrollAccordions: true }}>
-      <div
-        className="flex flex-col h-screen w-screen overflow-hidden text-foreground relative font-sans selection:bg-primary/30 antialiased"
-        style={{ backgroundColor: 'var(--bg-base)' }}
+    <div className="flex flex-col h-screen w-screen overflow-hidden text-foreground relative font-sans selection:bg-primary/30 antialiased bg-background">
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 1, ease: [0.16, 1, 0.3, 1] }}
+        className="flex flex-col h-full w-full relative z-10"
       >
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 1, ease: [0.16, 1, 0.3, 1] }}
-          className="flex flex-col h-full w-full relative z-10"
-        >
-          <Titlebar />
+        <Titlebar />
 
-          <div className="flex flex-1 overflow-hidden relative">
-            <Sidebar activeTab={activeTab} onTabChange={setActiveTab} />
+        <div className="flex flex-1 overflow-hidden relative">
+          <Sidebar activeTab={activeTab} onTabChange={setActiveTab} />
 
-            <div className="flex-1 relative overflow-hidden bg-transparent flex flex-col">
-              <RobloxStatusBanner isVisible={isRobloxApiDown} />
+          <div className="flex-1 relative overflow-hidden bg-transparent flex flex-col">
+            <RobloxStatusBanner isVisible={isRobloxApiDown} />
 
-              <div className="flex-1 relative overflow-hidden">
-                <Suspense fallback={<div className="w-full h-full bg-bg-base/50" />}>
-                  <AnimatePresence mode="wait" initial={false}>
-                    {activeTab === 'spoofing' && <SpoofingView key="spoofing" />}
-                    {activeTab === 'activity' && <ActivityView key="activity" />}
-                    {activeTab === 'settings' && <SettingsView key="settings" />}
-                  </AnimatePresence>
-                </Suspense>
-              </div>
-
-              <Suspense fallback={null}>
-                <DebugConsole
-                  isOpen={config.debug?.debugMode || false}
-                  onClose={() => updateConfig('debug', 'debugMode', false)}
-                />
+            <div className="flex-1 relative overflow-hidden">
+              <Suspense fallback={<div className="w-full h-full bg-background/50" />}>
+                <AnimatePresence mode="wait" initial={false}>
+                  {activeTab === 'spoofing' && <SpoofingView key="spoofing" />}
+                  {activeTab === 'activity' && <ActivityView key="activity" />}
+                  {activeTab === 'settings' && <SettingsView key="settings" />}
+                </AnimatePresence>
               </Suspense>
             </div>
 
             <Suspense fallback={null}>
-              <AssetExplorer
-                isOpen={isExplorerOpen}
-                setIsOpen={setIsExplorerOpen}
-                onScanReceived={() => setIsExplorerOpen(true)}
+              <DebugConsole
+                isOpen={config.debug?.debugMode || false}
+                onClose={() => updateConfig('debug', 'debugMode', false)}
               />
             </Suspense>
-
-            {!isExplorerOpen && (
-              <motion.div
-                initial={{ x: 20, opacity: 0 }}
-                animate={{ x: 0, opacity: 1 }}
-                exit={{ x: 20, opacity: 0 }}
-                transition={{ type: 'spring', damping: 20, stiffness: 300 }}
-                className="absolute right-0 top-1/2 -translate-y-1/2 z-45 cursor-pointer flex items-center justify-end group"
-                onClick={() => setIsExplorerOpen(true)}
-              >
-                <motion.div
-                  whileHover={{
-                    width: 28,
-                    backgroundColor: 'var(--bg-elevated)',
-                  }}
-                  className="w-6 h-28 bg-bg-elevated/60 backdrop-blur-xl border border-border-subtle border-r-0 rounded-l-2xl flex items-center justify-center shadow-floating transition-colors"
-                >
-                  <ChevronLeft
-                    size={16}
-                    strokeWidth={2.5}
-                    className="text-text-secondary group-hover:text-text-primary transition-colors"
-                  />
-                </motion.div>
-              </motion.div>
-            )}
           </div>
 
-          <div
-            className="absolute bottom-0 left-0 right-0 h-32 pointer-events-none z-60 opacity-[0.03] mix-blend-screen"
-            style={{
-              background: 'linear-gradient(to top, var(--primary), transparent)',
-            }}
-          />
+          <Suspense fallback={null}>
+            <AssetExplorer
+              isOpen={isExplorerOpen}
+              setIsOpen={setIsExplorerOpen}
+              onScanReceived={() => setIsExplorerOpen(true)}
+            />
+          </Suspense>
 
-          <StatusBar />
-          <WatermarkEngine />
-        </motion.div>
-      </div>
-    </IsmProvider>
+          {!isExplorerOpen && (
+            <motion.div
+              initial={{ x: 20, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              exit={{ x: 20, opacity: 0 }}
+              transition={{ type: 'spring', damping: 20, stiffness: 300 }}
+              className="absolute right-0 top-1/2 -translate-y-1/2 z-45 cursor-pointer flex items-center justify-end group"
+              onClick={() => setIsExplorerOpen(true)}
+            >
+              <motion.div
+                whileHover={{
+                  width: 24,
+                  backgroundColor: 'var(--muted)',
+                }}
+                className="w-5 h-20 bg-muted/60 backdrop-blur-xl border border-border border-r-0 rounded-l-2xl flex items-center justify-center shadow-lg transition-colors"
+              >
+                <ChevronLeft
+                  size={14}
+                  strokeWidth={2.5}
+                  className="text-muted-foreground group-hover:text-foreground transition-colors"
+                />
+              </motion.div>
+            </motion.div>
+          )}
+        </div>
+
+        <div
+          className="absolute bottom-0 left-0 right-0 h-32 pointer-events-none z-60 opacity-[0.03] mix-blend-screen"
+          style={{
+            background: 'linear-gradient(to top, var(--primary), transparent)',
+          }}
+        />
+
+        <StatusBar />
+        <WatermarkEngine />
+      </motion.div>
+    </div>
   );
 }

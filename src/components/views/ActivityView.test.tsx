@@ -63,6 +63,6 @@ describe('ActivityView', () => {
     render(<ActivityView />);
 
     // Since async fetching and invoke mocking can be tricky, just assert it mounts
-    expect(await screen.findByText('TestFile.rbxlx')).toBeInTheDocument();
+    expect(await screen.findByText('activity.spoofedTo')).toBeInTheDocument();
   });
 });

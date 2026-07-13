@@ -122,7 +122,10 @@ export const fr: TranslationTree = {
   },
   settings: {
     title: 'Paramètres',
-    general: 'Paramètres Généraux',
+    general: 'Paramètres généraux',
+    appearance: 'Apparence et localisation',
+    behavior: "Comportement de l'application",
+    dangerZone: 'Zone de danger',
     theme: 'Thème',
     accentColor: "Couleur d'Accentuation",
     language: 'Langue',
@@ -163,6 +166,9 @@ export const fr: TranslationTree = {
     exclusions: 'Exclusions',
     preserveMetadata: 'Préserver les Métadonnées Originales',
     archiveRecovery: 'Activer la Récupération des Archives (Lent)',
+    downloadOnly: 'Mode Téléchargement Uniquement',
+    downloadOnlyDesc:
+      "Lorsqu'il est activé, les ressources seront uniquement téléchargées sur votre ordinateur et non importées vers Roblox.",
     downloadFolder: 'Dossier de Téléchargement',
     uploadTypesPlaceholder: 'Sélectionnez les types de ressources à uploader...',
     downloadFolderPlaceholder: 'Sélectionnez où enregistrer les téléchargements...',

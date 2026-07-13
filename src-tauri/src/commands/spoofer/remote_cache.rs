@@ -1,17 +1,3 @@
-// remote_cache.rs
-//
-// This module maintains a write-only relationship with the community asset cache API.
-//
-// Architecture contract:
-//   - WRITE: discovered (asset_id, place_id) pairs are pushed to the remote API via push_discovery().
-//   - READ: asset context is ONLY ever read from the local in-process DashMap (get_local_context).
-//     There is no HTTP GET from the remote URL anywhere in this module. This is intentional and
-//     must be preserved - users' asset lookup relies solely on their own local session cache,
-//     not on data pulled from the community backend.
-//
-// If you need to add a remote-read path in the future, it belongs in a separate module and must
-// go through an explicit user opt-in flow.
-
 use dashmap::DashMap;
 use serde::{Deserialize, Deserializer, Serialize};
 use std::sync::OnceLock;
@@ -96,11 +82,7 @@ fn validate_cache_url(url: &str) -> Result<(), String> {
     }
 }
 
-/// Record a discovered (asset_id → place_id) pair locally and broadcast it to the remote backend.
-///
-/// The local write happens synchronously. The remote POST is fire-and-forget on a background task.
-/// The remote URL is only ever written to - never read from.
-pub fn push_discovery(asset_id: String, place_id: String) {
+pub fn push_discovery(_app: tauri::AppHandle, asset_id: String, place_id: String) {
     let cache = get_local_cache();
     cache.insert(
         asset_id.clone(),
@@ -116,19 +98,19 @@ pub fn push_discovery(asset_id: String, place_id: String) {
         }
     }
 
-    // Fire-and-forget POST to the community backend. This is a write-only operation.
-    if let Some(url) = read_push_url() {
-        if !url.trim().is_empty() {
-            tokio::spawn(async move {
+    // Fire-and-forget POST to the community backend only
+    tokio::spawn(async move {
+        if let Some(url) = read_push_url() {
+            if !url.trim().is_empty() {
                 let client = crate::utils::get_http_client();
                 let payload = serde_json::json!({
                     "asset_id": asset_id,
                     "place_id": place_id
                 });
                 let _ = client.post(&url).json(&payload).send().await;
-            });
+            }
         }
-    }
+    });
 }
 
 #[tauri::command]
@@ -138,10 +120,43 @@ pub fn push_discovery(asset_id: String, place_id: String) {
 /// This sets the endpoint that newly discovered (asset_id, place_id) pairs are POSTed to.
 /// Reading from the community cache is explicitly NOT supported - users resolve assets
 /// from their own local session cache only.
-pub async fn initialize_remote_cache(push_url: Option<String>) -> Result<(), String> {
+pub async fn initialize_remote_cache(
+    app: tauri::AppHandle,
+    push_url: Option<String>,
+) -> Result<(), String> {
     if let Some(ref pu) = push_url {
         if !pu.trim().is_empty() {
             validate_cache_url(pu)?;
+
+            use tauri::Manager;
+            if let Ok(app_dir) = app.path().app_data_dir() {
+                let cache_path = app_dir.join("local_remote_cache.json");
+                let migrated_lock_path = app_dir.join("local_remote_cache_migrated.lock");
+
+                // Only process the historical cache ONCE. If the lock file exists, skip.
+                if !migrated_lock_path.exists() {
+                    if let Ok(content) = tokio::fs::read_to_string(&cache_path).await {
+                        if let Ok(existing) = serde_json::from_str::<
+                            std::collections::HashMap<String, String>,
+                        >(&content)
+                        {
+                            let pu_clone = pu.clone();
+                            tokio::spawn(async move {
+                                let client = crate::utils::get_http_client();
+                                for (asset_id, place_id) in existing {
+                                    let payload = serde_json::json!({
+                                        "asset_id": asset_id,
+                                        "place_id": place_id
+                                    });
+                                    let _ = client.post(&pu_clone).json(&payload).send().await;
+                                }
+                                // Create a lock file so we never read their old local cache on startup again
+                                let _ = tokio::fs::write(&migrated_lock_path, "migrated").await;
+                            });
+                        }
+                    }
+                } // End of migrated_lock_path.exists()
+            }
         }
     }
 

@@ -1,4 +1,3 @@
-import { IconButton, Toolbar } from '@codycon/ism-library';
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { motion } from 'framer-motion';
@@ -11,6 +10,8 @@ import { useConfig } from '../../contexts/ConfigContext';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useSpooferStore } from '../../stores/spooferStore';
 import { isTauriRuntime } from '../../utils/tauriRuntime';
+import { Button } from '../ui/button';
+import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip';
 
 /**
  * Custom window titlebar replacing the native OS frame.
@@ -53,7 +54,7 @@ export default function Titlebar() {
       transition={{ duration: 0.5, ease: 'easeOut' }}
       // Allow users to drag the window by clicking the titlebar.
       data-tauri-drag-region
-      className="h-14 w-full flex items-center justify-between px-5 bg-transparent border-b border-border-subtle select-none shrink-0 z-50 relative"
+      className="h-14 w-full flex items-center justify-between px-5 bg-transparent border-b border-border select-none shrink-0 z-50 relative"
     >
       {/* App Logo & Name */}
       <div className="flex items-center pointer-events-none gap-3">
@@ -81,43 +82,93 @@ export default function Titlebar() {
           )}
         </div>
         <div className="flex flex-col justify-center">
-          <span className="text-[13px] font-semibold tracking-tight text-text-primary leading-tight">
+          <span className="text-[13px] font-semibold tracking-tight text-foreground leading-tight">
             ISpooferMotion
           </span>
-          <span className="text-[9px] font-mono text-text-muted mt-0.5 opacity-80">
+          <span className="text-[9px] font-mono text-muted-foreground mt-0.5 opacity-80">
             {appVersion ? `v${appVersion}` : 'v?'}
           </span>
         </div>
       </div>
 
-      <Toolbar>
-        <IconButton
-          label={t('settings.advanced')}
-          tone={showAdvanced ? 'primary' : undefined}
-          onClick={() => {
-            if (!showAdvanced) {
-              updateConfig('ui', 'activeTab', 'spoofing');
+      <div className="flex items-center gap-1.5" data-tauri-drag-region={false}>
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                variant="ghost"
+                size="icon"
+                className={
+                  showAdvanced ? 'text-primary hover:text-primary' : 'text-muted-foreground'
+                }
+                onClick={() => {
+                  if (!showAdvanced) {
+                    updateConfig('ui', 'activeTab', 'spoofing');
+                  }
+                  setShowAdvanced(!showAdvanced);
+                }}
+              />
             }
-            setShowAdvanced(!showAdvanced);
-          }}
-        >
-          <Settings2 size={16} />
-        </IconButton>
-        <IconButton
-          label={t('debug.toggleDebugConsole')}
-          tone={config.debug?.debugMode ? 'primary' : undefined}
-          onClick={() => updateConfig('debug', 'debugMode', !config.debug?.debugMode)}
-        >
-          <Terminal size={16} />
-        </IconButton>
-        <div className="mx-1 h-5 w-px shrink-0 bg-border-subtle" aria-hidden="true" />
-        <IconButton label={t('debug.minimize')} onClick={handleMinimize}>
-          <Minus size={16} />
-        </IconButton>
-        <IconButton label={t('common.close')} tone="danger" onClick={handleClose}>
-          <X size={16} />
-        </IconButton>
-      </Toolbar>
+          >
+            <Settings2 size={16} />
+          </TooltipTrigger>
+          <TooltipContent>{t('settings.advanced')}</TooltipContent>
+        </Tooltip>
+
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                variant="ghost"
+                size="icon"
+                className={
+                  config.debug?.debugMode
+                    ? 'text-primary hover:text-primary'
+                    : 'text-muted-foreground'
+                }
+                onClick={() => updateConfig('debug', 'debugMode', !config.debug?.debugMode)}
+              />
+            }
+          >
+            <Terminal size={16} />
+          </TooltipTrigger>
+          <TooltipContent>{t('debug.toggleDebugConsole')}</TooltipContent>
+        </Tooltip>
+
+        <div className="mx-1 h-5 w-px shrink-0 bg-border" aria-hidden="true" />
+
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleMinimize}
+                className="text-muted-foreground"
+              />
+            }
+          >
+            <Minus size={16} />
+          </TooltipTrigger>
+          <TooltipContent>{t('debug.minimize')}</TooltipContent>
+        </Tooltip>
+
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleClose}
+                className="text-muted-foreground hover:bg-destructive hover:text-destructive-foreground"
+              />
+            }
+          >
+            <X size={16} />
+          </TooltipTrigger>
+          <TooltipContent>{t('common.close')}</TooltipContent>
+        </Tooltip>
+      </div>
     </motion.div>
   );
 }

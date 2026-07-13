@@ -41,7 +41,10 @@ export default function ExecutionLogs({
     }
 
     const interval = setInterval(() => {
-      const elapsedMs = Date.now() - spoofStartTime;
+      const store = useSpooferStore.getState();
+      const now =
+        store.isJobPaused && store.jobPauseStartTime ? store.jobPauseStartTime : Date.now();
+      const elapsedMs = now - spoofStartTime;
       const msPerItem = elapsedMs / spoofCurrentCount;
       const remainingItems = spoofTotalCount - spoofCurrentCount;
 
@@ -112,7 +115,7 @@ export default function ExecutionLogs({
       </div>
       <div
         ref={outputRef}
-        className="w-full flex-1 min-h-30 rounded-md border border-border-strong bg-bg-surface p-3 font-mono text-[13px] font-medium text-text-primary shadow-inner overflow-y-auto whitespace-pre-wrap wrap-break-word"
+        className="w-full flex-1 min-h-30 p-2 rounded-md font-mono text-[13px] font-medium text-text-primary overflow-y-auto whitespace-pre-wrap wrap-break-word"
       >
         {logs && logs.length > 0 ? (
           <div className="flex flex-col gap-1">
@@ -123,13 +126,13 @@ export default function ExecutionLogs({
               const isError = line.includes('[ERROR]');
 
               const containerClass = cn(
-                'py-1.5 px-3 rounded border border-transparent',
+                'py-1.5 px-3 rounded',
                 isError
-                  ? 'text-danger bg-danger/5 border-danger/10'
+                  ? 'text-red-500 bg-red-500/5'
                   : isWarn
-                    ? 'text-warning bg-warning/5 border-warning/10'
+                    ? 'text-yellow-500 bg-yellow-500/5'
                     : isSuccess
-                      ? 'text-success bg-success/5 border-success/10'
+                      ? 'text-green-500 bg-green-500/5'
                       : 'text-text-primary',
               );
 

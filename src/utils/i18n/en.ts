@@ -100,6 +100,9 @@ export const en: TranslationTree = {
   settings: {
     title: 'Settings',
     general: 'General Settings',
+    appearance: 'Appearance & Localization',
+    behavior: 'App Behavior',
+    dangerZone: 'Danger Zone',
     theme: 'Theme',
     accentColor: 'Accent Color',
     language: 'Language',
@@ -141,6 +144,9 @@ export const en: TranslationTree = {
     debugDisplay: 'Debug & Display',
     preserveMetadata: 'Preserve Original Metadata',
     archiveRecovery: 'Enable Archive Recovery (Slow)',
+    downloadOnly: 'Download Only Mode',
+    downloadOnlyDesc:
+      'When enabled, assets will only be downloaded to your computer and not uploaded to Roblox.',
     downloadFolder: 'Download Folder',
     uploadTypesPlaceholder: 'Select asset types to upload...',
     downloadFolderPlaceholder: 'Select where downloads should be saved...',

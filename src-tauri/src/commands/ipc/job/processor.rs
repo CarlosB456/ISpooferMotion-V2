@@ -255,7 +255,12 @@ pub async fn process_spoofer_action(
         return Ok(());
     }
 
-    if api_key.trim().len() < 20 {
+    let is_download_only_job = data.upload_types.as_ref().map_or(true, |types| {
+        types.is_empty()
+            || (types.contains(&"download".to_string()) && !types.contains(&"upload".to_string()))
+    });
+
+    if !is_download_only_job && api_key.trim().len() < 20 {
         temp_log("An Open Cloud API key is required before spoofing. Create one with Assets read/write access for the selected creator.", "error");
         let _ = app.emit("spoofer-result", serde_json::json!({"success": false, "output": "Missing Open Cloud API key", "jobId": job_id, "logFilePath": job_log_path}));
         finish_spoofer_job(&job_id);
@@ -539,9 +544,18 @@ pub async fn process_spoofer_action(
                 } else {
                     "rbxm"
                 };
-                let file_path = downloads_dir.join(format!("{asset_id}.{file_ext}")).to_string_lossy().to_string();
-
                 let direct_url = if asset_type == "plugin" { None } else { ctx.batch_urls.get(&asset_id).cloned() };
+
+                let is_download_only = asset_type == "script_ref" || asset_type == "video" || !ctx.upload_types.contains(&asset_type) || asset_type == "plugin";
+                let file_name = if is_download_only {
+                    let safe_name = exact_name.replace(|c: char| !c.is_alphanumeric() && c != ' ' && c != '_' && c != '-', "_");
+                    format!("{safe_name}.{file_ext}")
+                } else {
+                    format!("{asset_id}.{file_ext}")
+                };
+
+                let file_path = downloads_dir.join(file_name).to_string_lossy().to_string();
+
                 let place_ids_for_download = if ctx.forced_place_ids.is_empty() {
                     match crate::commands::spoofer::get_asset_creator_for_asset(ctx.app.clone(), asset_id.clone(), ctx.cookie.clone()).await {
                         Ok((creator_type, creator_id)) => {
@@ -604,7 +618,7 @@ pub async fn process_spoofer_action(
 
                 match dl_res {
                     Ok(res) if res.success => {
-                        let download_only = asset_type == "script_ref" || !ctx.upload_types.contains(&asset_type) || asset_type == "plugin";
+                        let download_only = asset_type == "script_ref" || asset_type == "video" || !ctx.upload_types.contains(&asset_type) || asset_type == "plugin";
                         if download_only {
                             ctx.success_count.fetch_add(1, Ordering::Relaxed);
                             ctx.skip_count.fetch_add(1, Ordering::Relaxed);

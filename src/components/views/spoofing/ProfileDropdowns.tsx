@@ -1,12 +1,11 @@
-import { Spinner } from '@codycon/ism-library';
-import { AnimatePresence, motion } from 'framer-motion';
-import { ChevronDown, Users, UserSquare2 } from 'lucide-react';
-import { type ReactNode, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
+import { motion } from 'framer-motion';
+import { Loader2, Users, UserSquare2 } from 'lucide-react';
 
 import { useLanguage } from '../../../contexts/LanguageContext';
 import { cn } from '../../../utils/cn';
 import { normalizeId, type RobloxGroup, type RobloxUserInfo } from '../../../utils/robloxProfiles';
+
+import { Select, SelectContent, SelectItem, SelectTrigger } from '../../ui/select';
 
 export type AudioQuotaDisplay =
   | { status: 'idle' | 'loading' | 'unavailable' }
@@ -43,59 +42,6 @@ export function parseAudioQuota(payload: unknown): AudioQuotaDisplay | null {
     remaining: Math.max(0, capacity - usage),
     capacity,
   };
-}
-
-function DropdownChevron({ open }: { open: boolean }) {
-  return (
-    <motion.span
-      initial={false}
-      animate={{ rotate: open ? 180 : 0 }}
-      transition={{ duration: 0.2, ease: [0.2, 0, 0, 1] }}
-      className="text-text-muted shrink-0"
-    >
-      <ChevronDown size={14} />
-    </motion.span>
-  );
-}
-
-function DropdownPortal({
-  open,
-  setOpen,
-  coords,
-  children,
-}: {
-  open: boolean;
-  setOpen: (open: boolean) => void;
-  coords: { top: number; left: number; width: number };
-  children: ReactNode;
-}) {
-  // Render dropdowns outside the DOM node to prevent clipping from overflow:hidden.
-  return createPortal(
-    <AnimatePresence>
-      {open && (
-        <>
-          <div className="fixed inset-0 z-490" onPointerDown={() => setOpen(false)} />
-          <motion.div
-            initial={{ opacity: 0, y: -6, scale: 0.97 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -6, scale: 0.97 }}
-            transition={{ duration: 0.15, ease: 'easeOut' }}
-            onPointerDown={(event) => event.stopPropagation()}
-            className="fixed z-500 bg-bg-surface border border-border-subtle rounded-md shadow-floating backdrop-blur-xl p-1"
-            style={{
-              top: coords.top,
-              left: coords.left,
-              width: coords.width,
-              minWidth: 180,
-            }}
-          >
-            <div className="max-h-64 overflow-y-auto flex flex-col gap-0.5">{children}</div>
-          </motion.div>
-        </>
-      )}
-    </AnimatePresence>,
-    document.body,
-  );
 }
 
 function EmptyAvatar({ group = false, size = 12 }: { group?: boolean; size?: number }) {
@@ -190,117 +136,80 @@ export function GroupDropdown({
   loading: boolean;
 }) {
   const { t } = useLanguage();
-  const [open, setOpen] = useState(false);
-  const buttonRef = useRef<HTMLButtonElement>(null);
-  const [coords, setCoords] = useState({ top: 0, left: 0, width: 200 });
   const selected = groups.find((group) => normalizeId(group.id) === normalizeId(value));
-
-  const toggle = () => {
-    if (buttonRef.current) {
-      const rect = buttonRef.current.getBoundingClientRect();
-      setCoords({ top: rect.bottom + 4, left: rect.left, width: rect.width });
-    }
-    setOpen((current) => !current);
-  };
 
   return (
     <div className="flex flex-col items-start gap-1.5 w-full">
       <span className="text-sm font-medium text-text-primary shrink-0">
         {t('spoof.selectedGroup')}
       </span>
-      <button
-        ref={buttonRef}
-        type="button"
-        onClick={toggle}
-        className="flex items-center gap-2 h-10 px-3 bg-bg-surface border border-border-strong rounded-md text-[13px] font-medium text-text-primary hover:border-primary transition-colors w-full"
-      >
-        <motion.div
-          key={`${selected?.id || 'none'}-icon`}
-          initial={{ opacity: 0, x: 8 }}
-          animate={{ opacity: 1, x: 0 }}
-          className="relative w-6 h-6 shrink-0"
-        >
-          {loading ? (
-            <Spinner size="sm" color="current" className="text-text-muted" />
-          ) : selected?.iconUrl ? (
-            <img
-              src={selected.iconUrl}
-              alt={selected.name}
-              className="w-6 h-6 rounded-full object-cover"
-            />
-          ) : (
-            <EmptyAvatar group />
-          )}
-        </motion.div>
-        <motion.div
-          key={selected?.id || 'none'}
-          initial={{ opacity: 0, x: 8 }}
-          animate={{ opacity: 1, x: 0 }}
-          className="min-w-0 flex-1 text-left truncate"
-        >
-          {selected?.name || t('common.none')}
-        </motion.div>
-        <DropdownChevron open={open} />
-      </button>
-
-      <DropdownPortal open={open} setOpen={setOpen} coords={coords}>
-        <button
-          type="button"
-          onClick={() => {
-            onChange('none');
-            setOpen(false);
-          }}
-          className={cn(
-            'flex items-center gap-3 w-full px-2 py-1.5 text-left text-[13px] rounded-sm hover:bg-bg-elevated transition-colors',
-            value === 'none' ? 'text-primary font-semibold' : 'text-text-primary',
-          )}
-        >
-          <div className="w-7 h-7 shrink-0">
-            <EmptyAvatar group size={14} />
-          </div>
-          {t('common.none')}
-        </button>
-        {groups.map((group, index) => (
-          <motion.button
-            key={group.id}
-            type="button"
-            initial={{ opacity: 0, x: -4 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{
-              duration: 0.14,
-              delay: Math.min(index * 0.025, 0.12),
-            }}
-            onClick={() => {
-              onChange(String(group.id));
-              setOpen(false);
-            }}
-            className={cn(
-              'flex items-center gap-3 w-full px-2 py-1.5 text-left text-[13px] rounded-sm hover:bg-bg-elevated transition-colors',
-              normalizeId(group.id) === normalizeId(value)
-                ? 'text-primary font-semibold'
-                : 'text-text-primary',
-            )}
-          >
-            <div className="w-7 h-7 shrink-0">
-              {group.iconUrl ? (
+      <Select value={value} onValueChange={(v) => onChange(v || 'none')}>
+        <SelectTrigger className="w-full bg-bg-surface border-border-strong text-text-primary hover:border-primary h-10 px-3 transition-colors">
+          <div className="flex items-center gap-2 overflow-hidden w-full">
+            <div className="relative w-6 h-6 shrink-0">
+              {loading ? (
+                <Loader2 size={16} className="text-text-muted animate-spin" />
+              ) : selected?.iconUrl ? (
                 <img
-                  src={group.iconUrl}
-                  alt={group.name}
-                  className="w-full h-full rounded-full object-cover ring-1 ring-border-subtle"
+                  src={selected.iconUrl}
+                  alt={selected.name}
+                  className="w-6 h-6 rounded-full object-cover"
                 />
               ) : (
-                <EmptyAvatar group size={14} />
+                <EmptyAvatar group />
               )}
             </div>
-            <span className="truncate font-medium">{group.name}</span>
-          </motion.button>
-        ))}
-        {groups.length === 0 && !loading && (
-          <div className="px-3 py-4 text-center text-[12px] text-text-muted">
-            {t('spoof.noGroupsFound')}
+            <div className="min-w-0 flex-1 text-left truncate text-[13px] font-medium">
+              {selected?.name || t('common.none')}
+            </div>
           </div>
-        )}
-      </DropdownPortal>
+        </SelectTrigger>
+
+        <SelectContent>
+          <SelectItem value="none" className="text-[13px]">
+            <div className="flex items-center gap-3 w-full">
+              <div className="w-6 h-6 shrink-0">
+                <EmptyAvatar group size={14} />
+              </div>
+              <span className={cn(value === 'none' && 'font-semibold text-primary')}>
+                {t('common.none')}
+              </span>
+            </div>
+          </SelectItem>
+          {groups.map((group) => (
+            <SelectItem key={group.id} value={String(group.id)} className="text-[13px]">
+              <div className="flex items-center gap-3 w-full">
+                <div className="w-6 h-6 shrink-0">
+                  {group.iconUrl ? (
+                    <img
+                      src={group.iconUrl}
+                      alt={group.name}
+                      className="w-full h-full rounded-full object-cover ring-1 ring-border-subtle"
+                    />
+                  ) : (
+                    <EmptyAvatar group size={14} />
+                  )}
+                </div>
+                <span
+                  className={cn(
+                    'truncate',
+                    normalizeId(group.id) === normalizeId(value)
+                      ? 'font-semibold text-primary'
+                      : 'font-medium',
+                  )}
+                >
+                  {group.name}
+                </span>
+              </div>
+            </SelectItem>
+          ))}
+          {groups.length === 0 && !loading && (
+            <div className="px-3 py-4 text-center text-[12px] text-text-muted">
+              {t('spoof.noGroupsFound')}
+            </div>
+          )}
+        </SelectContent>
+      </Select>
     </div>
   );
 }

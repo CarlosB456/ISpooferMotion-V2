@@ -40,7 +40,7 @@ local function createPluginGui()
 	container.Size = UDim2.fromOffset(680, 420)
 	container.Position = UDim2.fromScale(0.5, 0.5)
 	container.AnchorPoint = Vector2.new(0.5, 0.5)
-	container.BackgroundColor3 = Color3.fromHex("#18181C")
+	container.BackgroundColor3 = Color3.fromHex("#09090b")
 	container.BorderSizePixel = 0
 	container.Parent = gui
 
@@ -49,21 +49,9 @@ local function createPluginGui()
 	panelCorner.Parent = container
 
 	local panelStroke = Instance.new("UIStroke")
-	panelStroke.Color = Color3.fromHex("#3F3F46")
+	panelStroke.Color = Color3.fromHex("#27272a")
 	panelStroke.Thickness = 1
 	panelStroke.Parent = container
-
-	local topHighlight = Instance.new("Frame")
-	topHighlight.Name = "TopHighlight"
-	topHighlight.Size = UDim2.new(1, 0, 0, 1)
-	topHighlight.BackgroundColor3 = Color3.fromHex("#ffffff")
-	topHighlight.BackgroundTransparency = 0.92
-	topHighlight.BorderSizePixel = 0
-	topHighlight.Parent = container
-
-	local thCorner = Instance.new("UICorner")
-	thCorner.CornerRadius = UDim.new(0, 8)
-	thCorner.Parent = topHighlight
 
 	local header = Instance.new("Frame")
 	header.Name = "Header"
@@ -86,9 +74,9 @@ local function createPluginGui()
 	title.Position = UDim2.new(0, 64, 0.5, -8)
 	title.AnchorPoint = Vector2.new(0, 0.5)
 	title.BackgroundTransparency = 1
-	title.Font = Enum.Font.GothamBold
-	title.TextSize = 16
-	title.TextColor3 = Color3.fromHex("#EEEDF2")
+	title.Font = Enum.Font.BuilderSansExtraBold
+	title.TextSize = 14
+	title.TextColor3 = Color3.fromHex("#fafafa")
 	title.TextXAlignment = Enum.TextXAlignment.Left
 	title.Text = "ISpooferMotion"
 	title.Parent = header
@@ -99,9 +87,9 @@ local function createPluginGui()
 	versionLabel.Position = UDim2.new(0, 64, 0.5, 10)
 	versionLabel.AnchorPoint = Vector2.new(0, 0.5)
 	versionLabel.BackgroundTransparency = 1
-	versionLabel.Font = Enum.Font.GothamMedium
+	versionLabel.Font = Enum.Font.BuilderSansMedium
 	versionLabel.TextSize = 12
-	versionLabel.TextColor3 = Color3.fromHex("#8B8B9C")
+	versionLabel.TextColor3 = Color3.fromHex("#a1a1aa")
 	versionLabel.TextXAlignment = Enum.TextXAlignment.Left
 	versionLabel.Text = "v" .. (PLUGIN_VERSION or "Unknown")
 	versionLabel.Parent = header
@@ -112,9 +100,9 @@ local function createPluginGui()
 	statusText.Position = UDim2.fromScale(0.5, 0.5)
 	statusText.AnchorPoint = Vector2.new(0.5, 0.5)
 	statusText.BackgroundTransparency = 1
-	statusText.Font = Enum.Font.GothamMedium
+	statusText.Font = Enum.Font.BuilderSansMedium
 	statusText.TextSize = 13
-	statusText.TextColor3 = Color3.fromHex("#EEEDF2")
+	statusText.TextColor3 = Color3.fromHex("#fafafa")
 	statusText.TextXAlignment = Enum.TextXAlignment.Center
 	statusText.Text = "Waiting for Desktop App..."
 	statusText.Parent = header
@@ -124,11 +112,11 @@ local function createPluginGui()
 	copyLogsButton.Size = UDim2.fromOffset(100, 32)
 	copyLogsButton.Position = UDim2.new(1, -16, 0.5, 0)
 	copyLogsButton.AnchorPoint = Vector2.new(1, 0.5)
-	copyLogsButton.BackgroundColor3 = Color3.fromHex("#111114")
+	copyLogsButton.BackgroundColor3 = Color3.fromHex("#09090b")
 	copyLogsButton.BorderSizePixel = 0
-	copyLogsButton.Font = Enum.Font.GothamMedium
+	copyLogsButton.Font = Enum.Font.BuilderSansMedium
 	copyLogsButton.TextSize = 13
-	copyLogsButton.TextColor3 = Color3.fromHex("#EEEDF2")
+	copyLogsButton.TextColor3 = Color3.fromHex("#fafafa")
 	copyLogsButton.Text = "Export Logs"
 	copyLogsButton.AutoButtonColor = false
 	copyLogsButton.Parent = header
@@ -138,21 +126,21 @@ local function createPluginGui()
 	btnCorner.Parent = copyLogsButton
 
 	local btnStroke = Instance.new("UIStroke")
-	btnStroke.Color = Color3.fromHex("#3F3F46")
+	btnStroke.Color = Color3.fromHex("#27272a")
 	btnStroke.Thickness = 1
 	btnStroke.Parent = copyLogsButton
 
 	copyLogsButton.MouseEnter:Connect(function()
-		copyLogsButton.BackgroundColor3 = Color3.fromHex("#18181C")
+		copyLogsButton.BackgroundColor3 = Color3.fromHex("#27272a")
 	end)
 	copyLogsButton.MouseLeave:Connect(function()
-		copyLogsButton.BackgroundColor3 = Color3.fromHex("#111114")
+		copyLogsButton.BackgroundColor3 = Color3.fromHex("#09090b")
 	end)
 	copyLogsButton.MouseButton1Down:Connect(function()
-		copyLogsButton.BackgroundColor3 = Color3.fromHex("#08090C")
+		copyLogsButton.BackgroundColor3 = Color3.fromHex("#18181b")
 	end)
 	copyLogsButton.MouseButton1Up:Connect(function()
-		copyLogsButton.BackgroundColor3 = Color3.fromHex("#18181C")
+		copyLogsButton.BackgroundColor3 = Color3.fromHex("#27272a")
 	end)
 
 	copyLogsButton.MouseButton1Click:Connect(function()
@@ -202,38 +190,87 @@ local function createPluginGui()
 		end
 	end)
 
+	-- Tab Bar
+	local tabBar = Instance.new("Frame")
+	tabBar.Name = "TabBar"
+	tabBar.Size = UDim2.new(1, -32, 0, 32)
+	tabBar.Position = UDim2.fromOffset(16, 56)
+	tabBar.BackgroundTransparency = 1
+	tabBar.Parent = container
+
+	local tabListLayout = Instance.new("UIListLayout")
+	tabListLayout.FillDirection = Enum.FillDirection.Horizontal
+	tabListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+	tabListLayout.Padding = UDim.new(0, 8)
+	tabListLayout.Parent = tabBar
+
+	local function createTabButton(name, text, order, isActive)
+		local btn = Instance.new("TextButton")
+		btn.Name = name
+		btn.Size = UDim2.fromOffset(120, 32)
+		btn.BackgroundColor3 = isActive and Color3.fromHex("#18181b") or Color3.fromHex("#09090b")
+		btn.BorderSizePixel = 0
+		btn.Font = Enum.Font.BuilderSansMedium
+		btn.TextSize = 13
+		btn.TextColor3 = isActive and Color3.fromHex("#ffffff") or Color3.fromHex("#a1a1aa")
+		btn.Text = text
+		btn.AutoButtonColor = false
+		btn.LayoutOrder = order
+
+		local corner = Instance.new("UICorner")
+		corner.CornerRadius = UDim.new(0, 6)
+		corner.Parent = btn
+
+		local stroke = Instance.new("UIStroke")
+		stroke.Color = Color3.fromHex("#27272a")
+		stroke.Thickness = 1
+		stroke.Parent = btn
+
+		return btn
+	end
+
+	local consoleTabBtn = createTabButton("ConsoleTab", "Console Logs", 1, true)
+	consoleTabBtn.Parent = tabBar
+
+	local manualTabBtn = createTabButton("ManualTab", "Manual Swap", 2, false)
+	manualTabBtn.Parent = tabBar
+
+	-- Containers
+	local contentArea = Instance.new("Frame")
+	contentArea.Name = "ContentArea"
+	contentArea.Size = UDim2.new(1, -32, 1, -104)
+	contentArea.Position = UDim2.fromOffset(16, 96)
+	contentArea.BackgroundTransparency = 1
+	contentArea.Parent = container
+
+	-- CONSOLE CONTAINER
 	local logsContainer = Instance.new("Frame")
 	logsContainer.Name = "LogsContainer"
-	logsContainer.Size = UDim2.new(1, -32, 1, -88)
-	logsContainer.Position = UDim2.fromOffset(16, 72)
-	logsContainer.BackgroundColor3 = Color3.fromHex("#08090C")
+	logsContainer.Size = UDim2.fromScale(1, 1)
+	logsContainer.BackgroundColor3 = Color3.fromHex("#09090b")
 	logsContainer.BorderSizePixel = 0
-	logsContainer.Parent = container
+	logsContainer.Parent = contentArea
 
 	local logsCorner = Instance.new("UICorner")
 	logsCorner.CornerRadius = UDim.new(0, 6)
 	logsCorner.Parent = logsContainer
 
 	local logsStroke = Instance.new("UIStroke")
-	logsStroke.Color = Color3.fromHex("#000000")
+	logsStroke.Color = Color3.fromHex("#27272a")
 	logsStroke.Thickness = 1
 	logsStroke.Parent = logsContainer
-
-	local logsInnerHighlight = Instance.new("UIStroke")
-	logsInnerHighlight.Color = Color3.fromHex("#18181C")
-	logsInnerHighlight.Thickness = 1
-	logsInnerHighlight.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-	logsInnerHighlight.Parent = logsContainer
 
 	logsScrollingFrame = Instance.new("ScrollingFrame")
 	logsScrollingFrame.Name = "Logs"
 	logsScrollingFrame.Size = UDim2.fromScale(1, 1)
-	logsScrollingFrame.Position = UDim2.fromScale(0, 0)
 	logsScrollingFrame.BackgroundTransparency = 1
 	logsScrollingFrame.BorderSizePixel = 0
 	logsScrollingFrame.ScrollBarThickness = 6
-	logsScrollingFrame.ScrollBarImageColor3 = Color3.fromHex("#2F2F33")
+	logsScrollingFrame.ScrollBarImageColor3 = Color3.fromHex("#27272a")
 	logsScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+	logsScrollingFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
+	logsScrollingFrame.ScrollingEnabled = true
+	logsScrollingFrame.Active = true
 	logsScrollingFrame.Parent = logsContainer
 
 	local logsPadding = Instance.new("UIPadding")
@@ -249,8 +286,126 @@ local function createPluginGui()
 	listLayout.Padding = UDim.new(0, 4)
 
 	listLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-		logsScrollingFrame.CanvasSize = UDim2.fromOffset(0, listLayout.AbsoluteContentSize.Y)
-		logsScrollingFrame.CanvasPosition = Vector2.new(0, listLayout.AbsoluteContentSize.Y)
+		local maxScroll = logsScrollingFrame.AbsoluteCanvasSize.Y
+			- logsScrollingFrame.AbsoluteWindowSize.Y
+		local isAtBottom = logsScrollingFrame.CanvasPosition.Y >= (maxScroll - 50)
+		task.defer(function()
+			if isAtBottom or maxScroll <= 0 then
+				logsScrollingFrame.CanvasPosition =
+					Vector2.new(0, logsScrollingFrame.AbsoluteCanvasSize.Y)
+			end
+		end)
+	end)
+
+	-- MANUAL REPLACEMENTS CONTAINER
+	local manualContainer = Instance.new("Frame")
+	manualContainer.Name = "ManualContainer"
+	manualContainer.Size = UDim2.fromScale(1, 1)
+	manualContainer.BackgroundTransparency = 1
+	manualContainer.Visible = false
+	manualContainer.Parent = contentArea
+
+	local manualBox = Instance.new("TextBox")
+	manualBox.Name = "InputBox"
+	manualBox.Size = UDim2.new(1, 0, 1, -44)
+	manualBox.BackgroundColor3 = Color3.fromHex("#09090b")
+	manualBox.BorderSizePixel = 0
+	manualBox.Font = Enum.Font.RobotoMono
+	manualBox.TextSize = 13
+	manualBox.TextColor3 = Color3.fromHex("#fafafa")
+	manualBox.PlaceholderText = "Paste 'oldId -> newId' pairs here..."
+	manualBox.TextXAlignment = Enum.TextXAlignment.Left
+	manualBox.TextYAlignment = Enum.TextYAlignment.Top
+	manualBox.TextWrapped = true
+	manualBox.ClearTextOnFocus = false
+	manualBox.MultiLine = true
+	manualBox.Text = ""
+	manualBox.Parent = manualContainer
+
+	local manualBoxCorner = Instance.new("UICorner")
+	manualBoxCorner.CornerRadius = UDim.new(0, 6)
+	manualBoxCorner.Parent = manualBox
+
+	local manualBoxStroke = Instance.new("UIStroke")
+	manualBoxStroke.Color = Color3.fromHex("#27272a")
+	manualBoxStroke.Thickness = 1
+	manualBoxStroke.Parent = manualBox
+
+	local manualBoxPadding = Instance.new("UIPadding")
+	manualBoxPadding.PaddingLeft = UDim.new(0, 8)
+	manualBoxPadding.PaddingRight = UDim.new(0, 8)
+	manualBoxPadding.PaddingTop = UDim.new(0, 8)
+	manualBoxPadding.PaddingBottom = UDim.new(0, 8)
+	manualBoxPadding.Parent = manualBox
+
+	local runManualBtn = Instance.new("TextButton")
+	runManualBtn.Name = "RunButton"
+	runManualBtn.Size = UDim2.new(1, 0, 0, 36)
+	runManualBtn.Position = UDim2.new(0, 0, 1, -36)
+	runManualBtn.BackgroundColor3 = Color3.fromHex("#27272a")
+	runManualBtn.BorderSizePixel = 0
+	runManualBtn.Font = Enum.Font.BuilderSansMedium
+	runManualBtn.TextSize = 14
+	runManualBtn.TextColor3 = Color3.fromHex("#ffffff")
+	runManualBtn.Text = "Run Replacements"
+	runManualBtn.AutoButtonColor = false
+	runManualBtn.Parent = manualContainer
+
+	local runBtnCorner = Instance.new("UICorner")
+	runBtnCorner.CornerRadius = UDim.new(0, 6)
+	runBtnCorner.Parent = runManualBtn
+
+	runManualBtn.MouseEnter:Connect(function()
+		runManualBtn.BackgroundColor3 = Color3.fromHex("#3f3f46")
+	end)
+	runManualBtn.MouseLeave:Connect(function()
+		runManualBtn.BackgroundColor3 = Color3.fromHex("#27272a")
+	end)
+	runManualBtn.MouseButton1Down:Connect(function()
+		runManualBtn.BackgroundColor3 = Color3.fromHex("#18181b")
+	end)
+	runManualBtn.MouseButton1Up:Connect(function()
+		runManualBtn.BackgroundColor3 = Color3.fromHex("#3f3f46")
+	end)
+
+	runManualBtn.MouseButton1Click:Connect(function()
+		local txt = manualBox.Text
+		local _G_plugin = _G.ISpooferMotionPlugin
+		if _G_plugin and _G_plugin.runManualReplacements then
+			_G_plugin.runManualReplacements(txt)
+		else
+			warn("[ISpooferMotion] Manual replacement handler not linked.")
+		end
+	end)
+
+	-- Tab Switching Logic
+	local function switchTab(tab)
+		if tab == "console" then
+			consoleTabBtn.BackgroundColor3 = Color3.fromHex("#18181b")
+			consoleTabBtn.TextColor3 = Color3.fromHex("#ffffff")
+			manualTabBtn.BackgroundColor3 = Color3.fromHex("#09090b")
+			manualTabBtn.TextColor3 = Color3.fromHex("#a1a1aa")
+
+			logsContainer.Visible = true
+			manualContainer.Visible = false
+			copyLogsButton.Visible = true
+		else
+			manualTabBtn.BackgroundColor3 = Color3.fromHex("#18181b")
+			manualTabBtn.TextColor3 = Color3.fromHex("#ffffff")
+			consoleTabBtn.BackgroundColor3 = Color3.fromHex("#09090b")
+			consoleTabBtn.TextColor3 = Color3.fromHex("#a1a1aa")
+
+			logsContainer.Visible = false
+			manualContainer.Visible = true
+			copyLogsButton.Visible = false
+		end
+	end
+
+	consoleTabBtn.MouseButton1Click:Connect(function()
+		switchTab("console")
+	end)
+	manualTabBtn.MouseButton1Click:Connect(function()
+		switchTab("manual")
 	end)
 
 	return gui

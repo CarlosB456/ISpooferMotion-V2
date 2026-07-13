@@ -100,29 +100,6 @@ vi.mock('../../utils/jobTypes', () => ({
 }));
 vi.mock('../../utils/pluginBridge', () => ({}));
 
-// ISM Library (Floating UI causes React version mismatch in test env)
-vi.mock('@codycon/ism-library', () => ({
-  Button: ({ children }: any) => <button data-testid="ism-button">{children}</button>,
-  Group: ({ children }: any) => <div data-testid="ism-group">{children}</div>,
-  Divider: () => <div data-testid="ism-divider" />,
-  Dropdown: () => <div data-testid="ism-dropdown">Dropdown</div>,
-  FormDropdown: () => <div data-testid="ism-form-dropdown">FormDropdown</div>,
-  FormInput: () => <div data-testid="ism-form-input">FormInput</div>,
-  FormTextarea: () => <div data-testid="ism-form-textarea">FormTextarea</div>,
-  FormToggle: () => <div data-testid="ism-form-toggle">FormToggle</div>,
-  FormColorPickerRow: () => <div data-testid="ism-color-picker">FormColorPickerRow</div>,
-  MultiSelectDropdown: () => <div data-testid="ism-multiselect">MultiSelectDropdown</div>,
-  Spinner: () => <div data-testid="ism-spinner">Spinner</div>,
-  Modal: ({ children, isOpen }: any) =>
-    isOpen ? <div data-testid="ism-modal">{children}</div> : null,
-  ModalContent: ({ children }: any) => <div data-testid="ism-modal-content">{children}</div>,
-  ModalHeader: ({ children }: any) => <div data-testid="ism-modal-header">{children}</div>,
-  ModalBody: ({ children }: any) => <div data-testid="ism-modal-body">{children}</div>,
-  ModalFooter: ({ children }: any) => <div data-testid="ism-modal-footer">{children}</div>,
-  pageVariants: { hidden: {}, show: {}, exit: {} },
-  itemVariants: { hidden: {}, show: {} },
-}));
-
 // Child components (each deeply imports ism-library)
 vi.mock('./spoofing/SpoofingControls', () => ({
   SpoofingControls: () => <div data-testid="spoofing-controls">SpoofingControls</div>,
@@ -265,17 +242,5 @@ describe('SpoofingView', () => {
   it('renders spoofing controls', () => {
     render(<SpoofingView />);
     expect(screen.getByTestId('spoofing-controls')).toBeInTheDocument();
-  });
-
-  it('does not render advanced modal when showAdvanced is false', () => {
-    render(<SpoofingView />);
-    // Modal is hidden (isOpen=false) so ism-modal testid is not in DOM
-    expect(screen.queryByTestId('ism-modal')).not.toBeInTheDocument();
-  });
-
-  it('renders spoof options multiselect', () => {
-    render(<SpoofingView />);
-    // There should be at least one MultiSelectDropdown for spoof type selection
-    expect(screen.getByTestId('ism-multiselect')).toBeInTheDocument();
   });
 });

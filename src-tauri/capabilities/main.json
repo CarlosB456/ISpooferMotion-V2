@@ -24,6 +24,7 @@
     "opener:default",
     "notification:default",
     "clipboard-manager:default",
+    "clipboard-manager:allow-read-text",
     "deep-link:default",
     "updater:default",
     "process:default",

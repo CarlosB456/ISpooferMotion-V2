@@ -123,8 +123,11 @@ export const es: TranslationTree = {
       'No se encontraron grupos. Agrega credenciales en Configuración, luego selecciona un usuario.',
   },
   settings: {
-    title: 'Configuración',
-    general: 'Configuración General',
+    title: 'Ajustes',
+    general: 'Ajustes Generales',
+    appearance: 'Apariencia y Localización',
+    behavior: 'Comportamiento de la App',
+    dangerZone: 'Zona de Peligro',
     theme: 'Tema',
     accentColor: 'Color de Acento',
     language: 'Idioma',
@@ -165,6 +168,9 @@ export const es: TranslationTree = {
     exclusions: 'Exclusiones',
     preserveMetadata: 'Preservar Metadatos Originales',
     archiveRecovery: 'Habilitar Recuperación de Archivos (Lento)',
+    downloadOnly: 'Modo de Solo Descarga',
+    downloadOnlyDesc:
+      'Cuando está habilitado, los recursos solo se descargarán en su computadora y no se subirán a Roblox.',
     downloadFolder: 'Carpeta de Descargas',
     uploadTypesPlaceholder: 'Seleccione tipos de activos para subir...',
     downloadFolderPlaceholder: 'Seleccione dónde guardar las descargas...',

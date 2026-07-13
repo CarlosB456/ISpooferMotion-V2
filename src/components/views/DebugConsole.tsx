@@ -1,4 +1,3 @@
-import { Dropdown, MultiSelectDropdown } from '@codycon/ism-library';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ArrowDown, Check, Copy, Terminal, Trash2, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
@@ -11,7 +10,11 @@ import {
   type LogEntry,
   subscribeDebugLogs,
 } from '../../utils/debugLogger';
+import { Button } from '../ui/button';
+import { Command, CommandGroup, CommandItem, CommandList } from '../ui/command';
 import { JsonViewer } from '../ui/JsonViewer';
+import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 
 function useLogs() {
   const [logs, setLogs] = useState<LogEntry[]>(getDebugLogs());
@@ -128,52 +131,110 @@ export default function DebugConsole({ isOpen, onClose }: DebugConsoleProps) {
     { value: 'error', label: t('debug.errors') },
   ];
 
+  const toggleLevel = (val: string) => {
+    setFilterLevels((prev) =>
+      prev.includes(val) ? prev.filter((v) => v !== val) : [...prev, val],
+    );
+  };
+
   return (
     <AnimatePresence>
       {isOpen && (
         <motion.div
           key="debug-console"
-          initial={{ y: '100%', opacity: 0.5, height: 288 }}
+          initial={{ y: '100%', opacity: 0.5 }}
           animate={{ y: 0, opacity: 1 }}
           exit={{ y: '100%', opacity: 0.5 }}
           transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-          className="absolute bottom-0 left-0 right-0 bg-bg-surface/95 backdrop-blur-2xl border-t border-border-strong shadow-[0_-10px_40px_rgba(0,0,0,0.3)] flex flex-col z-40"
+          className="h-1/3 w-full bg-background/95 backdrop-blur-2xl flex flex-col z-40 overflow-hidden border-t border-border-subtle shadow-[0_-10px_40px_rgba(0,0,0,0.3)]"
         >
-          <div className="flex items-center justify-between px-4 py-2 border-b border-border-subtle bg-bg-elevated/80 shrink-0">
+          <div className="flex items-center justify-between px-4 py-2 border-b bg-muted/50 shrink-0">
             <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2 text-text-secondary text-[13px] font-bold uppercase tracking-wider">
+              <div className="flex items-center gap-2 text-muted-foreground text-[13px] font-bold uppercase tracking-wider">
                 <Terminal size={15} className="text-primary" /> {t('debug.title')}
               </div>
-              <div className="w-45 z-50">
-                <Dropdown options={filterOptions} value={filterSource} onChange={setFilterSource} />
+              <div className="w-40 z-50">
+                <Select
+                  value={filterSource}
+                  onValueChange={(val) => {
+                    if (val) setFilterSource(val);
+                  }}
+                >
+                  <SelectTrigger className="h-8 text-xs">
+                    <SelectValue placeholder={t('debug.allLogs')} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {filterOptions.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value} className="text-xs">
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-              <div className="w-55 z-50">
-                <MultiSelectDropdown
-                  options={levelOptions}
-                  values={filterLevels}
-                  onChange={setFilterLevels}
-                  placeholder={t('debug.logLevels')}
-                />
+              <div className="w-48 z-50">
+                <Popover>
+                  <PopoverTrigger
+                    render={
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full justify-between h-8 text-xs px-3 font-normal"
+                      />
+                    }
+                  >
+                    {filterLevels.length === levelOptions.length
+                      ? t('debug.logLevels')
+                      : `${filterLevels.length} selected`}
+                  </PopoverTrigger>
+                  <PopoverContent className="w-48 p-0" align="start">
+                    <Command>
+                      <CommandList>
+                        <CommandGroup>
+                          {levelOptions.map((opt) => (
+                            <CommandItem
+                              key={opt.value}
+                              onSelect={() => toggleLevel(opt.value)}
+                              className="text-xs"
+                            >
+                              <div
+                                className={cn(
+                                  'mr-2 flex h-3.5 w-3.5 items-center justify-center rounded-sm border border-primary',
+                                  filterLevels.includes(opt.value)
+                                    ? 'bg-primary text-primary-foreground'
+                                    : 'opacity-50 [&_svg]:invisible',
+                                )}
+                              >
+                                <Check className="h-3 w-3" />
+                              </div>
+                              {opt.label}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
               </div>
             </div>
             <div className="flex gap-2">
               <button
                 onClick={handleCopy}
-                className="p-1.5 text-text-muted hover:text-primary hover:bg-primary/10 rounded-md transition-colors"
+                className="p-1.5 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-md transition-colors"
                 aria-label={t('debug.copyLogs')}
               >
                 {isCopied ? <Check size={15} /> : <Copy size={15} />}
               </button>
               <button
                 onClick={clearLogs}
-                className="p-1.5 text-text-muted hover:text-danger hover:bg-danger/10 rounded-md transition-colors"
+                className="p-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-md transition-colors"
                 aria-label={t('debug.clearLogs')}
               >
                 <Trash2 size={15} />
               </button>
               <button
                 onClick={onClose}
-                className="p-1.5 text-text-muted hover:text-text-primary hover:bg-bg-base rounded-md transition-colors"
+                className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-accent rounded-md transition-colors"
                 aria-label={t('debug.hideConsole')}
               >
                 <X size={15} />
@@ -187,7 +248,7 @@ export default function DebugConsole({ isOpen, onClose }: DebugConsoleProps) {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: 10 }}
                 onClick={scrollToBottom}
-                className="absolute bottom-4 right-6 bg-bg-elevated text-text-primary border border-border-strong px-3 py-1.5 rounded-full text-[11px] font-semibold flex items-center gap-1.5 shadow-lg hover:bg-bg-surface hover:text-primary transition-colors z-50"
+                className="absolute bottom-4 right-6 bg-accent text-foreground border px-3 py-1.5 rounded-full text-[11px] font-semibold flex items-center gap-1.5 shadow-lg hover:bg-muted hover:text-primary transition-colors z-50"
               >
                 <ArrowDown size={14} /> {t('debug.goToBottom')}
               </motion.button>
@@ -200,7 +261,7 @@ export default function DebugConsole({ isOpen, onClose }: DebugConsoleProps) {
             style={{ overflowAnchor: 'none' }}
           >
             {groupedLogs.length === 0 ? (
-              <div className="text-text-muted italic flex items-center justify-center h-full">
+              <div className="text-muted-foreground italic flex items-center justify-center h-full">
                 {t('debug.noLogs')}
               </div>
             ) : (
@@ -210,18 +271,18 @@ export default function DebugConsole({ isOpen, onClose }: DebugConsoleProps) {
                   className={cn(
                     'flex items-start gap-3 py-1.5 px-3 rounded border border-transparent',
                     log.level === 'error'
-                      ? 'text-danger bg-danger/5 border-danger/10'
+                      ? 'text-destructive bg-destructive/5 border-destructive/10'
                       : log.level === 'warn'
-                        ? 'text-warning bg-warning/5 border-warning/10'
+                        ? 'text-yellow-500 bg-yellow-500/5 border-yellow-500/10'
                         : log.level === 'success'
-                          ? 'text-success bg-success/5 border-success/10'
-                          : 'text-text-primary hover:bg-bg-elevated/50',
+                          ? 'text-green-500 bg-green-500/5 border-green-500/10'
+                          : 'text-foreground hover:bg-accent/50',
                   )}
                 >
-                  <span className="text-text-muted shrink-0 min-w-17.5 select-none opacity-60 flex items-center gap-1.5">
+                  <span className="text-muted-foreground shrink-0 min-w-17.5 select-none opacity-60 flex items-center gap-1.5">
                     {log.timestamp}
                     {log.count > 1 && (
-                      <span className="bg-border-strong/40 text-text-primary px-1 rounded font-bold text-[9px] shadow-sm">
+                      <span className="bg-border/40 text-foreground px-1 rounded font-bold text-[9px] shadow-sm">
                         x{log.count}
                       </span>
                     )}
@@ -230,17 +291,17 @@ export default function DebugConsole({ isOpen, onClose }: DebugConsoleProps) {
                     className={cn(
                       'uppercase shrink-0 min-w-15 font-bold select-none',
                       log.level === 'error'
-                        ? 'text-danger'
+                        ? 'text-destructive'
                         : log.level === 'warn'
-                          ? 'text-warning'
+                          ? 'text-yellow-500'
                           : log.level === 'success'
-                            ? 'text-success'
+                            ? 'text-green-500'
                             : 'text-primary/70',
                     )}
                   >
                     {log.level}
                   </span>
-                  <span className="text-text-muted shrink-0 min-w-12.5 font-bold select-none opacity-40">
+                  <span className="text-muted-foreground shrink-0 min-w-12.5 font-bold select-none opacity-40">
                     [{log.source === 'ism' ? 'ISM' : 'DEV'}]
                   </span>
                   <div className="flex-1 min-w-0 flex flex-col gap-1">
@@ -250,7 +311,7 @@ export default function DebugConsole({ isOpen, onClose }: DebugConsoleProps) {
                           const isTrace = /^\s*at\s+/.test(line);
                           if (isTrace) {
                             return (
-                              <div key={i} className="text-text-muted opacity-80 pl-4">
+                              <div key={i} className="text-muted-foreground opacity-80 pl-4">
                                 {line.replace(/^\s*at\s+/, '↳ at ')}
                               </div>
                             );
@@ -264,7 +325,7 @@ export default function DebugConsole({ isOpen, onClose }: DebugConsoleProps) {
                         {log.payload.map((p, i) => (
                           <div
                             key={i}
-                            className="bg-bg-base/50 rounded-md p-1.5 border border-border-subtle/30 overflow-x-auto"
+                            className="bg-background/50 rounded-md p-1.5 border border-border/30 overflow-x-auto"
                           >
                             <JsonViewer data={p} defaultExpanded={log.level === 'error'} />
                           </div>

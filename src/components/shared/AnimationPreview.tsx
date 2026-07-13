@@ -1,7 +1,6 @@
-import { Button, Spinner } from '@codycon/ism-library';
 import { invoke } from '@tauri-apps/api/core';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Clapperboard, Pause, Play, RotateCcw, X } from 'lucide-react';
+import { Clapperboard, Loader2, Pause, Play, RotateCcw, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import * as THREE from 'three';
@@ -11,6 +10,7 @@ import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
 
 import { useConfig } from '../../contexts/ConfigContext';
 import { useLanguage } from '../../contexts/LanguageContext';
+import { Button } from '../ui/button';
 import { cn } from '../../utils/cn';
 import {
   parseAnimationXml,
@@ -634,7 +634,7 @@ export default function AnimationPreview({ assetId, assetName, onClose }: Animat
                 exit={{ opacity: 0 }}
                 className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-bg-base"
               >
-                <Spinner size="lg" />
+                <Loader2 className="animate-spin text-primary" size={32} />
                 <p className="text-[13px] text-text-muted font-medium">
                   {t('misc.fetchingAnimation')}
                 </p>
@@ -711,20 +711,18 @@ export default function AnimationPreview({ assetId, assetName, onClose }: Animat
             {}
             <div className="flex items-center gap-2">
               <Button
-                isIconOnly
-                size="sm"
-                variant="flat"
-                className="h-7 w-7 min-w-7"
+                size="icon"
+                variant="secondary"
+                className="h-7 w-7 min-w-7 shrink-0"
                 onClick={() => setPlaying((p) => !p)}
               >
                 {playing ? <Pause size={13} /> : <Play size={13} fill="currentColor" />}
               </Button>
 
               <Button
-                isIconOnly
-                size="sm"
+                size="icon"
                 variant="ghost"
-                className="h-7 w-7 min-w-7"
+                className="h-7 w-7 min-w-7 shrink-0"
                 onClick={() => {
                   currentTimeRef.current = 0;
                 }}

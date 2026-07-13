@@ -402,7 +402,7 @@ pub async fn publish_asset_with_progress(
             } else {
                 let file =
                     tokio::fs::File::open(&canonical_file_path).await.map_err(|e| e.to_string())?;
-                reqwest::multipart::Part::stream(file)
+                reqwest::multipart::Part::stream_with_length(file, file_metadata.len())
                     .file_name(file_name.clone())
                     .mime_str(&file_type)?
             };

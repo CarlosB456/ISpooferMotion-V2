@@ -1,16 +1,22 @@
-import {
-  Button,
-  itemVariants,
-  Modal,
-  ModalBody,
-  ModalContent,
-  ModalFooter,
-  ModalHeader,
-  pageVariants,
-} from '@codycon/ism-library';
+import { type Variants } from 'framer-motion';
+
+const pageVariants: Variants = {
+  hidden: { opacity: 0, y: 10 },
+  show: { opacity: 1, y: 0, transition: { staggerChildren: 0.05, duration: 0.3 } },
+  exit: { opacity: 0, y: -10, transition: { duration: 0.2 } },
+};
+
+const itemVariants: Variants = {
+  hidden: { opacity: 0, y: 10 },
+  show: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 300, damping: 24 } },
+};
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { readText as readClipboardText } from '@tauri-apps/plugin-clipboard-manager';
+import { Button } from '../ui/button';
+import { Label } from '../ui/label';
+import { Switch } from '../ui/switch';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../ui/dialog';
 import { motion } from 'framer-motion';
 import { ArrowDownUp, Settings2, ShieldAlert, SlidersHorizontal, Wand2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
@@ -88,6 +94,7 @@ export default function SpoofingView() {
   const { t } = useLanguage();
   const { studioPlaceId } = useStudioConnectionState();
   const { config, updateConfig, updateCategory } = useConfig();
+
   const {
     rootInstances,
     loadedFileName,
@@ -101,7 +108,6 @@ export default function SpoofingView() {
     lastAssetResults,
     setIsSpoofing,
     setSpoofProgress,
-    setActiveSpooferJobId,
     setReplaceError,
     failedReplacements,
     setFailedReplacements,
@@ -417,18 +423,6 @@ export default function SpoofingView() {
       group: retry.group,
       assetTypes: retry.assetTypes,
     };
-  };
-
-  const handleCancelSpoofer = async () => {
-    if (!activeSpooferJobId) return;
-    try {
-      await invoke('spoofer_cancel', { jobId: activeSpooferJobId });
-      setActiveSpooferJobId(null);
-      setIsJobPaused(false);
-      setLogs((prev) => appendSpoofingLog(prev, '[WARN] Spoofing cancellation requested.\n'));
-    } catch (error) {
-      logIsm('warn', `Could not cancel spoofer: ${String(error)}`, true);
-    }
   };
 
   const handleScanStudio = async () => {
@@ -761,7 +755,7 @@ export default function SpoofingView() {
           apiKey,
           groupId: selectedGroup !== 'none' ? selectedGroup : null,
           spoofSounds,
-          uploadTypes,
+          uploadTypes: config.spoofing.downloadOnly ? ['download'] : uploadTypes,
           downloadPath: config.spoofing.downloadPath,
           forcePlaceIds: configuredPlaceIds || studioPlaceIdFallback,
 
@@ -869,8 +863,8 @@ export default function SpoofingView() {
     >
       <div className="w-full h-full p-4 flex flex-col overflow-hidden">
         <div className="w-full flex-1 min-h-0 flex flex-col gap-4 relative px-2 pt-2">
-          <Modal isOpen={showAdvanced} onOpenChange={setShowAdvanced} size="full">
-            <ModalContent className="w-[95vw]! max-w-[95vw]! sm:max-w-300! max-h-[90vh]! p-0! overflow-hidden">
+          <Dialog open={showAdvanced} onOpenChange={setShowAdvanced}>
+            <DialogContent className="w-[95vw]! max-w-[95vw]! sm:max-w-225! max-h-[90vh]! p-0! overflow-hidden">
               <div className="flex h-full min-h-[75vh]">
                 {/* Sidebar Nav */}
                 <div className="w-56 shrink-0 flex flex-col gap-1 p-4 border-r border-border-subtle bg-bg-base">
@@ -923,7 +917,7 @@ export default function SpoofingView() {
                   ))}
                   <div className="mt-auto pt-4 border-t border-border-subtle">
                     <Button
-                      color="primary"
+                      variant="default"
                       className="w-full"
                       onClick={() => setShowAdvanced(false)}
                     >
@@ -980,8 +974,8 @@ export default function SpoofingView() {
                   )}
                 </div>
               </div>
-            </ModalContent>
-          </Modal>
+            </DialogContent>
+          </Dialog>
 
           {/* Top Configuration Bento */}
           <motion.div
@@ -989,17 +983,17 @@ export default function SpoofingView() {
             className="w-full grid grid-cols-1 lg:grid-cols-12 gap-3 shrink-0"
           >
             {/* Left Column: Identity & Credentials */}
-            <div className="col-span-1 lg:col-span-7 flex flex-col gap-3 p-4 bg-bg-surface border border-border-subtle rounded-xl shadow-sm">
-              <div className="flex items-center gap-2 mb-0 border-b border-border-subtle pb-2">
-                <ArrowDownUp size={16} className="text-primary" />
-                <span className="text-sm font-bold uppercase tracking-widest text-text-muted">
+            <div className="col-span-1 lg:col-span-7 flex flex-col gap-2 p-3 bg-bg-surface border border-border-subtle rounded-lg shadow-sm">
+              <div className="flex items-center gap-2 mb-0.5">
+                <ArrowDownUp size={14} className="text-primary" />
+                <span className="text-xs font-bold uppercase tracking-widest text-text-muted">
                   {t('spoof.targetContext')} {t('common.and')} {t('config.credentials')}
                 </span>
               </div>
 
               {/* Target Context */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="flex flex-col gap-2">
+                <div className="flex flex-col gap-1.5">
                   <AvatarDropdown
                     users={users}
                     value={config.spoofing.selectedUser}
@@ -1009,7 +1003,7 @@ export default function SpoofingView() {
                     showAudioQuota={true}
                   />
                 </div>
-                <div className="flex flex-col gap-2">
+                <div className="flex flex-col gap-1.5">
                   <GroupDropdown
                     groups={groups}
                     value={config.spoofing.selectedGroup}
@@ -1019,10 +1013,8 @@ export default function SpoofingView() {
                 </div>
               </div>
 
-              <div className="w-full h-px bg-border-subtle my-0" />
-
               {/* Credentials */}
-              <div className="flex flex-col gap-2">
+              <div className="flex flex-col gap-2 mt-1">
                 <CredentialsSection />
               </div>
             </div>
@@ -1030,24 +1022,41 @@ export default function SpoofingView() {
             {/* Right Column: Options & Custom Assets */}
             <div className="col-span-1 lg:col-span-5 flex flex-col gap-3">
               {/* Job Options */}
-              <div className="flex flex-col gap-3 p-4 bg-bg-surface border border-border-subtle rounded-xl shadow-sm">
-                <div className="flex items-center gap-2 mb-0">
-                  <Wand2 size={16} className="text-primary" />
-                  <span className="text-xs font-bold uppercase tracking-widest text-text-muted">
+              <div className="flex flex-col gap-2 p-3 bg-bg-surface border border-border-subtle rounded-lg shadow-sm">
+                <div className="flex items-center gap-2 mb-0.5">
+                  <Wand2 size={14} className="text-primary" />
+                  <span className="text-[11px] font-bold uppercase tracking-widest text-text-muted">
                     {t('spoof.options')}
                   </span>
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-sm font-medium text-text-primary">
+                  <Label className="text-sm font-medium text-text-primary">
                     {t('settings.forcePlaceIds')}
-                  </label>
+                  </Label>
                   <input
                     type="text"
                     value={config.advanced.forcePlaceIds}
                     onChange={(e) => updateConfig('advanced', 'forcePlaceIds', e.target.value)}
                     placeholder={t('settings.forcePlaceIdsPlaceholder')}
-                    className="w-full h-10 bg-bg-elevated text-text-primary text-[13px] rounded-md border border-border-strong px-3 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20 transition-all placeholder:text-text-muted"
+                    className="w-full h-9 bg-bg-elevated text-text-primary text-[13px] rounded-md border border-border-strong px-3 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20 transition-all placeholder:text-text-muted"
                   />
+                </div>
+
+                <div className="pt-2 flex flex-col gap-3">
+                  <div className="flex flex-row items-center justify-between rounded-lg border border-border-subtle bg-bg-base p-3">
+                    <div className="space-y-0.5">
+                      <Label className="text-base">{t('settings.downloadOnly')}</Label>
+                      <div className="text-sm text-text-secondary">
+                        {t('settings.downloadOnlyDesc')}
+                      </div>
+                    </div>
+                    <Switch
+                      checked={config.spoofing.downloadOnly}
+                      onCheckedChange={(checked) =>
+                        updateConfig('spoofing', 'downloadOnly', checked)
+                      }
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -1057,8 +1066,8 @@ export default function SpoofingView() {
           </motion.div>
 
           {/* Middle Console - Logs */}
-          <motion.div variants={itemVariants} className="flex-1 min-h-0 flex flex-col gap-3 mt-2">
-            <div className="flex-1 min-h-0 flex flex-col">
+          <motion.div variants={itemVariants} className="flex-1 min-h-0 flex flex-col gap-4 mt-3">
+            <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
               <ExecutionLogs
                 logs={logs}
                 setLogs={setLogs}
@@ -1080,7 +1089,7 @@ export default function SpoofingView() {
             replaceError={replaceError}
             itemVariants={itemVariants}
             handleRetryFailedAssets={handleRetryFailedAssets}
-            handleCancelSpoofer={handleCancelSpoofer}
+
             handleScanStudio={handleScanStudio}
             setIsJobPaused={setIsJobPaused}
             handleRetryReplacement={handleRetryReplacement}
@@ -1092,38 +1101,39 @@ export default function SpoofingView() {
       </div>
       <ResultsModal isOpen={resultsModalOpen} onClose={() => setResultsModalOpen(false)} />
 
-      <Modal
-        isOpen={Boolean(pendingQuotaRun)}
-        onOpenChange={(open: boolean) => !open && setPendingQuotaRun(null)}
-        size="sm"
+      <Dialog
+        open={Boolean(pendingQuotaRun)}
+        onOpenChange={(open) => !open && setPendingQuotaRun(null)}
       >
-        <ModalContent>
-          <ModalHeader>{t('misc.audioQuotaExceeded')}</ModalHeader>
-          <ModalBody>
-            <p className="text-sm leading-6 text-text-secondary">
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{t('misc.audioQuotaExceeded')}</DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <div className="text-sm text-text-secondary">
               {t('spoof.audioQuotaWarning')
                 .replace('{audioCount}', (pendingQuotaRun?.audioCount ?? 0).toString())
                 .replace('{remaining}', (pendingQuotaRun?.remaining ?? 0).toString())}
-            </p>
-          </ModalBody>
-          <ModalFooter className="flex justify-end gap-2">
-            <Button variant="ghost" onClick={() => setPendingQuotaRun(null)}>
+            </div>
+          </div>
+          <DialogFooter className="flex justify-end gap-2 sm:justify-end">
+            <Button variant="outline" onClick={() => setPendingQuotaRun(null)}>
               {t('common.cancel')}
             </Button>
             <Button
-              color="warning"
+              variant="default"
               onClick={() => {
                 const assetIds = pendingQuotaRun?.assetIds;
                 const runContext = pendingQuotaRun?.runContext;
                 setPendingQuotaRun(null);
-                if (assetIds) void handleRunSpoofer(assetIds, true, runContext);
+                if (assetIds) void handleRunSpooferRef.current(assetIds, true, runContext);
               }}
             >
               {t('spoof.continueAnyway')}
             </Button>
-          </ModalFooter>
-        </ModalContent>
-      </Modal>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </motion.div>
   );
 }

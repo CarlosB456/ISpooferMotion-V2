@@ -1,7 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import Titlebar from './Titlebar';
-import { IsmProvider } from '@codycon/ism-library';
 
 // Mock contexts and stores
 vi.mock('../../contexts/LanguageContext', () => ({
@@ -36,11 +35,7 @@ describe('Titlebar Component', () => {
   });
 
   it('renders app title and version', async () => {
-    render(
-      <IsmProvider>
-        <Titlebar />
-      </IsmProvider>,
-    );
+    render(<Titlebar />);
 
     // Title is present
     expect(screen.getByText('ISpooferMotion')).toBeInTheDocument();

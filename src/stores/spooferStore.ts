@@ -68,6 +68,9 @@ interface SpooferState {
   isJobPaused: boolean;
   setIsJobPaused: (val: boolean) => void;
 
+  jobPauseStartTime: number | null;
+  setJobPauseStartTime: (val: number | null) => void;
+
   lastAssetResults: SpooferAssetResult[];
   setLastAssetResults: (results: SpooferAssetResult[]) => void;
 
@@ -173,6 +176,9 @@ export const useSpooferStore = create<SpooferState>((set) => ({
 
   isJobPaused: false,
   setIsJobPaused: (val) => set({ isJobPaused: val }),
+
+  jobPauseStartTime: null,
+  setJobPauseStartTime: (val) => set({ jobPauseStartTime: val }),
 
   lastAssetResults: [],
   setLastAssetResults: (results) => set({ lastAssetResults: results }),

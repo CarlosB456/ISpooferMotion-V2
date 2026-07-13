@@ -270,6 +270,7 @@ pub async fn download_animation_asset_with_progress(
                 if result.is_ok() {
                     if let Some(valid_place_id) = request_place_id.clone() {
                         crate::commands::spoofer::remote_cache::push_discovery(
+                            app.clone(),
                             asset_id.clone(),
                             valid_place_id,
                         );

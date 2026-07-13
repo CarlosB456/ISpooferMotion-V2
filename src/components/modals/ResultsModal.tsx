@@ -1,13 +1,14 @@
-import { Button, Modal, ModalBody, ModalContent, ModalHeader } from '@codycon/ism-library';
 import { save } from '@tauri-apps/plugin-dialog';
 import { readTextFile, writeTextFile } from '@tauri-apps/plugin-fs';
 import { motion, type Variants } from 'framer-motion';
-import { ArrowRight, Check, Copy, ListChecks, X } from 'lucide-react';
+import { ArrowRight, Check, Copy, ListChecks } from 'lucide-react';
 import { useState } from 'react';
 
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useSpooferStore } from '../../stores/spooferStore';
 import { appendSpoofingLog } from '../../utils/spoofingLogs';
+import { Button } from '../ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog';
 
 /**
  * Renders the final spoofing results and any error logs after a job completes.
@@ -96,108 +97,93 @@ export default function ResultsModal({
   };
 
   return (
-    <Modal isOpen={isOpen} onOpenChange={onClose} size="xl">
-      <ModalContent>
-        <ModalHeader className="flex items-start justify-between">
-          <div className="flex flex-col gap-1">
-            <h2 className="text-xl font-bold flex items-center gap-2">
-              <ListChecks className="text-primary" /> {t('results.title')}
-            </h2>
-            <p className="text-sm font-medium text-text-secondary">
-              {t('results.assetsSpoofed').replace('{count}', replacementsArray.length.toString())}
-            </p>
-          </div>
-          <Button
-            variant="ghost"
-            isIconOnly
-            className="text-text-secondary hover:text-text-primary"
-            onClick={onClose}
-          >
-            <X size={20} />
-          </Button>
-        </ModalHeader>
-        <ModalBody className="pb-6">
-          <div className="flex flex-col gap-4">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-semibold text-text-primary">
-                {t('misc.assetIdMappings')}
-              </span>
-              {replacementsArray.length > 0 && (
-                <Button size="sm" variant="flat" onClick={handleCopyAll} className="gap-2">
-                  {copied ? <Check size={16} className="text-success" /> : <Copy size={16} />}
-                  {copied ? t('common.copied') : t('results.copyAll')}
-                </Button>
-              )}
-            </div>
-
-            {replacementsArray.length > 0 ? (
-              <motion.div
-                variants={stagger}
-                initial="hidden"
-                animate="show"
-                className="flex flex-col gap-2 max-h-100 overflow-y-auto pr-2"
-              >
-                {replacementsArray.slice(0, 100).map(([oldId, newId]) => {
-                  const meta = assetMetadataMap[oldId];
-                  return (
-                    <motion.div
-                      key={oldId}
-                      variants={item}
-                      className="flex items-center justify-between p-3 rounded-md bg-bg-surface border border-border-strong gap-4"
-                    >
-                      <div className="flex flex-col flex-1 min-w-0">
-                        <span
-                          className="text-xs text-text-secondary font-medium truncate"
-                          title={meta?.name}
-                        >
-                          {meta
-                            ? `${meta.type.toUpperCase()} • ${meta.name}`
-                            : t('misc.originalId')}
-                        </span>
-                        <span className="text-sm font-mono font-semibold text-danger">{oldId}</span>
-                      </div>
-                      <ArrowRight size={16} className="text-text-secondary opacity-50 shrink-0" />
-                      <div className="flex flex-col text-right flex-1 min-w-0">
-                        <span className="text-xs text-text-secondary font-medium truncate">
-                          {t('misc.spoofedId')}
-                        </span>
-                        <span className="text-sm font-mono font-semibold text-success">
-                          {newId}
-                        </span>
-                      </div>
-                    </motion.div>
-                  );
-                })}
-                {replacementsArray.length > 100 && (
-                  <div className="p-3 text-center text-xs font-medium text-text-secondary bg-bg-surface border border-border-strong rounded-md">
-                    {t('results.moreReplacements').replace(
-                      '{count}',
-                      (replacementsArray.length - 100).toString(),
-                    )}
-                  </div>
-                )}
-              </motion.div>
-            ) : (
-              <div className="p-8 text-center text-text-secondary bg-bg-surface rounded-lg border border-border-strong border-dashed">
-                {t('results.noReplacements')}
-              </div>
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="max-w-2xl bg-background border-border text-foreground">
+        <DialogHeader className="flex flex-col gap-1 pb-4 border-b border-border">
+          <DialogTitle className="text-xl font-bold flex items-center gap-2">
+            <ListChecks className="text-primary" /> {t('results.title')}
+          </DialogTitle>
+          <p className="text-sm font-medium text-muted-foreground">
+            {t('results.assetsSpoofed').replace('{count}', replacementsArray.length.toString())}
+          </p>
+        </DialogHeader>
+        <div className="flex flex-col gap-4 py-4">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-semibold text-foreground">
+              {t('misc.assetIdMappings')}
+            </span>
+            {replacementsArray.length > 0 && (
+              <Button size="sm" variant="outline" onClick={handleCopyAll} className="gap-2">
+                {copied ? <Check size={16} className="text-success" /> : <Copy size={16} />}
+                {copied ? t('common.copied') : t('results.copyAll')}
+              </Button>
             )}
-
-            <div className="rounded-md border border-primary/20 bg-primary/10 px-4 py-3 mt-2">
-              <p className="text-sm font-medium text-text-primary">
-                {t('results.autoReplacedDesc')}
-              </p>
-            </div>
           </div>
-        </ModalBody>
-        <div className="flex justify-end gap-3 px-6 pb-6 pt-2">
-          {loadedFilePath && loadedFilePath.endsWith('.rbxlx') && replacementsArray.length > 0 && (
-            <Button color="primary" variant="solid" onClick={handleSaveRbxlx} isLoading={isSaving}>
+
+          {replacementsArray.length > 0 ? (
+            <motion.div
+              variants={stagger}
+              initial="hidden"
+              animate="show"
+              className="flex flex-col gap-2 max-h-96 overflow-y-auto pr-2"
+            >
+              {replacementsArray.slice(0, 100).map(([oldId, newId]) => {
+                const meta = assetMetadataMap[oldId];
+                return (
+                  <motion.div
+                    key={oldId}
+                    variants={item}
+                    className="flex items-center justify-between p-3 rounded-md bg-muted border border-border gap-4"
+                  >
+                    <div className="flex flex-col flex-1 min-w-0">
+                      <span
+                        className="text-xs text-muted-foreground font-medium truncate"
+                        title={meta?.name}
+                      >
+                        {meta ? `${meta.type.toUpperCase()} • ${meta.name}` : t('misc.originalId')}
+                      </span>
+                      <span className="text-sm font-mono font-semibold text-destructive">
+                        {oldId}
+                      </span>
+                    </div>
+                    <ArrowRight size={16} className="text-muted-foreground opacity-50 shrink-0" />
+                    <div className="flex flex-col text-right flex-1 min-w-0">
+                      <span className="text-xs text-muted-foreground font-medium truncate">
+                        {t('misc.spoofedId')}
+                      </span>
+                      <span className="text-sm font-mono font-semibold text-success">{newId}</span>
+                    </div>
+                  </motion.div>
+                );
+              })}
+              {replacementsArray.length > 100 && (
+                <div className="p-3 text-center text-xs font-medium text-muted-foreground bg-muted border border-border rounded-md">
+                  {t('results.moreReplacements').replace(
+                    '{count}',
+                    (replacementsArray.length - 100).toString(),
+                  )}
+                </div>
+              )}
+            </motion.div>
+          ) : (
+            <div className="p-8 text-center text-muted-foreground bg-muted rounded-lg border border-border border-dashed">
+              {t('results.noReplacements')}
+            </div>
+          )}
+
+          <div className="rounded-md border border-primary/20 bg-primary/10 px-4 py-3 mt-2">
+            <p className="text-sm font-medium text-foreground">{t('results.autoReplacedDesc')}</p>
+          </div>
+        </div>
+
+        {loadedFilePath && loadedFilePath.endsWith('.rbxlx') && replacementsArray.length > 0 && (
+          <div className="flex justify-end gap-3 pt-2">
+            <Button onClick={handleSaveRbxlx} disabled={isSaving}>
               Save Spoofed .rbxlx
             </Button>
-          )}
-        </div>
-      </ModalContent>
-    </Modal>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }

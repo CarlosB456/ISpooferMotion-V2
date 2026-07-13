@@ -207,10 +207,10 @@ pub async fn handle_scan_abort(State(state): State<AppState>) -> Json<Value> {
 
 /// Long-poll endpoint for the Studio plugin.
 ///
-/// Keeps the connection open for up to 25 seconds waiting for the desktop daemon
+/// Keeps the connection open for up to 8 seconds waiting for the desktop daemon
 /// to request an action (like a new scan).
 pub async fn handle_poll(State(state): State<AppState>) -> Json<Value> {
-    let timeout = tokio::time::Duration::from_secs(25);
+    let timeout = tokio::time::Duration::from_secs(8);
     // Heartbeat interval: refresh last_plugin_poll_time while we're waiting so
     // the frontend health check never sees a stale timestamp during a quiet poll.
     let heartbeat_interval = tokio::time::Duration::from_secs(5);
@@ -249,7 +249,7 @@ pub async fn handle_poll(State(state): State<AppState>) -> Json<Value> {
 
 /// Long-poll endpoint waiting for queued replacement patches.
 pub async fn handle_poll_replacements(State(state): State<AppState>) -> Json<Value> {
-    let timeout = tokio::time::Duration::from_secs(25);
+    let timeout = tokio::time::Duration::from_secs(8);
     let heartbeat_interval = tokio::time::Duration::from_secs(5);
     let start = Instant::now();
     let notify = std::sync::Arc::clone(&state.data.read().await.notify);
@@ -383,7 +383,7 @@ request_handler!(request_meshes, request_meshes, last_meshes);
 request_handler!(request_script_refs, request_script_refs, last_script_refs);
 
 async fn legacy_poll(State(state): State<AppState>, kind: &'static str) -> Json<Value> {
-    let timeout = tokio::time::Duration::from_secs(25);
+    let timeout = tokio::time::Duration::from_secs(8);
     // Heartbeat keeps last_plugin_poll_time fresh during a quiet idle wait,
     // matching the behaviour of handle_poll to prevent false "disconnected" readings.
     let heartbeat_interval = tokio::time::Duration::from_secs(5);

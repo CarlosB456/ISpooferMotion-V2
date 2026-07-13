@@ -43,14 +43,6 @@ fn starts_with_ignore_ascii_case(haystack: &[u8], needle: &[u8]) -> bool {
     haystack.len() >= needle.len() && haystack[..needle.len()].eq_ignore_ascii_case(needle)
 }
 
-fn is_valid_model(head: &[u8]) -> bool {
-    contains_ignore_ascii_case(head, b"<roblox")
-        || head.starts_with(b"version ")
-        || head.starts_with(b"v ")
-        || head.starts_with(b"CSGPHS")
-        || (head.starts_with(b"{") && !contains_ignore_ascii_case(head, b"\"error"))
-}
-
 pub async fn validate_downloaded_payload(
     file_path: &str,
     asset_type: Option<&str>,
@@ -105,11 +97,10 @@ pub async fn validate_downloaded_payload(
             }
         }
         "mesh" | "animation" | "plugin" | "model" => {
-            if is_valid_model(head) {
-                Ok(())
-            } else {
-                Err("Downloaded asset was not a recognized Roblox model format.".into())
-            }
+            // Rely on the HTML/JSON blacklist above rather than a strict whitelist,
+            // because Roblox frequently introduces new binary formats (e.g., Mesh V3/V4/V5, packages)
+            // that don't match old magic number signatures.
+            Ok(())
         }
         _ => Ok(()),
     }

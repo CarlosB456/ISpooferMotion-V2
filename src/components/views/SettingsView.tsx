@@ -1,10 +1,10 @@
-import { itemVariants, pageVariants, Section, Window } from '@codycon/ism-library';
+import { itemVariants, pageVariants } from '../../utils/animations';
 import { motion } from 'framer-motion';
-import { Globe, Settings2 } from 'lucide-react';
 
-import { useLanguage } from '../../contexts/LanguageContext';
-import DebugSection from './settings/DebugSection';
-import GeneralSection from './settings/GeneralSection';
+import AppearanceCard from './settings/AppearanceCard';
+import BehaviorCard from './settings/BehaviorCard';
+import DangerCard from './settings/DangerCard';
+import DebugCard from './settings/DebugCard';
 
 /**
  * Container view for all user-configurable settings.
@@ -13,42 +13,25 @@ import GeneralSection from './settings/GeneralSection';
  * so other components can reactively update when things like "upload audio" or "language" change.
  */
 export default function SettingsView() {
-  const { t } = useLanguage();
-
   return (
     <motion.div
       variants={pageVariants}
       initial="hidden"
       animate="show"
       exit="exit"
-      className="w-full h-full"
+      className="w-full h-full overflow-y-auto overflow-x-hidden"
     >
-      <Window>
+      <div className="w-full h-full p-4 lg:p-8">
         <motion.div
           variants={itemVariants}
-          className="w-full flex flex-col xl:flex-row gap-6 h-full"
+          className="w-full max-w-3xl mx-auto flex flex-col gap-6 pb-12"
         >
-          {/* Left Column: Core App Settings */}
-          <div className="flex flex-col gap-6 w-full xl:w-1/2">
-            <Section
-              title={t('settings.general')}
-              icon={<Globe size={18} className="text-primary" />}
-            >
-              <GeneralSection />
-            </Section>
-          </div>
-
-          {/* Right Column: Debug & Advanced */}
-          <div className="flex flex-col gap-6 w-full xl:w-1/2">
-            <Section
-              title={t('settings.debugDisplay')}
-              icon={<Settings2 size={18} className="text-primary" />}
-            >
-              <DebugSection />
-            </Section>
-          </div>
+          <AppearanceCard />
+          <BehaviorCard />
+          <DebugCard />
+          <DangerCard />
         </motion.div>
-      </Window>
+      </div>
     </motion.div>
   );
 }

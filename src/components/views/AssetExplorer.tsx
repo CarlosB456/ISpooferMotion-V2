@@ -1,10 +1,10 @@
-import { Button, Spinner } from '@codycon/ism-library';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { open as openFilePicker } from '@tauri-apps/plugin-dialog';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ChevronLeft, ChevronRight, FileUp, FolderOpen, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, FileUp, FolderOpen, Loader2, X } from 'lucide-react';
+import { Button } from '../ui/button';
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
@@ -28,7 +28,7 @@ import { ExplorerToolbar } from './asset-explorer/ExplorerToolbar';
 
 interface AssetExplorerProps {
   isOpen: boolean;
-  setIsOpen: (val: boolean) => void;
+  setIsOpen: (isOpen: boolean) => void;
   onScanReceived?: () => void;
 }
 
@@ -442,19 +442,8 @@ export default function AssetExplorer({ isOpen, setIsOpen, onScanReceived }: Ass
       setLoadedFileName(fileName);
       setLoadedFilePath(filePath);
 
-      const autoSelected = new Set<string>();
-
-      const autoSelectAsset = (node: RbxInstance) => {
-        for (const asset of node.assets) {
-          if (asset.assetId) {
-            autoSelected.add(asset.assetId);
-          }
-        }
-        node.children.forEach(autoSelectAsset);
-      };
-
-      result.rootInstances.forEach(autoSelectAsset);
-      setSelectedAssetIds(autoSelected);
+      // Start with an empty selection so the user can explicitly choose what to spoof
+      setSelectedAssetIds(new Set());
       setRootInstances(result.rootInstances);
 
       let totalAssets = 0;
@@ -552,7 +541,7 @@ export default function AssetExplorer({ isOpen, setIsOpen, onScanReceived }: Ass
         opacity: isOpen ? 1 : 0,
       }}
       transition={{ type: 'spring', stiffness: 350, damping: 35 }}
-      className="h-full bg-bg-surface border-l border-border-subtle flex flex-col shrink-0 overflow-hidden relative"
+      className="h-full bg-background flex flex-col shrink-0 overflow-hidden relative border-l border-border-subtle"
     >
       {}
       <AnimatePresence>
@@ -592,10 +581,9 @@ export default function AssetExplorer({ isOpen, setIsOpen, onScanReceived }: Ass
 
         <div className="flex items-center gap-1.5 justify-end z-100">
           <Button
-            isIconOnly
             variant="ghost"
-            size="sm"
-            className="h-7 w-7 min-w-7 text-text-secondary hover:text-text-primary"
+            size="icon"
+            className="h-7 w-7 min-w-7 text-muted-foreground hover:text-foreground"
             onClick={() => setIsOpen(!isOpen)}
           >
             {isOpen ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
@@ -614,10 +602,10 @@ export default function AssetExplorer({ isOpen, setIsOpen, onScanReceived }: Ass
             className="flex-1 overflow-y-auto scrollbar-hide w-full flex flex-col"
           >
             {resolvingScriptRefs ? (
-              <div className="flex-1 flex flex-col items-center justify-center gap-3 text-text-muted px-6">
-                <Spinner size="sm" color="current" />
+              <div className="flex-1 flex flex-col items-center justify-center gap-3 text-muted-foreground px-6">
+                <Loader2 className="w-4 h-4 animate-spin text-current" />
                 <div className="flex flex-col items-center text-center gap-1">
-                  <span className="text-xs font-semibold text-text-primary">
+                  <span className="text-xs font-semibold text-foreground">
                     {t('explorer.resolvingScriptRefs')}
                   </span>
                   {resolverProgress && resolverProgress.total > 0 && (
@@ -629,8 +617,8 @@ export default function AssetExplorer({ isOpen, setIsOpen, onScanReceived }: Ass
                 </div>
               </div>
             ) : parseState ? (
-              <div className="flex-1 flex flex-col items-center justify-center gap-3 text-text-muted px-6">
-                <Spinner size="sm" color="current" />
+              <div className="flex-1 flex flex-col items-center justify-center gap-3 text-muted-foreground px-6">
+                <Loader2 className="w-4 h-4 animate-spin text-current" />
                 <div className="flex flex-col items-center text-center gap-1">
                   <span className="text-xs font-semibold text-text-primary">
                     {parseState.phase}
@@ -722,7 +710,7 @@ export default function AssetExplorer({ isOpen, setIsOpen, onScanReceived }: Ass
                     setLoadedFileName(null);
                     lastStudioSnapshotRef.current = '';
                   }}
-                  variant="flat"
+                  variant="destructive"
                   className="mx-3 mb-3 mt-1 text-[11px]"
                 >
                   {t('explorer.clearExplorer')}
@@ -770,7 +758,7 @@ function AnimationPreviewFallback({ onClose }: { onClose: () => void }) {
       onClick={onClose}
       className="fixed inset-0 z-9999 bg-black/80 backdrop-blur-md flex items-center justify-center p-6 pointer-events-auto"
     >
-      <Spinner size="lg" />
+      <Loader2 className="w-10 h-10 animate-spin text-white" />
     </motion.div>,
     document.body,
   );
@@ -823,7 +811,7 @@ function ImageOverlay({ assetId, onClose }: { assetId: string; onClose: () => vo
             Failed to load image
           </div>
         ) : (
-          <Spinner size="lg" />
+          <Loader2 className="w-10 h-10 animate-spin text-white" />
         )}
       </div>
     </motion.div>,

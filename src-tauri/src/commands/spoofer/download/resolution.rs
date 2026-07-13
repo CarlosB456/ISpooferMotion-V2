@@ -31,17 +31,20 @@ pub async fn resolve_asset_id_location(
         return Ok(None);
     }
 
-    let data: serde_json::Value = resp.json().await?;
-    Ok(data
-        .get("locations")
-        .and_then(|l| l.as_array())
-        .and_then(|l| l.first())
-        .and_then(|l| l.get("location"))
-        .and_then(|l| l.as_str())
-        .map(std::string::ToString::to_string)
-        .or_else(|| {
-            data.get("location").and_then(|l| l.as_str()).map(std::string::ToString::to_string)
-        }))
+    if let Ok(data) = resp.json::<serde_json::Value>().await {
+        Ok(data
+            .get("locations")
+            .and_then(|l| l.as_array())
+            .and_then(|l| l.first())
+            .and_then(|l| l.get("location"))
+            .and_then(|l| l.as_str())
+            .map(std::string::ToString::to_string)
+            .or_else(|| {
+                data.get("location").and_then(|l| l.as_str()).map(std::string::ToString::to_string)
+            }))
+    } else {
+        Ok(None)
+    }
 }
 
 // Extract alternate CDN links or asset version IDs from the economy API.

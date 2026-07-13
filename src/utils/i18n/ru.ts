@@ -128,6 +128,9 @@ export const ru: TranslationTree = {
   settings: {
     title: 'Настройки',
     general: 'Общие настройки',
+    appearance: 'Внешний вид и локализация',
+    behavior: 'Поведение приложения',
+    dangerZone: 'Опасная зона',
     theme: 'Тема',
     accentColor: 'Цвет акцента',
     language: 'Язык',
@@ -168,6 +171,9 @@ export const ru: TranslationTree = {
     debugDisplay: 'Отладка и отображение',
     preserveMetadata: 'Сохранить Оригинальные Метаданные',
     archiveRecovery: 'Включить Восстановление Архива (Медленно)',
+    downloadOnly: 'Режим только скачивания',
+    downloadOnlyDesc:
+      'Если включено, ассеты будут только скачиваться на ваш компьютер и не будут загружаться в Roblox.',
     downloadFolder: 'Папка Загрузок',
     uploadTypesPlaceholder: 'Выберите типы активов для загрузки...',
     downloadFolderPlaceholder: 'Выберите папку для сохранения загрузок...',

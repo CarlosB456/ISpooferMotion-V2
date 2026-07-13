@@ -5,7 +5,7 @@ export const SpoofProgressText = () => {
   const spoofStatusText = useSpooferStore((s) => s.spoofStatusText);
   return (
     <>
-      {spoofStatusText
+      {spoofStatusText && spoofStatusText !== 'Initializing...'
         ? `${spoofStatusText} (${Math.round(spoofProgress)}%)`
         : `Spoofing (${Math.round(spoofProgress)}%)`}
     </>

@@ -18,11 +18,6 @@ vi.mock('../ui/JsonViewer', () => ({
   JsonViewer: ({ data }: any) => <div data-testid="json-viewer">{JSON.stringify(data)}</div>,
 }));
 
-vi.mock('@codycon/ism-library', () => ({
-  Dropdown: () => <div data-testid="dropdown">Dropdown</div>,
-  MultiSelectDropdown: () => <div data-testid="multi-dropdown">MultiSelectDropdown</div>,
-}));
-
 // We must mock ResizeObserver for framer-motion or standard react components if they use it
 globalThis.ResizeObserver = class ResizeObserver {
   observe() {}

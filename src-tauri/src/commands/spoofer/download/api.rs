@@ -263,7 +263,9 @@ pub async fn auto_claim_free_asset(
     if !resp.status().is_success() {
         return Ok(false);
     }
-    let data: serde_json::Value = resp.json().await?;
+    let Ok(data) = resp.json::<serde_json::Value>().await else {
+        return Ok(false);
+    };
 
     let price = data.get("PriceInRobux");
     let is_public =

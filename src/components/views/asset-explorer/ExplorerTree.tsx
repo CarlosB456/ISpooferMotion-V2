@@ -1,4 +1,3 @@
-import { Button, MultiSelectToggle } from '@codycon/ism-library';
 import { ChevronRight, Copy, Image as ImageIcon, Play, Square, ZoomIn } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 
@@ -8,6 +7,8 @@ import { cn } from '../../../utils/cn';
 import { playRobloxAudio, stopRobloxAudio } from '../../../utils/robloxAudio';
 import type { ParsedAssetRef, RbxInstance } from '../../../utils/robloxPlaceParser/types';
 import { logIsm } from '../../../utils/robloxProfiles';
+import { Button } from '../../ui/button';
+import { Checkbox } from '../../ui/checkbox';
 
 export const getAssetId = (asset: ParsedAssetRef | { id: string; name: string }) => {
   if ('assetId' in asset) return asset.assetId;
@@ -57,7 +58,6 @@ export const ExplorerTreeNode = memo(function ExplorerTreeNode({
 
   const selectedCount = allIds.filter((id) => selectedAssetIds.has(id)).length;
   const isChecked = selectedCount === allIds.length;
-  const isIndeterminate = selectedCount > 0 && selectedCount < allIds.length;
 
   const copyAssetId = async (asset: ParsedAssetRef) => {
     // Copy to clipboard for manual pasting.
@@ -110,7 +110,7 @@ export const ExplorerTreeNode = memo(function ExplorerTreeNode({
 
     return (
       <div
-        className="rounded-sm hover:bg-bg-elevated/60 group"
+        className="rounded-sm hover:bg-accent/60 group"
         style={{ marginLeft: `${(level + 1) * 16 + 18}px` }}
       >
         <div
@@ -124,12 +124,12 @@ export const ExplorerTreeNode = memo(function ExplorerTreeNode({
               toggleAsset(assetId, !selectedAssetIds.has(assetId));
             }}
           >
-            <MultiSelectToggle checked={selectedAssetIds.has(assetId)} />
+            <Checkbox checked={selectedAssetIds.has(assetId)} />
           </div>
           <ChevronRight
             size={12}
             className={cn(
-              'mr-1 shrink-0 text-text-muted transition-transform',
+              'mr-1 shrink-0 text-muted-foreground transition-transform',
               isOpen && 'rotate-90',
             )}
           />
@@ -145,24 +145,23 @@ export const ExplorerTreeNode = memo(function ExplorerTreeNode({
             />
           </div>
           <div className="flex-1 flex flex-col min-w-0">
-            <span className="text-[11px] text-text-secondary truncate flex items-center gap-1">
+            <span className="text-[11px] text-foreground/80 truncate flex items-center gap-1">
               {getAssetTitle(asset)}
               {(instanceCount ?? 1) > 1 && (
-                <span className="text-[9px] text-text-muted bg-bg-base px-1 rounded-sm border border-border-subtle">
+                <span className="text-[9px] text-muted-foreground bg-background px-1 rounded-sm border">
                   {instanceCount}x
                 </span>
               )}
             </span>
-            <span className="text-[9px] text-text-muted truncate">
+            <span className="text-[9px] text-muted-foreground truncate">
               {asset.propertyName || asset.type} · {assetId}
             </span>
           </div>
           <div className="flex items-center gap-1 pl-1 shrink-0">
             {isSound && (
               <Button
-                isIconOnly
                 variant="ghost"
-                size="sm"
+                size="icon"
                 className="h-6 w-6 min-w-6"
                 title={
                   playingAudioId === assetId ? t('explorer.stopAudio') : t('explorer.playAudio')
@@ -181,9 +180,8 @@ export const ExplorerTreeNode = memo(function ExplorerTreeNode({
             )}
             {isAnimation && (
               <Button
-                isIconOnly
                 variant="ghost"
-                size="sm"
+                size="icon"
                 className="h-6 w-6 min-w-6 text-primary"
                 title={t('explorer.previewAnimation')}
                 onClick={(event: React.MouseEvent) => {
@@ -199,9 +197,8 @@ export const ExplorerTreeNode = memo(function ExplorerTreeNode({
             )}
             {(isImage || isMesh) && (
               <Button
-                isIconOnly
                 variant="ghost"
-                size="sm"
+                size="icon"
                 className="h-6 w-6 min-w-6"
                 title={isMesh ? t('explorer.previewMeshThumbnail') : t('explorer.previewImage')}
                 onClick={(event: React.MouseEvent) => {
@@ -213,9 +210,8 @@ export const ExplorerTreeNode = memo(function ExplorerTreeNode({
               </Button>
             )}
             <Button
-              isIconOnly
               variant="ghost"
-              size="sm"
+              size="icon"
               className="h-6 w-6 min-w-6"
               title={t('explorer.copyAssetId')}
               onClick={(event: React.MouseEvent) => {
@@ -230,7 +226,7 @@ export const ExplorerTreeNode = memo(function ExplorerTreeNode({
 
         {isOpen && (
           <div className="overflow-hidden">
-            <div className="mx-2 mb-2 rounded border border-border-subtle bg-bg-base/80 px-2.5 py-2 text-[9px] text-text-muted">
+            <div className="mx-2 mb-2 rounded border bg-background/80 px-2.5 py-2 text-[9px] text-muted-foreground">
               <DetailLine label={t('explorer.path')} value={asset.path} />
               <DetailLine label={t('explorer.id')} value={assetId} />
               <DetailLine
@@ -251,7 +247,7 @@ export const ExplorerTreeNode = memo(function ExplorerTreeNode({
   return (
     <div className="flex flex-col">
       <div
-        className="flex items-center py-1 px-1 hover:bg-bg-elevated/40 cursor-pointer rounded-sm group select-none"
+        className="flex items-center py-1 px-1 hover:bg-accent/40 cursor-pointer rounded-sm group select-none"
         style={{ paddingLeft: `${level * 16}px` }}
         onClick={() => setExpanded(!expanded)}
       >
@@ -262,13 +258,13 @@ export const ExplorerTreeNode = memo(function ExplorerTreeNode({
             toggleNode(node, !isChecked);
           }}
         >
-          <MultiSelectToggle checked={isChecked} indeterminate={isIndeterminate} />
+          <Checkbox checked={isChecked} />
         </div>
         <div className="w-4 h-4 flex items-center justify-center shrink-0 mr-1">
           {(filteredAssets.length > 0 || totalChildren > 0) && (
             <ChevronRight
               size={12}
-              className={cn('transition-transform text-text-muted', expanded && 'rotate-90')}
+              className={cn('transition-transform text-muted-foreground', expanded && 'rotate-90')}
             />
           )}
         </div>
@@ -287,7 +283,7 @@ export const ExplorerTreeNode = memo(function ExplorerTreeNode({
             }}
           />
         </div>
-        <span className="text-xs text-text-primary whitespace-nowrap overflow-hidden text-ellipsis">
+        <span className="text-xs text-foreground whitespace-nowrap overflow-hidden text-ellipsis">
           {node.name}
         </span>
       </div>
@@ -329,10 +325,10 @@ export const ExplorerTreeNode = memo(function ExplorerTreeNode({
 function DetailLine({ label, value }: { label: string; value: string }) {
   return (
     <div className="py-1 first:pt-0 last:pb-0">
-      <div className="text-[8px] font-semibold uppercase tracking-normal text-text-muted/70">
+      <div className="text-[8px] font-semibold uppercase tracking-normal text-muted-foreground/70">
         {label}
       </div>
-      <div className="mt-0.5 select-text whitespace-normal wrap-break-word text-[10px] leading-snug text-text-secondary">
+      <div className="mt-0.5 select-text whitespace-normal wrap-break-word text-[10px] leading-snug text-foreground/80">
         {value}
       </div>
     </div>

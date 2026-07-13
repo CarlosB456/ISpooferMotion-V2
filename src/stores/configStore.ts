@@ -41,6 +41,7 @@ export const AppConfigSchema = z.object({
     apiKey: z.string().default(''),
     enableSpoofing: z.boolean().default(false),
     uploadTypes: z.array(z.string()).default(['animation', 'audio', 'image', 'mesh', 'script_ref']),
+    downloadOnly: z.boolean().default(false),
     downloadPath: z.string().default(''),
     extraAssetIds: z.string().default(''),
     preserveMetadata: z.boolean().default(true),
@@ -97,6 +98,7 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
     apiKey: '',
     enableSpoofing: false,
     uploadTypes: ['animation', 'audio', 'image', 'mesh', 'script_ref'],
+    downloadOnly: false,
     downloadPath: '',
     extraAssetIds: '',
     preserveMetadata: true,
@@ -207,7 +209,7 @@ export const useConfigStore = create<ConfigState>((set, get) => {
 
   return {
     config: initConfig,
-    updateConfig: (cat, key, val) =>
+    updateConfig: (cat, key, val) => {
       set((state) => {
         const n = {
           ...state.config,
@@ -215,13 +217,21 @@ export const useConfigStore = create<ConfigState>((set, get) => {
         };
         saveToStorage(n);
         return { config: n };
-      }),
-    updateCategory: (cat, vals) =>
+      });
+      if (cat === 'spoofing' && (key === 'cookie' || key === 'apiKey')) {
+        get().saveSecrets();
+      }
+    },
+    updateCategory: (cat, vals) => {
       set((state) => {
         const n = { ...state.config, [cat]: { ...state.config[cat], ...vals } };
         saveToStorage(n);
         return { config: n };
-      }),
+      });
+      if (cat === 'spoofing' && ('cookie' in vals || 'apiKey' in vals)) {
+        get().saveSecrets();
+      }
+    },
     resetConfig: () =>
       set(() => {
         saveToStorage(DEFAULT_APP_CONFIG);

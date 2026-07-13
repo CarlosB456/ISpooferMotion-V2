@@ -1,6 +1,9 @@
-import { MultiSelectDropdown } from '@codycon/ism-library';
-import { Filter, FolderOpen } from 'lucide-react';
+import { Check, Filter, FolderOpen } from 'lucide-react';
 import { useLanguage } from '../../../contexts/LanguageContext';
+import { cn } from '../../../utils/cn';
+import { Button } from '../../ui/button';
+import { Command, CommandGroup, CommandItem, CommandList } from '../../ui/command';
+import { Popover, PopoverContent, PopoverTrigger } from '../../ui/popover';
 
 export const ASSET_TYPE_OPTIONS = [
   { value: 'audio', label: 'Audio' },
@@ -24,33 +27,78 @@ export function ExplorerToolbar({
 
   if (!loadedFileName) return null;
 
+  const toggleFilter = (val: string) => {
+    setActiveAssetFilters(
+      activeAssetFilters.includes(val)
+        ? activeAssetFilters.filter((v) => v !== val)
+        : [...activeAssetFilters, val],
+    );
+  };
+
   return (
-    <div className="px-3 pt-3 pb-2 flex flex-col gap-2 border-b border-border-subtle">
-      <div className="flex items-center gap-2 text-[10px] text-text-muted">
+    <div className="px-3 pt-3 pb-2 flex flex-col gap-2 border-b border-border">
+      <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
         <FolderOpen size={11} />
         <span className="truncate font-medium">{loadedFileName}</span>
       </div>
       <div className="flex min-w-0 items-center gap-2">
-        <Filter size={13} className="shrink-0 text-text-muted" />
+        <Filter size={13} className="shrink-0 text-muted-foreground" />
         <div className="min-w-0 flex-1">
-          <MultiSelectDropdown
-            options={ASSET_TYPE_OPTIONS.map((a) => ({
-              ...a,
-              label: t(
-                'explorer.' +
-                  (a.value === 'image'
-                    ? 'images'
-                    : a.value === 'animation'
-                      ? 'animations'
-                      : a.value === 'mesh'
-                        ? 'meshes'
-                        : a.value),
-              ),
-            }))}
-            values={activeAssetFilters}
-            onChange={setActiveAssetFilters}
-            placeholder={t('explorer.allAssetTypes')}
-          />
+          <Popover>
+            <PopoverTrigger
+              render={
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full justify-between h-8 text-xs px-3 font-normal"
+                />
+              }
+            >
+              {activeAssetFilters.length === 0 ||
+              activeAssetFilters.length === ASSET_TYPE_OPTIONS.length
+                ? t('explorer.allAssetTypes')
+                : `${activeAssetFilters.length} selected`}
+            </PopoverTrigger>
+            <PopoverContent className="w-48 p-0" align="start">
+              <Command>
+                <CommandList>
+                  <CommandGroup>
+                    {ASSET_TYPE_OPTIONS.map((opt) => {
+                      const label = t(
+                        'explorer.' +
+                          (opt.value === 'image'
+                            ? 'images'
+                            : opt.value === 'animation'
+                              ? 'animations'
+                              : opt.value === 'mesh'
+                                ? 'meshes'
+                                : opt.value),
+                      );
+                      return (
+                        <CommandItem
+                          key={opt.value}
+                          onSelect={() => toggleFilter(opt.value)}
+                          className="text-xs"
+                        >
+                          <div
+                            className={cn(
+                              'mr-2 flex h-3.5 w-3.5 items-center justify-center rounded-sm border border-primary',
+                              activeAssetFilters.includes(opt.value)
+                                ? 'bg-primary text-primary-foreground'
+                                : 'opacity-50 [&_svg]:invisible',
+                            )}
+                          >
+                            <Check className="h-3 w-3" />
+                          </div>
+                          {label}
+                        </CommandItem>
+                      );
+                    })}
+                  </CommandGroup>
+                </CommandList>
+              </Command>
+            </PopoverContent>
+          </Popover>
         </div>
       </div>
     </div>

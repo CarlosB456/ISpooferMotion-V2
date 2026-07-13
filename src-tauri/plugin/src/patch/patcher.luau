@@ -145,9 +145,9 @@ local function decodeJsonTable(value: any, label: string): (any?, string?)
 	if type(value) ~= "string" then
 		return nil, label .. " must be a JSON string"
 	end
-	if #value > 1000000 then
-		return nil, label .. " JSON is too large"
-	end
+	-- if #value > 1000000 then
+	-- 	return nil, label .. " JSON is too large"
+	-- end
 
 	local ok, decoded = pcall(function()
 		return HttpService:JSONDecode(value)
@@ -292,9 +292,9 @@ local function applyPatch(patch: Patch): (boolean, string?)
 		local source = if type(patch.value) == "string"
 			then patch.value
 			else tostring(patch.value or "")
-		if #source > MAX_SCRIPT_SOURCE_BYTES then
-			return false, "Script source patch too large"
-		end
+		-- if #source > MAX_SCRIPT_SOURCE_BYTES then
+		-- 	return false, "Script source patch too large"
+		-- end
 
 		local ok, err
 		if #source >= 200000 then
