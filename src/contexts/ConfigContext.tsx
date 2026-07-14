@@ -123,7 +123,16 @@ export const ConfigProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         if (e.payload.error) {
           setSpoofingLogs((prev) => appendSpoofingLog(prev, `[ERROR]: ${e.payload.error}`));
         } else if (e.payload.replacements) {
-          applyReplacements(e.payload.replacements);
+          // Merge the new batch's replacements with any previously-accumulated mappings
+          // from earlier runs in this session. Without this merge, assets that were already
+          // uploaded and skipped by skipExistingReplacements would never have their known
+          // old→new mappings re-sent to Studio, causing only a subset to be replaced.
+          const existingMappings = useSpooferStore.getState().lastReplacements;
+          const mergedReplacements: Record<string, string> = {
+            ...existingMappings,
+            ...e.payload.replacements,
+          };
+          applyReplacements(mergedReplacements);
         }
       });
 

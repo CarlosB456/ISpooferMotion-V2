@@ -15,6 +15,16 @@ pub use validation::{
     RobloxGroup, RobloxUserInfo, ROBLOX_USER_AGENT,
 };
 
+/// Sanitize a raw ROBLOSECURITY cookie value so it can be safely used as an
+/// HTTP header. Strips leading/trailing whitespace and removes every byte
+/// outside the visible ASCII range (0x20 – 0x7E). Chrome's DPAPI blobs,
+/// Roblox Studio credential entries, and clipboard pastes occasionally contain
+/// non-printable characters that cause `HeaderValue::from_str` to reject an
+/// otherwise valid token.
+pub(crate) fn sanitize_cookie_value(raw: &str) -> String {
+    raw.trim().chars().filter(|c| *c >= '\x20' && *c <= '\x7E').collect()
+}
+
 #[derive(Deserialize)]
 struct AvatarResponse {
     data: Vec<AvatarItem>,
@@ -97,7 +107,7 @@ pub async fn get_authenticated_user_id(
 ) -> crate::error::Result<String> {
     // Verify cookie validity via the users endpoint and fetch the user ID.
     let url = "https://users.roblox.com/v1/users/authenticated";
-    let cookie_val = cookie.trim().replace(['\r', '\n'], "");
+    let cookie_val = sanitize_cookie_value(&cookie);
     let cookie_header_str = if cookie_val.starts_with(".ROBLOSECURITY=") {
         cookie_val
     } else {
@@ -201,7 +211,7 @@ pub async fn get_manageable_groups(
     cookie: String,
 ) -> crate::error::Result<Vec<RobloxGroup>> {
     let url = "https://develop.roblox.com/v1/user/groups/canmanage";
-    let cookie_val = cookie.trim().replace(['\r', '\n'], "");
+    let cookie_val = sanitize_cookie_value(&cookie);
     let cookie_header_str = if cookie_val.starts_with(".ROBLOSECURITY=") {
         cookie_val
     } else {

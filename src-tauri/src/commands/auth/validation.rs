@@ -22,8 +22,8 @@ pub async fn fetch_csrf_token_internal(
     // Retrieve a fresh CSRF token from the logout endpoint response headers.
     let url = "https://auth.roblox.com/v2/logout";
 
-    // Format and sanitize cookie header to prevent CRLF injection
-    let cookie_val = cookie.trim().replace(['\r', '\n'], "");
+    // Sanitize cookie to strip non-printable characters that cause HeaderValue rejection.
+    let cookie_val = crate::commands::auth::sanitize_cookie_value(&cookie);
     let cookie_header_str = if cookie_val.starts_with(".ROBLOSECURITY=") {
         cookie_val
     } else {

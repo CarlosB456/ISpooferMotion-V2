@@ -274,11 +274,14 @@ export const applyReplacements = async (replacements: Record<string, string>) =>
     setLastReplacements(replacements);
   } catch (e: unknown) {
     const errorStr = String(e);
-    if (
+    // These are expected non-fatal outcomes - log as info rather than showing an error toast.
+    const isExpectedOutcome =
       errorStr.includes('No usable replacements') ||
       errorStr.includes('did not accept any mappings') ||
-      errorStr.includes('rejected the mappings')
-    ) {
+      errorStr.includes('rejected the mappings') ||
+      errorStr.includes('length mismatch') ||
+      errorStr.includes('Plugin bridge will apply');
+    if (isExpectedOutcome) {
       setSpoofingLogs((prev) =>
         appendSpoofingLog(prev, `\n[INFO] ${errorStr.replace('Error: ', '')}`),
       );

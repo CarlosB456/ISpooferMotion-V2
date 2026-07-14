@@ -178,7 +178,7 @@ pub async fn open_dev_console(app: AppHandle) -> crate::error::Result<bool> {
         #[cfg(target_os = "macos")]
         {
             // `quoted form of POSIX path` is AppleScript's own shell-safe path
-            // escaping — it handles all special characters including quotes,
+            // escaping - it handles all special characters including quotes,
             // spaces, and backslashes without any manual string construction.
             let posix_path = path.to_string_lossy().into_owned();
             let script = format!(

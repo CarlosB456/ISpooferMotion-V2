@@ -80,9 +80,38 @@ export default function CredentialsSection() {
       }
       const result = await validateCookieProfile(detected);
       applyValidatedCookie(result);
-    } catch {
-      setAuthStatus('idle');
-      logIsm('warn', 'Auto-detected cookie was invalid or expired.');
+    } catch (e: unknown) {
+      const errStr = String(e);
+      // Only treat explicit Roblox auth rejections (HTTP 401/403) as "cookie invalid".
+      // Network timeouts, transient 429 rate-limits, and other connectivity issues should
+      // NOT cause the cookie to be discarded - the token itself may still be valid.
+      const isAuthFailure =
+        errStr.includes('401') ||
+        errStr.includes('403') ||
+        errStr.includes('Unauthorized') ||
+        errStr.includes('Forbidden') ||
+        errStr.includes('authenticated user') ||
+        errStr.includes('invalid or expired');
+      if (isAuthFailure) {
+        setAuthStatus('idle');
+        updateCategory('advanced', {
+          autoCookieStudio: false,
+          autoCookieBrowser: false,
+        });
+        setManualCookieEdit(true);
+        logIsm(
+          'warn',
+          'Auto-detected cookie was invalid or expired. Please add it manually.',
+          true,
+        );
+      } else {
+        // Transient error - keep auto-detect enabled, leave the existing cookie in place.
+        setAuthStatus('idle');
+        logIsm(
+          'warn',
+          `Auto-detect encountered a temporary error (${errStr}). Keeping the existing cookie. It will retry on next launch.`,
+        );
+      }
     }
   };
 
