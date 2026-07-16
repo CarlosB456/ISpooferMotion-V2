@@ -47,8 +47,8 @@ describe('useStudioAssetPoll', () => {
     expect(invokeSpy).toHaveBeenCalled();
     expect(onComplete).not.toHaveBeenCalled();
 
-    // Fast polling while scanning
-    await vi.advanceTimersByTimeAsync(2100);
+    // Fast polling while scanning (1000ms interval)
+    await vi.advanceTimersByTimeAsync(1100);
     expect(invokeSpy).toHaveBeenCalledTimes(2);
     expect(onComplete).not.toHaveBeenCalled();
   });
@@ -101,8 +101,8 @@ describe('useStudioAssetPoll', () => {
     // First complete
     expect(onComplete).toHaveBeenCalledTimes(1);
 
-    // Fast forward to next poll (10s idle)
-    await vi.advanceTimersByTimeAsync(10100);
+    // Fast forward to next poll (1.5s idle interval)
+    await vi.advanceTimersByTimeAsync(1600);
     expect(invokeSpy).toHaveBeenCalledTimes(2);
 
     // Hash is the same, should not trigger onComplete again
