@@ -67,7 +67,7 @@ export function useStudioAssetPoll(
         const anyScanning = stores.some((store) => store.scanning);
         if (anyScanning && idle) {
           idle = false;
-          schedulePoll(2000);
+          schedulePoll(1000);
         }
 
         const allDone = stores.every((store) => store.complete);
@@ -75,7 +75,7 @@ export function useStudioAssetPoll(
         if (!allDone) {
           idle = false;
           lastSnapshot = '';
-          if (intervalId) schedulePoll(2000);
+          if (intervalId) schedulePoll(1000);
           return;
         }
 
@@ -83,7 +83,7 @@ export function useStudioAssetPoll(
         if (snapshot === lastSnapshot) {
           if (!idle) {
             idle = true;
-            schedulePoll(10000);
+            schedulePoll(1500);
           }
           return;
         }
@@ -91,7 +91,7 @@ export function useStudioAssetPoll(
         lastSnapshot = snapshot;
         idle = true;
         onCompleteRef.current(bundle);
-        schedulePoll(10000);
+        schedulePoll(1500);
       } catch {
       } finally {
         inFlight = false;

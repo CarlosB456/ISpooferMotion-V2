@@ -325,10 +325,38 @@ pub async fn fetch_animation_xml(
     }
 
     let bytes = resp.bytes().await?;
+    let mut final_bytes = bytes;
+
+    if final_bytes.starts_with(b"{") {
+        if let Ok(json) = serde_json::from_slice::<serde_json::Value>(&final_bytes) {
+            let mut location_url = None;
+            if let Some(loc) = json.get("location").and_then(serde_json::Value::as_str) {
+                location_url = Some(loc.to_string());
+            } else if let Some(locations) = json.get("locations").and_then(serde_json::Value::as_array) {
+                if let Some(first_loc) = locations.first() {
+                    if let Some(loc) = first_loc.get("location").and_then(serde_json::Value::as_str) {
+                        location_url = Some(loc.to_string());
+                    }
+                }
+            }
+
+            if let Some(url) = location_url {
+                let mut req = client.get(&url).header(USER_AGENT, "ISpooferMotion/AnimPreview");
+                if let Some(cookie_val) = &cookie {
+                    let cookie_header = crate::utils::build_roblox_cookie_header(cookie_val);
+                    req = req.header(COOKIE, cookie_header);
+                }
+                let resp = req.send().await?;
+                if resp.status().is_success() {
+                    final_bytes = resp.bytes().await?;
+                }
+            }
+        }
+    }
 
     // Parse binary XML API responses and serialize to string format.
-    if bytes.starts_with(b"<roblox!") {
-        let dom = match rbx_binary::from_reader(bytes.as_ref()) {
+    if final_bytes.starts_with(b"<roblox!") {
+        let dom = match rbx_binary::from_reader(final_bytes.as_ref()) {
             Ok(d) => d,
             Err(e) => {
                 return Err(crate::error::AppError::Custom(format!("Binary parse error: {e}")))
@@ -340,8 +368,8 @@ pub async fn fetch_animation_xml(
         }
         let xml_str = String::from_utf8_lossy(&out).to_string();
         Ok(Some(xml_str))
-    } else if bytes.starts_with(b"<roblox") {
-        let xml_str = String::from_utf8_lossy(&bytes).to_string();
+    } else if final_bytes.starts_with(b"<roblox") {
+        let xml_str = String::from_utf8_lossy(&final_bytes).to_string();
         Ok(Some(xml_str))
     } else {
         Ok(None)

@@ -393,15 +393,22 @@ local function scanAssets(): ()
 		end
 	end
 
+	local excludedCount = response and tonumber(response.excludedCount) or 0
+	local excludedSuffix = ""
+	if excludedCount > 0 then
+		excludedSuffix = string.format(" (%d excluded/already replaced)", excludedCount)
+	end
+
 	logToPlugin(
 		string.format(
-			"[ISpooferMotion] Scan complete: %d records captured, %d animations, %d sounds, %d images, %d meshes, %d script refs",
+			"[ISpooferMotion] Scan complete: %d records captured, %d animations, %d sounds, %d images, %d meshes, %d script refs%s",
 			captured,
 			tonumber(totals.animations) or 0,
 			tonumber(totals.sounds) or 0,
 			tonumber(totals.images) or 0,
 			tonumber(totals.meshes) or 0,
-			tonumber(totals.scriptRefs) or 0
+			tonumber(totals.scriptRefs) or 0,
+			excludedSuffix
 		)
 	)
 	if autoReplaceEnabled then

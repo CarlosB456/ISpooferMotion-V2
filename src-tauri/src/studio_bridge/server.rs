@@ -124,6 +124,20 @@ pub async fn handle_scan_records(
     Json(serde_json::json!({"success": true}))
 }
 
+fn extract_numeric_id(value: &str) -> Option<String> {
+    let mut digits = String::new();
+    for character in value.chars() {
+        if character.is_ascii_digit() {
+            digits.push(character);
+        }
+    }
+    if digits.len() >= 5 {
+        Some(digits)
+    } else {
+        None
+    }
+}
+
 /// Triggers analysis and patch planning when the Studio plugin finishes a scan.
 pub async fn handle_scan_complete(State(state): State<AppState>) -> Json<Value> {
     let (records, mappings) = {
@@ -140,6 +154,7 @@ pub async fn handle_scan_complete(State(state): State<AppState>) -> Json<Value> 
         (std::sync::Arc::clone(&guard.studio_records), guard.stored_mappings.clone())
     };
     let records_for_patches = std::sync::Arc::clone(&records);
+    let records_for_counting = std::sync::Arc::clone(&records);
     let stores =
         tokio::task::spawn_blocking(move || analyze_records(&records)).await.unwrap_or_else(|e| {
             log::error!("Failed to analyze records: {}", e);
@@ -164,6 +179,27 @@ pub async fn handle_scan_complete(State(state): State<AppState>) -> Json<Value> 
             })
     };
 
+    let mut excluded_count = 0;
+    if !mappings.is_empty() {
+        let mut target_ids = std::collections::HashSet::new();
+        for map_val in &mappings {
+            if let Some(new_id) = map_val.get("newId").and_then(Value::as_str) {
+                target_ids.insert(new_id.to_string());
+            }
+        }
+
+        let mut seen_ids = std::collections::HashSet::new();
+        for record in &*records_for_counting {
+            if let Some(id) = extract_numeric_id(&record.value) {
+                if seen_ids.insert(id.clone()) {
+                    if target_ids.contains(&id) {
+                        excluded_count += 1;
+                    }
+                }
+            }
+        }
+    }
+
     let mut guard = state.data.write().await;
     (
         guard.last_animations,
@@ -178,10 +214,47 @@ pub async fn handle_scan_complete(State(state): State<AppState>) -> Json<Value> 
     }
     let kf_warnings = count_keyframe_warnings(&guard.last_script_refs);
     guard.keyframe_warning_count = kf_warnings;
+
+    let total_assets = guard.last_animations.assets.len()
+        + guard.last_sounds.assets.len()
+        + guard.last_images.assets.len()
+        + guard.last_meshes.assets.len()
+        + guard.last_script_refs.assets.len();
+
+    use tauri::Emitter;
+    if total_assets == 0 {
+        let _ = state.app_handle.emit(
+            "spoofer-log",
+            serde_json::json!({
+                "message": "[WARN] Studio scan finished, but no assets were found. Are you sure you have the plugin installed and enabled in your place?\n",
+                "level": "warn"
+            })
+        );
+    } else {
+        let anims = guard.last_animations.assets.len();
+        let sounds = guard.last_sounds.assets.len();
+        let images = guard.last_images.assets.len();
+        let meshes = guard.last_meshes.assets.len();
+        let scripts = guard.last_script_refs.assets.len();
+
+        let msg = format!(
+            "[SUCCESS] Studio Scan Complete! Found {} assets ({} animations, {} sounds, {} images, {} meshes, {} script refs)\n",
+            total_assets, anims, sounds, images, meshes, scripts
+        );
+        let _ = state.app_handle.emit(
+            "spoofer-log",
+            serde_json::json!({
+                "message": msg,
+                "level": "info"
+            })
+        );
+    }
+
     Json(serde_json::json!({
         "ok": true,
         "recordsTruncated": guard.scan_records_truncated,
         "keyframeWarningCount": kf_warnings,
+        "excludedCount": excluded_count,
         "totals": {
             "animations": guard.last_animations.assets.len(),
             "sounds": guard.last_sounds.assets.len(),

@@ -36,7 +36,7 @@ export function useStudioConnection() {
     let cancelled = false;
     let timerId: ReturnType<typeof setTimeout> | null = null;
     let currentDelay = 1000;
-    const MAX_DELAY = 10000;
+    const MAX_DELAY = 3000;
     const VISIBILITY_PENALTY = 5000;
 
     const check = async () => {

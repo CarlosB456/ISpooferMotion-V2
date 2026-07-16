@@ -207,6 +207,14 @@ local function scanSpecialInstanceAssets(
 			"GraphicTShirt",
 			"Pants",
 			"Shirt",
+			"ClimbAnimation",
+			"FallAnimation",
+			"IdleAnimation",
+			"JumpAnimation",
+			"RunAnimation",
+			"SwimAnimation",
+			"WalkAnimation",
+			"MoodAnimation",
 		}) do
 			captureProperty(records, obj, prop, scannedProps)
 		end
@@ -331,6 +339,7 @@ local function scanSpecialInstanceAssets(
 			captureProperty(records, obj, prop, scannedProps)
 		end
 	end
+
 
 	if obj:IsA("Humanoid") then
 		for _, prop in ipairs({

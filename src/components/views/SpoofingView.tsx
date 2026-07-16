@@ -29,7 +29,6 @@ import { useSpooferStore } from '../../stores/spooferStore';
 import { cn } from '../../utils/cn';
 import { addDebugLog } from '../../utils/debugLogger';
 import { type PendingSpoofRetry, takeSpoofRetry } from '../../utils/jobTypes';
-import { type PluginAsset } from '../../utils/pluginBridge';
 import { getStudioPlaceIdFallback } from '../../utils/apiClient';
 import type { RbxInstance } from '../../utils/robloxPlaceParser/types';
 import { SpoofingControls } from './spoofing/SpoofingControls';
@@ -430,38 +429,6 @@ export default function SpoofingView() {
     try {
       setLogs((prev) => appendSpoofingLog(prev, '[INFO] Scanning Roblox Studio for assets...\n'));
       await triggerStudioScan();
-      const { invoke } = await import('@tauri-apps/api/core');
-      const snapshots = await invoke<{
-        anims: { assets: PluginAsset[] };
-        sounds: { assets: PluginAsset[] };
-        images: { assets: PluginAsset[] };
-        meshes: { assets: PluginAsset[] };
-        scriptRefs: { assets: PluginAsset[] };
-      }>('get_studio_asset_snapshots');
-
-      let totalAssets = 0;
-      if (snapshots) {
-        totalAssets += snapshots.anims?.assets?.length || 0;
-        totalAssets += snapshots.sounds?.assets?.length || 0;
-        totalAssets += snapshots.images?.assets?.length || 0;
-        totalAssets += snapshots.meshes?.assets?.length || 0;
-        totalAssets += snapshots.scriptRefs?.assets?.length || 0;
-      }
-
-      if (totalAssets === 0) {
-        setLogs((prev) =>
-          appendSpoofingLog(
-            prev,
-            '[WARN] Studio scan finished, but no assets were found. Are you sure you have the plugin installed and enabled in your place?\n',
-          ),
-        );
-        logIsm('warn', 'Scan finished but no assets found', true);
-      } else {
-        setLogs((prev) =>
-          appendSpoofingLog(prev, `[SUCCESS] Studio Scan Complete! Found ${totalAssets} assets.\n`),
-        );
-        logIsm('info', `Studio scan completed. Found ${totalAssets} assets.`, true);
-      }
     } catch (error) {
       logIsm('error', `Studio scan failed: ${String(error)}`, true);
       setLogs((prev) => appendSpoofingLog(prev, `[ERROR] Studio scan failed: ${String(error)}\n`));
@@ -469,6 +436,8 @@ export default function SpoofingView() {
       setIsScanningStudio(false);
     }
   };
+
+
 
   useEffect(() => {
     if (!isTauriRuntime()) return;
