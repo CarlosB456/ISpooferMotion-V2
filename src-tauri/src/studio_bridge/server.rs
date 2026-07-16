@@ -191,10 +191,8 @@ pub async fn handle_scan_complete(State(state): State<AppState>) -> Json<Value> 
         let mut seen_ids = std::collections::HashSet::new();
         for record in &*records_for_counting {
             if let Some(id) = extract_numeric_id(&record.value) {
-                if seen_ids.insert(id.clone()) {
-                    if target_ids.contains(&id) {
-                        excluded_count += 1;
-                    }
+                if seen_ids.insert(id.clone()) && target_ids.contains(&id) {
+                    excluded_count += 1;
                 }
             }
         }
