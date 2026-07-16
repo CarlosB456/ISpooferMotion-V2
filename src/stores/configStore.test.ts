@@ -67,6 +67,7 @@ describe('configStore', () => {
         cookie: 'new_cookie',
         apiKey: 'new_key',
         profileCookies: {},
+        accountSecrets: {},
       },
     });
   });

@@ -284,3 +284,10 @@ pub async fn get_studio_asset_snapshots() -> AnyValue {
         "scriptRefs": guard.last_script_refs
     }))
 }
+
+/// Sets the UI accent color so the plugin can adopt it.
+pub async fn set_theme_accent(color: String) {
+    if let Some(data) = bridge_data() {
+        data.write().await.theme_accent = Some(color);
+    }
+}

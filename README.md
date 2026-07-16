@@ -51,7 +51,7 @@ Download the latest release for your platform:
 | Linux    | `ISpooferMotion_x.x.x_amd64.AppImage` |
 
 The Roblox Studio plugin (`ISpooferMotion.rbxmx`) is attached to every release.
-Install it by dragging it into Studio or through **Plugins → Manage Plugins**.
+Install it by dragging it into Studio or through **Plugins -> Manage Plugins**.
 
 > [!NOTE]
 > Windows Defender or your antivirus may flag the installer. This is a false positive - the app is not code-signed yet. You can verify the build yourself from source.

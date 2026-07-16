@@ -195,6 +195,13 @@ local function applyPatch(patch: Patch): (boolean, string?)
 		return false, "Studio object no longer exists; scan again"
 	end
 
+	local initialParentValid = pcall(function()
+		return obj.Parent
+	end)
+	if not initialParentValid or obj.Parent == nil then
+		return false, "Studio object was destroyed or deparented before patching"
+	end
+
 	if patch.action == "setProperty" then
 		if string.sub(patch.property, 1, 13) == "__Attribute__:" then
 			local attr = string.sub(patch.property, 14)
@@ -261,11 +268,7 @@ local function applyPatch(patch: Patch): (boolean, string?)
 				-- already in the replacement set (which would mean it is unchanged).
 				if
 					not newTagSet[oldTag]
-					and (
-						isAssetFormat(oldTag)
-						or stringContainsAssetReference(oldTag)
-						or nameLooksLikeAssetSlot(oldTag)
-					)
+					and (isAssetFormat(oldTag) or stringContainsAssetReference(oldTag))
 				then
 					CollectionService:RemoveTag(obj, oldTag)
 				end
@@ -348,6 +351,18 @@ local function applyPatch(patch: Patch): (boolean, string?)
 				RenderFidelity = meshObj.RenderFidelity,
 			})
 		end)
+
+		local objStillValid = pcall(function()
+			return meshObj.Parent
+		end)
+		if not objStillValid or meshObj.Parent == nil then
+			if createOk and createdPart then
+				pcall(function()
+					createdPart:Destroy()
+				end)
+			end
+			return false, "Original MeshPart was destroyed while waiting for CreateMeshPartAsync"
+		end
 
 		local newPart: BasePart
 		if createOk and createdPart and createdPart:IsA("BasePart") then

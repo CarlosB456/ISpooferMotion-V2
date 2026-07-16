@@ -40,6 +40,7 @@ pub async fn download_animation_asset_with_progress(
     app: AppHandle,
     direct_url: Option<String>,
     cookie: String,
+    fallback_cookies: Option<Vec<String>>,
     file_path: String,
     transfer_id: String,
     name: String,
@@ -63,7 +64,7 @@ pub async fn download_animation_asset_with_progress(
             .map_err(|_| "Download output directory is unavailable.")?;
     }
 
-    let cookie_header = build_roblox_cookie_header(&cookie);
+    let mut cookie_header = build_roblox_cookie_header(&cookie);
     if cookie_header.is_empty() {
         return Err("Missing or invalid ROBLOSECURITY cookie".into());
     }
@@ -327,6 +328,30 @@ pub async fn download_animation_asset_with_progress(
                 let retry_after_ms = crate::utils::extract_retry_after(&download_resp, None)
                     .unwrap_or_else(|| 800 * (attempt + 1));
                 if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
+                    if let Some(ref fallbacks) = fallback_cookies {
+                        let mut current_idx = 0;
+                        for (i, fc) in fallbacks.iter().enumerate() {
+                            if cookie_header.contains(fc) {
+                                current_idx = i + 1;
+                                break;
+                            }
+                        }
+                        if current_idx < fallbacks.len() {
+                            let next_cookie = fallbacks[current_idx].clone();
+                            cookie_header = build_roblox_cookie_header(&next_cookie);
+                            emit_spoofer_log(
+                                &app,
+                                "info",
+                                &format!(
+                                    "Rate limited downloading asset {asset_id}. Switching to fallback downloader {}/{}...",
+                                    current_idx + 1, fallbacks.len()
+                                ),
+                            );
+                            tokio::time::sleep(Duration::from_millis(500)).await;
+                            continue; // Retry the same URL with the new cookie
+                        }
+                    }
+
                     crate::commands::spoofer::record_adaptive_rate_limit(Some(retry_after_ms));
                     set_rate_limit(
                         RateLimitBucket::AssetDownload,
@@ -392,6 +417,7 @@ pub async fn download_animation_asset_with_progress(
                             app.clone(),
                             direct_url,
                             cookie,
+                            fallback_cookies,
                             file_path,
                             transfer_id,
                             name,

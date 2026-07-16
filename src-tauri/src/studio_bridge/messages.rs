@@ -8,8 +8,20 @@ use regex::{Captures, Regex};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::{HashMap, HashSet};
+use std::sync::OnceLock;
 
 use std::time::Instant;
+
+/// Compiled once at first use; matches bare asset IDs inside Luau table blocks.
+static LOOSE_NUM_RE: OnceLock<Regex> = OnceLock::new();
+
+#[inline]
+fn loose_num_re() -> &'static Regex {
+    LOOSE_NUM_RE.get_or_init(|| {
+        Regex::new(r"(?ix)(?:rbxassetid://)?(\d{7,15})")
+            .expect("LOOSE_NUM_RE pattern is a compile-time constant and must be valid")
+    })
+}
 
 /// Stores extracted assets for a specific category (e.g., Sounds, Meshes).
 #[derive(Clone, Default, Serialize, Debug, specta::Type)]
@@ -53,6 +65,7 @@ pub struct AssetServerStateData {
     pub skip_owned_check: bool,
     pub scan_status: Option<Value>,
     pub studio_place_id: Option<String>,
+    pub theme_accent: Option<String>,
     pub keyframe_warning_count: usize,
     pub scan_records_truncated: bool,
     pub notify: std::sync::Arc<tokio::sync::Notify>,
@@ -79,6 +92,7 @@ impl Default for AssetServerStateData {
             skip_owned_check: false,
             scan_status: None,
             studio_place_id: None,
+            theme_accent: None,
             keyframe_warning_count: 0,
             scan_records_truncated: false,
             notify: std::sync::Arc::new(tokio::sync::Notify::new()),
@@ -113,7 +127,7 @@ fn script_ref_pattern() -> &'static Regex {
     RE.get_or_init(|| {
         #[allow(clippy::unwrap_used)]
         Regex::new(
-            r#"(?ix)(?:(?:https?://(?:www\.)?)?roblox\.com/asset/?\?[^"'\s&]*?id=|rbxassetid://|rbxthumb://[^/]*/?)?(\d{7,15})"#,
+            r#"(?ix)(?:(?:(?:https?://(?:www\.)?)?roblox\.com/asset/?\?[^"'\s&]*?id=|rbxassetid://|rbxthumb://[^/]*/?)|\.AnimationId\s*=\s*|\.SoundId\s*=\s*|\.MeshId\s*=\s*|\.TextureId\s*=\s*|\.TextureID\s*=\s*|\.Image\s*=\s*|anim[a-z_]*\s*[=:]\s*|sound[a-z_]*\s*[=:]\s*|audio[a-z_]*\s*[=:]\s*|music[a-z_]*\s*[=:]\s*|mesh[a-z_]*\s*[=:]\s*|assetid[a-z_]*\s*[=:]\s*|\["anim[a-z_]*"\]\s*=\s*|\["sound[a-z_]*"\]\s*=\s*|\["mesh[a-z_]*"\]\s*=\s*)(\d{7,15})"#,
         ).expect("Invalid script reference regex")
     })
 }
@@ -121,10 +135,8 @@ fn script_ref_pattern() -> &'static Regex {
 fn script_rewrite_pattern() -> &'static Regex {
     static RE: std::sync::OnceLock<Regex> = std::sync::OnceLock::new();
     RE.get_or_init(|| {
-        // Minimum 7 digits matches script_ref_pattern - prevents 4–6 digit game constants
-        // (HP values, dates, scores) from being incorrectly swapped.
         #[allow(clippy::unwrap_used)]
-        Regex::new(r#"(?ix)((?:(?:https?://(?:www\.)?)?roblox\.com/asset/?\?[^"'\s&]*?id=|rbxassetid://|rbxthumb://[^/]*/?)?)(\d{7,15})"#).expect("Invalid script rewrite regex")
+        Regex::new(r#"(?ix)((?:(?:https?://(?:www\.)?)?roblox\.com/asset/?\?[^"'\s&]*?id=|rbxassetid://|rbxthumb://[^/]*/?)|\.AnimationId\s*=\s*|\.SoundId\s*=\s*|\.MeshId\s*=\s*|\.TextureId\s*=\s*|\.TextureID\s*=\s*|\.Image\s*=\s*|anim[a-z_]*\s*[=:]\s*|sound[a-z_]*\s*[=:]\s*|audio[a-z_]*\s*[=:]\s*|music[a-z_]*\s*[=:]\s*|mesh[a-z_]*\s*[=:]\s*|assetid[a-z_]*\s*[=:]\s*|\["anim[a-z_]*"\]\s*=\s*|\["sound[a-z_]*"\]\s*=\s*|\["mesh[a-z_]*"\]\s*=\s*)?(\d{7,15})"#).expect("Invalid script rewrite regex")
     })
 }
 
@@ -310,46 +322,19 @@ fn deep_scan_string(value: &str) -> Vec<String> {
     found
 }
 
-const ANIM_KEYWORDS: &[&str] = &[
-    "anim", "walk", "run", "idle", "jump", "swim", "climb", "fall", "emote", "dance", "crouch",
-    "sprint", "roll", "strafe", "pose", "gesture",
-];
-const SOUND_KEYWORDS: &[&str] = &["sound", "audio", "music", "sfx", "track", "bgm", "noise"];
-const IMAGE_KEYWORDS: &[&str] = &[
-    "image",
-    "icon",
-    "texture",
-    "decal",
-    "badge",
-    "thumbnail",
-    "sprite",
-    "logo",
-    "banner",
-    "avatar",
-    "portrait",
-];
-const MESH_KEYWORDS: &[&str] = &["mesh", "hat", "gear", "accessory", "model", "asset", "catalog"];
-
 fn infer_category_from_line(line: &str) -> Option<&'static str> {
-    // Static regex avoids repeated compilation on the hot path.
-    static DIGIT_RE: std::sync::OnceLock<Regex> = std::sync::OnceLock::new();
-    #[allow(clippy::unwrap_used)]
-    let digit_re = DIGIT_RE.get_or_init(|| Regex::new(r"\d{4,15}").expect("invalid digit regex"));
-
     let lower = line.to_lowercase();
-    let context: String = digit_re.replace_all(&lower, "").into_owned();
-
-    if ANIM_KEYWORDS.iter().any(|kw| context.contains(kw)) {
+    if lower.contains("anim") {
         return Some("animation");
     }
-    if SOUND_KEYWORDS.iter().any(|kw| context.contains(kw)) {
+    if lower.contains("sound") || lower.contains("audio") || lower.contains("music") {
         return Some("sound");
     }
-    if IMAGE_KEYWORDS.iter().any(|kw| context.contains(kw)) {
-        return Some("image");
-    }
-    if MESH_KEYWORDS.iter().any(|kw| context.contains(kw)) {
+    if lower.contains("mesh") {
         return Some("mesh");
+    }
+    if lower.contains("texture") || lower.contains("image") {
+        return Some("image");
     }
     None
 }
@@ -358,7 +343,9 @@ fn is_blocked_asset_id(id: &str) -> bool {
     id == "0" || id == "016666666666666" || id == "16666666666666"
 }
 
-fn extract_table_block_ids_with_context(source: &str) -> Vec<(String, Option<&'static str>)> {
+fn extract_table_block_ids_with_context(
+    source: &str,
+) -> Vec<(String, Option<&'static str>, Option<String>)> {
     let mut results = Vec::new();
     let mut seen = HashSet::new();
 
@@ -420,12 +407,17 @@ fn extract_table_block_ids_with_context(source: &str) -> Vec<(String, Option<&'s
             if source.is_char_boundary(end_idx) {
                 let block_text = &source[match_whole.end()..end_idx];
 
-                for id_cap in script_ref_pattern().captures_iter(block_text) {
+                // Inside a table block, any bare number is highly likely an asset ID.
+                for id_cap in loose_num_re().captures_iter(block_text) {
                     if let Some(asset_id) = id_cap.get(1) {
                         if !is_blocked_asset_id(asset_id.as_str())
                             && seen.insert(asset_id.as_str().to_string())
                         {
-                            results.push((asset_id.as_str().to_string(), hint));
+                            let Some(full_match) = id_cap.get(0) else { continue };
+                            let id_start = match_whole.start() + full_match.start();
+                            let line = find_line_containing(source, id_start);
+                            let var_name = extract_variable_name(line);
+                            results.push((asset_id.as_str().to_string(), hint, var_name));
                         }
                     }
                 }
@@ -457,7 +449,32 @@ fn find_line_containing(source: &str, index: usize) -> &str {
     &source[start..end]
 }
 
-fn extract_script_asset_ids_with_context(source: &str) -> Vec<(String, Option<&'static str>)> {
+fn is_repeating_digits(s: &str) -> bool {
+    let mut chars = s.chars();
+    if let Some(first) = chars.next() {
+        chars.all(|c| c == first)
+    } else {
+        false
+    }
+}
+
+fn extract_variable_name(line: &str) -> Option<String> {
+    static RE: std::sync::OnceLock<Regex> = std::sync::OnceLock::new();
+    let re = RE.get_or_init(|| {
+        #[allow(clippy::unwrap_used)]
+        Regex::new(r#"(?i)([a-zA-Z0-9_]+)\s*[:=]\s*(?:(?:(?:https?://(?:www\.)?)?roblox\.com/asset/?\?[^"'\s&]*?id=|rbxassetid://|rbxthumb://[^/]*/?)|['"]?)?\d{7,15}"#).expect("Invalid var name regex")
+    });
+    if let Some(caps) = re.captures(line) {
+        if let Some(mat) = caps.get(1) {
+            return Some(mat.as_str().to_string());
+        }
+    }
+    None
+}
+
+fn extract_script_asset_ids_with_context(
+    source: &str,
+) -> Vec<(String, Option<&'static str>, Option<String>)> {
     let pattern = script_ref_pattern();
     let mut seen: HashSet<String> = HashSet::new();
     let mut results = Vec::new();
@@ -474,6 +491,7 @@ fn extract_script_asset_ids_with_context(source: &str) -> Vec<(String, Option<&'
         let start = mat.start();
         let line = find_line_containing(source, start);
         let mut hint = infer_category_from_line(line);
+        let var_name = extract_variable_name(line);
 
         if hint.is_none() {
             let mut context_start = start.saturating_sub(160);
@@ -489,7 +507,7 @@ fn extract_script_asset_ids_with_context(source: &str) -> Vec<(String, Option<&'
         }
 
         if seen.insert(asset_id.to_string()) {
-            results.push((asset_id.to_string(), hint));
+            results.push((asset_id.to_string(), hint, var_name));
         }
     }
 
@@ -585,31 +603,31 @@ pub fn analyze_records(
                 let mut table_extracted = extract_table_block_ids_with_context(&record.value);
                 let line_extracted = extract_script_asset_ids_with_context(&record.value);
                 let mut block_seen: HashSet<String> =
-                    table_extracted.iter().map(|(id, _)| id.clone()).collect();
-                for (id, hint) in line_extracted {
+                    table_extracted.iter().map(|(id, _, _)| id.clone()).collect();
+                for (id, hint, var_name) in line_extracted {
                     if block_seen.insert(id.clone()) {
-                        table_extracted.push((id, hint));
+                        table_extracted.push((id, hint, var_name));
                     }
                 }
                 table_extracted
             } else if record.property == "__Emotes__" {
                 extract_script_asset_ids(&record.value)
                     .into_iter()
-                    .map(|id| (id.clone(), Some("animation")))
+                    .map(|id| (id.clone(), Some("animation"), None))
                     .collect()
             } else if record.property == "__Accessories__" {
                 extract_script_asset_ids(&record.value)
                     .into_iter()
-                    .map(|id| (id.clone(), Some("mesh")))
+                    .map(|id| (id.clone(), Some("mesh"), None))
                     .collect()
             } else {
                 extract_script_asset_ids(&record.value)
                     .into_iter()
-                    .map(|id| (id.clone(), None))
+                    .map(|id| (id.clone(), None, None))
                     .collect()
             };
 
-            for (asset_id, hint) in all_extracted {
+            for (asset_id, hint, var_name) in all_extracted {
                 match hint {
                     Some("animation") => {
                         use std::collections::hash_map::Entry;
@@ -618,7 +636,7 @@ pub fn analyze_records(
                                 e.insert(animations.assets.len());
                                 animations.assets.push(json!({
                                     "kind": record.class_name,
-                                    "name": record.name,
+                                    "name": var_name.clone().unwrap_or_else(|| record.name.clone()),
                                     "fullName": record.full_name,
                                     "property": record.property,
                                     "assetId": asset_id,
@@ -642,7 +660,7 @@ pub fn analyze_records(
                                 e.insert(sounds.assets.len());
                                 sounds.assets.push(json!({
                                     "kind": record.class_name,
-                                    "name": record.name,
+                                    "name": var_name.clone().unwrap_or_else(|| record.name.clone()),
                                     "fullName": record.full_name,
                                     "property": record.property,
                                     "assetId": asset_id,
@@ -666,7 +684,7 @@ pub fn analyze_records(
                                 e.insert(images.assets.len());
                                 images.assets.push(json!({
                                     "kind": record.class_name,
-                                    "name": record.name,
+                                    "name": var_name.clone().unwrap_or_else(|| record.name.clone()),
                                     "fullName": record.full_name,
                                     "property": record.property,
                                     "assetId": asset_id,
@@ -690,7 +708,7 @@ pub fn analyze_records(
                                 e.insert(meshes.assets.len());
                                 meshes.assets.push(json!({
                                     "kind": record.class_name,
-                                    "name": record.name,
+                                    "name": var_name.clone().unwrap_or_else(|| record.name.clone()),
                                     "fullName": record.full_name,
                                     "property": record.property,
                                     "assetId": asset_id,
@@ -734,7 +752,7 @@ pub fn analyze_records(
                 if seen.insert(("richtext".to_string(), record.token.clone(), asset_id.clone())) {
                     images.assets.push(json!({
                         "kind": record.class_name,
-                        "name": record.name,
+                        "name": record.name.clone(),
                         "fullName": record.full_name,
                         "property": record.property,
                         "assetId": asset_id,
@@ -759,7 +777,7 @@ pub fn analyze_records(
                             e.insert(store.assets.len());
                             store.assets.push(json!({
                                 "kind": record.class_name,
-                                "name": record.name,
+                                "name": record.name.clone(),
                                 "fullName": record.full_name,
                                 "property": record.property,
                                 "assetId": asset_id,
@@ -816,7 +834,7 @@ pub fn analyze_records(
                             e.insert(store.assets.len());
                             store.assets.push(json!({
                                 "kind": record.class_name,
-                                "name": record.name,
+                                "name": record.name.clone(),
                                 "fullName": record.full_name,
                                 "property": record.property,
                                 "assetId": asset_id,
@@ -915,7 +933,7 @@ pub fn analyze_records(
         }
         let asset = json!({
             "kind": record.class_name,
-            "name": record.name,
+            "name": record.name.clone(),
             "fullName": record.full_name,
             "property": record.property,
             "assetId": asset_id,
@@ -1083,8 +1101,9 @@ fn extract_script_asset_ids(source: &str) -> Vec<String> {
 
         fn visit_number(&mut self, token: &full_moon::tokenizer::Token) {
             let text = token.to_string();
-            if text.len() >= 4
+            if text.len() >= 7
                 && text.chars().all(|c| c.is_ascii_digit())
+                && !is_repeating_digits(&text)
                 && !is_blocked_asset_id(&text)
             {
                 self.ids.insert(text);
@@ -1265,6 +1284,7 @@ mod tests {
         let results = extract_script_asset_ids_with_context("local RunAnimation = 12345678");
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].1, Some("animation"));
+        assert_eq!(results[0].2, Some("RunAnimation".to_string()));
     }
 
     #[test]
@@ -1272,6 +1292,7 @@ mod tests {
         let results = extract_script_asset_ids_with_context("local backgroundMusic = 12345678");
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].1, Some("sound"));
+        assert_eq!(results[0].2, Some("backgroundMusic".to_string()));
     }
 
     #[test]
@@ -1289,11 +1310,12 @@ mod tests {
         let results = extract_table_block_ids_with_context(source);
         assert_eq!(results.len(), 3);
         assert_eq!(results[0].1, Some("animation"));
+        assert_eq!(results[0].2, Some("Idle".to_string()));
         assert_eq!(results[1].1, Some("animation"));
         assert_eq!(results[2].1, Some("animation"));
-        assert!(results.iter().any(|(id, _)| id == "12345678"));
-        assert!(results.iter().any(|(id, _)| id == "87654321"));
-        assert!(results.iter().any(|(id, _)| id == "99999999"));
+        assert!(results.iter().any(|(id, _, _)| id == "12345678"));
+        assert!(results.iter().any(|(id, _, _)| id == "87654321"));
+        assert!(results.iter().any(|(id, _, _)| id == "99999999"));
     }
 
     #[test]

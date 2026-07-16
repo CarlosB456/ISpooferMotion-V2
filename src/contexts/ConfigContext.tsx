@@ -126,7 +126,7 @@ export const ConfigProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           // Merge the new batch's replacements with any previously-accumulated mappings
           // from earlier runs in this session. Without this merge, assets that were already
           // uploaded and skipped by skipExistingReplacements would never have their known
-          // old→new mappings re-sent to Studio, causing only a subset to be replaced.
+          // old->new mappings re-sent to Studio, causing only a subset to be replaced.
           const existingMappings = useSpooferStore.getState().lastReplacements;
           const mergedReplacements: Record<string, string> = {
             ...existingMappings,

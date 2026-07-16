@@ -103,6 +103,17 @@ pub async fn save_profile_secrets(
                             existing.insert(profile_id.clone(), cookie.clone());
                         }
                     }
+                } else if k == "accountSecrets" {
+                    let account_secrets = all_obj
+                        .entry(k.clone())
+                        .or_insert_with(|| Value::Object(serde_json::Map::new()));
+                    if let (Some(existing), Some(incoming)) =
+                        (account_secrets.as_object_mut(), v.as_object())
+                    {
+                        for (account_id, secrets) in incoming {
+                            existing.insert(account_id.clone(), secrets.clone());
+                        }
+                    }
                 } else {
                     all_obj.insert(k.clone(), v.clone());
                 }

@@ -28,23 +28,23 @@ local HttpService = game:GetService("HttpService")
 local ScriptEditorService = game:GetService("ScriptEditorService")
 
 --- The port range we scan when trying to find the ISpooferMotion daemon.
-local PORT_START = 14285
-local PORT_END = 14289
+local PORT_START = plugin:GetSetting("ISpooferMotion_PORT_START") or 14285
+local PORT_END = plugin:GetSetting("ISpooferMotion_PORT_END") or 14289
 
 --- Maximum number of records we pack into a single HTTP request during a scan.
-local SEND_CHUNK_SIZE = 5000
+local SEND_CHUNK_SIZE = plugin:GetSetting("ISpooferMotion_SEND_CHUNK_SIZE") or 5000
 
 --- The largest script we are willing to read or overwrite. Eight megabytes
 --- is enough for almost any legitimate script.
-local MAX_SCRIPT_SOURCE_BYTES = 8000000
+local MAX_SCRIPT_SOURCE_BYTES = plugin:GetSetting("ISpooferMotion_MAX_SCRIPT_BYTES") or 8000000
 local MAX_TAGS_PER_OBJECT = 100
 local MAX_TAG_BYTES = 100
-local MAX_PATCHES_PER_BATCH = 10000
+local MAX_PATCHES_PER_BATCH = plugin:GetSetting("ISpooferMotion_MAX_PATCHES") or 10000
 
 --- We enforce strict limits on HTTP payloads to prevent the plugin from
 --- consuming too much memory and crashing Studio on massive games.
-local MAX_HTTP_BODY_BYTES = 10000000
-local MAX_HTTP_RESPONSE_BYTES = 1000000
+local MAX_HTTP_BODY_BYTES = plugin:GetSetting("ISpooferMotion_MAX_HTTP_BODY") or 10000000
+local MAX_HTTP_RESPONSE_BYTES = plugin:GetSetting("ISpooferMotion_MAX_HTTP_RESP") or 1000000
 
 --- The active URL of the daemon we are currently communicating with.
 local BASE_URL = nil

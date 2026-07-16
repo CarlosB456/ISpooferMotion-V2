@@ -29,7 +29,7 @@ export interface SpoofJob {
   group?: { id: string; name: string; iconUrl: string };
   assetResults: SpoofJobAssetResult[];
   config: SpoofJobConfig;
-  logFilePath: string;
+  logFilePath?: string;
 }
 
 export interface PendingSpoofRetry {

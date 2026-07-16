@@ -1,6 +1,8 @@
 import type React from 'react';
 import { createContext, useContext, useEffect, useState } from 'react';
 
+import { invoke } from '@tauri-apps/api/core';
+
 type ThemeMode = 'light' | 'dark';
 
 interface ThemeContextType {
@@ -20,7 +22,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   });
 
   const [accentColor, setAccentColor] = useState<string>(() => {
-    return localStorage.getItem('accentColor') || '#7e57c2';
+    return localStorage.getItem('accentColor') || '#10b981';
   });
 
   // Sync theme mode to DOM
@@ -41,6 +43,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const root = document.documentElement;
     root.style.setProperty('--primary', accentColor);
     localStorage.setItem('accentColor', accentColor);
+    invoke('set_plugin_theme_accent', { color: accentColor }).catch(console.error);
   }, [accentColor]);
 
   return (

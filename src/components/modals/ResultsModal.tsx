@@ -98,8 +98,8 @@ export default function ResultsModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl bg-background border-border text-foreground">
-        <DialogHeader className="flex flex-col gap-1 pb-4 border-b border-border">
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-hidden flex flex-col bg-background border-border text-foreground">
+        <DialogHeader className="flex flex-col gap-1 pb-4 border-b border-border shrink-0">
           <DialogTitle className="text-xl font-bold flex items-center gap-2">
             <ListChecks className="text-primary" /> {t('results.title')}
           </DialogTitle>
@@ -107,7 +107,7 @@ export default function ResultsModal({
             {t('results.assetsSpoofed').replace('{count}', replacementsArray.length.toString())}
           </p>
         </DialogHeader>
-        <div className="flex flex-col gap-4 py-4">
+        <div className="flex flex-col gap-4 py-4 overflow-y-auto flex-1 min-h-0">
           <div className="flex items-center justify-between">
             <span className="text-sm font-semibold text-foreground">
               {t('misc.assetIdMappings')}
@@ -125,7 +125,7 @@ export default function ResultsModal({
               variants={stagger}
               initial="hidden"
               animate="show"
-              className="flex flex-col gap-2 max-h-96 overflow-y-auto pr-2"
+              className="flex flex-col gap-2 max-h-64 overflow-y-auto pr-2"
             >
               {replacementsArray.slice(0, 100).map(([oldId, newId]) => {
                 const meta = assetMetadataMap[oldId];

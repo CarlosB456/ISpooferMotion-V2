@@ -21,6 +21,13 @@ if (savedTheme === 'dark') {
   document.documentElement.classList.remove('dark');
 }
 
+// Disable default browser context menu globally
+document.addEventListener('contextmenu', (e) => {
+  if (import.meta.env.PROD) {
+    e.preventDefault();
+  }
+});
+
 /**
  * Strips native HTML `title` attributes globally via a MutationObserver.
  *

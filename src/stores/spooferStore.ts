@@ -262,6 +262,7 @@ export const applyReplacements = async (replacements: Record<string, string>) =>
           `Memory injection complete! Patched ${total} exact matches in memory.`,
         ),
       );
+      setLastReplacements(replacements);
     } else {
       await queueStudioReplacements(replacements);
       setSpoofingLogs((prev) =>
@@ -270,8 +271,8 @@ export const applyReplacements = async (replacements: Record<string, string>) =>
           'Queued replacements to plugin bridge. The Studio plugin will auto-replace them automatically!',
         ),
       );
+      setLastReplacements(replacements);
     }
-    setLastReplacements(replacements);
   } catch (e: unknown) {
     const errorStr = String(e);
     // These are expected non-fatal outcomes - log as info rather than showing an error toast.

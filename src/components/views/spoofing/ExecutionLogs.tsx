@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
 import { useLanguage } from '../../../contexts/LanguageContext';
+import { useConfigStore } from '../../../stores/configStore';
 import { useSpooferStore } from '../../../stores/spooferStore';
 import { cn } from '../../../utils/cn';
 
@@ -22,6 +23,20 @@ export default function ExecutionLogs({
 }: ExecutionLogsProps) {
   const { t } = useLanguage();
   const outputRef = useRef<HTMLDivElement>(null);
+
+  const { config, accountSecrets } = useConfigStore();
+
+  const downloaderName =
+    config.accounts.find((a) => {
+      const secrets = accountSecrets[a.id];
+      return secrets?.cookie === config.spoofing.cookie;
+    })?.name || t('accounts.anonymousDownloader');
+
+  const uploaderName =
+    config.accounts.find((a) => {
+      const secrets = accountSecrets[a.id];
+      return secrets?.apiKey === config.spoofing.apiKey;
+    })?.name || t('accounts.anonymousUploader');
 
   const { spoofCurrentCount, spoofTotalCount, spoofStartTime, isSpoofing } = useSpooferStore(
     useShallow((s) => ({
@@ -85,6 +100,11 @@ export default function ExecutionLogs({
               {eta ? ` - ${eta}` : ''})
             </span>
           )}
+          <div className="ml-2 flex items-center gap-2 text-[11px] text-text-secondary bg-bg-muted px-2 py-0.5 rounded border border-border-subtle">
+            <span title={t('accounts.downloader')}>↓ {downloaderName}</span>
+            <span className="opacity-40">|</span>
+            <span title={t('accounts.uploader')}>↑ {uploaderName}</span>
+          </div>
         </span>
         <div className="flex items-center gap-3">
           {Object.keys(lastReplacements).length > 0 && (

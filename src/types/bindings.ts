@@ -253,6 +253,8 @@ export const commands = {
    */
   pushToStudio: (replacementsMap: string, pluginPort: string | null) =>
     typedError<string, AppError>(__TAURI_INVOKE('push_to_studio', { replacementsMap, pluginPort })),
+  setPluginThemeAccent: (color: string) =>
+    typedError<null, string>(__TAURI_INVOKE('set_plugin_theme_accent', { color })),
   /**
    *  Toggles whether the plugin should skip checking if the user actually owns the assets.
    *
@@ -422,6 +424,7 @@ export type RobloxUserInfo = {
 export type SpooferActionRequest = {
   assets: string | null;
   cookie: string | null;
+  fallbackCookies: string[] | null;
   apiKey: string | null;
   groupId: string | null;
   spoofSounds: boolean | null;
@@ -430,7 +433,9 @@ export type SpooferActionRequest = {
   forcePlaceIds: string | null;
   placeName: string | null;
   concurrent: boolean | null;
+  concurrentDownloading: boolean | null;
   maxConcurrency: number | null;
+  maxDownloadConcurrency: number | null;
   skipOwned: boolean | null;
   excludedUserIds: string | null;
   excludedGroupIds: string | null;

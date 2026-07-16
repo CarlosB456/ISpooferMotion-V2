@@ -206,7 +206,6 @@ jobs:
           workspaces: src-tauri
           cache-on-failure: true
 
-
       - name: Normalize Tauri signing key
         shell: bash
         env:
@@ -296,7 +295,6 @@ jobs:
           path: ~/.bun/install/cache
           key: bun-${{ runner.os }}-${{ hashFiles('**/bun.lockb') }}
           restore-keys: bun-${{ runner.os }}-
-
 
       - name: Build plugin
         run: bun run build:plugin

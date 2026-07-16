@@ -374,7 +374,7 @@ pub async fn scan_and_replace_multiple_strings(
             // in-place). Skip the pair and let the plugin bridge handle it instead.
             if target.len() != replacement.len() {
                 log::warn!(
-                    "Memory injection: skipping {target} → {replacement} (length mismatch: {} vs {}). \
+                    "Memory injection: skipping {target} -> {replacement} (length mismatch: {} vs {}). \
                      Plugin bridge will apply this mapping instead.",
                     target.len(),
                     replacement.len()

@@ -13,7 +13,7 @@ use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, Manager};
 use tokio::fs::File;
 use tokio::io::AsyncWriteExt;
-use tokio::sync::Notify;
+use tokio::sync::Semaphore;
 use uuid::Uuid;
 
 static CIRCUIT_BREAKER: Mutex<Option<Instant>> = Mutex::new(None);
@@ -66,10 +66,9 @@ fn is_valid_numeric_id(value: &str) -> bool {
 struct AdaptiveLimiter {
     max: AtomicUsize,
     current: AtomicUsize,
-    active: AtomicUsize,
     success_streak: AtomicUsize,
     blocked_until: Mutex<Option<Instant>>,
-    notify: Notify,
+    semaphore: Semaphore,
 }
 
 impl AdaptiveLimiter {
@@ -77,10 +76,9 @@ impl AdaptiveLimiter {
         Self {
             max: AtomicUsize::new(max),
             current: AtomicUsize::new(max),
-            active: AtomicUsize::new(0),
             success_streak: AtomicUsize::new(0),
             blocked_until: Mutex::new(None),
-            notify: Notify::new(),
+            semaphore: Semaphore::new(max),
         }
     }
 }
@@ -91,8 +89,7 @@ pub struct AdaptivePermit {
 
 impl Drop for AdaptivePermit {
     fn drop(&mut self) {
-        self.limiter.active.fetch_sub(1, Ordering::Release);
-        self.limiter.notify.notify_waiters();
+        self.limiter.semaphore.add_permits(1);
     }
 }
 
@@ -113,14 +110,13 @@ pub fn configure_adaptive_concurrency(max_concurrency: usize) {
     if let Ok(mut guard) = limiter.blocked_until.lock() {
         *guard = None;
     }
-    limiter.notify.notify_waiters();
+
+    // We don't restore permits here because they are restored when permits drop or when success increases.
 }
 
 pub async fn acquire_adaptive_permit() -> AdaptivePermit {
     let limiter = adaptive_limiter();
     loop {
-        let notified = limiter.notify.notified();
-
         let blocked_until = limiter.blocked_until.lock().ok().and_then(|guard| *guard);
         if let Some(until) = blocked_until {
             let now = Instant::now();
@@ -130,18 +126,25 @@ pub async fn acquire_adaptive_permit() -> AdaptivePermit {
             }
         }
 
-        let limit = limiter.current.load(Ordering::Acquire).max(1);
-        let active = limiter.active.load(Ordering::Acquire);
-        if active < limit
-            && limiter
-                .active
-                .compare_exchange(active, active + 1, Ordering::AcqRel, Ordering::Acquire)
-                .is_ok()
-        {
-            return AdaptivePermit { limiter };
+        let permit = limiter
+            .semaphore
+            .acquire()
+            .await
+            .expect("AdaptiveLimiter semaphore should never be closed");
+
+        let blocked_until = limiter.blocked_until.lock().ok().and_then(|guard| *guard);
+        if let Some(until) = blocked_until {
+            let now = Instant::now();
+            if until > now {
+                permit.forget();
+                limiter.semaphore.add_permits(1);
+                tokio::time::sleep_until(tokio::time::Instant::from_std(until)).await;
+                continue;
+            }
         }
 
-        notified.await;
+        permit.forget();
+        return AdaptivePermit { limiter };
     }
 }
 
@@ -156,13 +159,14 @@ pub fn record_adaptive_success() {
     let streak = limiter.success_streak.fetch_add(1, Ordering::AcqRel) + 1;
     if streak >= limit.max(1) {
         limiter.success_streak.store(0, Ordering::Release);
-        let _ = limiter.current.compare_exchange(
-            limit,
-            (limit + 1).min(max),
-            Ordering::AcqRel,
-            Ordering::Acquire,
-        );
-        limiter.notify.notify_waiters();
+        if limiter
+            .current
+            .compare_exchange(limit, (limit + 1).min(max), Ordering::AcqRel, Ordering::Acquire)
+            .is_ok()
+            && limit < max
+        {
+            limiter.semaphore.add_permits(1);
+        }
     }
 }
 
@@ -170,7 +174,18 @@ pub fn record_adaptive_rate_limit(retry_after_ms: Option<u64>) {
     let limiter = adaptive_limiter();
     let current = limiter.current.load(Ordering::Acquire).max(1);
     let next = (current / 2).max(1);
-    limiter.current.store(next, Ordering::Release);
+    if limiter.current.compare_exchange(current, next, Ordering::AcqRel, Ordering::Acquire).is_ok()
+    {
+        let diff = current - next;
+        if diff > 0 {
+            tokio::spawn(async move {
+                if let Ok(permits) = limiter.semaphore.acquire_many(diff as u32).await {
+                    permits.forget();
+                }
+            });
+        }
+    }
+
     limiter.success_streak.store(0, Ordering::Release);
 
     if let Some(retry_after_ms) = retry_after_ms {
@@ -182,8 +197,6 @@ pub fn record_adaptive_rate_limit(retry_after_ms: Option<u64>) {
             }
         }
     }
-
-    limiter.notify.notify_waiters();
 }
 
 pub fn record_explicit_rate_limit(reset_in_ms: u64) {
@@ -195,15 +208,24 @@ pub fn record_explicit_rate_limit(reset_in_ms: u64) {
             *guard = Some(next_until);
         }
     }
-    limiter.notify.notify_waiters();
 }
 
 pub fn record_adaptive_server_error() {
     let limiter = adaptive_limiter();
     let current = limiter.current.load(Ordering::Acquire).max(1);
-    limiter.current.store(current.saturating_sub(1).max(1), Ordering::Release);
+    let next = current.saturating_sub(1).max(1);
+    if limiter.current.compare_exchange(current, next, Ordering::AcqRel, Ordering::Acquire).is_ok()
+    {
+        let diff = current - next;
+        if diff > 0 {
+            tokio::spawn(async move {
+                if let Ok(permits) = limiter.semaphore.acquire_many(diff as u32).await {
+                    permits.forget();
+                }
+            });
+        }
+    }
     limiter.success_streak.store(0, Ordering::Release);
-    limiter.notify.notify_waiters();
 }
 
 #[derive(Clone)]

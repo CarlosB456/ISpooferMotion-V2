@@ -61,6 +61,236 @@ pub async fn should_skip_asset_for_spoofing(
     false
 }
 
+/// Fastest possible place-context path: resolves an asset directly to the universe(s)
+/// that own it via the `asset-to-universe` endpoint, then batch-resolves those universes
+/// to their root place IDs. One successful call here makes all creator/game-list
+/// scraping unnecessary.
+async fn asset_to_universe_fast_path(asset_id: &str, cookie_header: &str) -> Vec<String> {
+    let client = crate::utils::get_http_client();
+
+    // Asset -> universeIds
+    let url = format!("https://games.roblox.com/v1/games/asset-to-universe?assetId={asset_id}");
+    let mut resp_opt = None;
+    for _ in 0..3 {
+        wait_rate_limit(RateLimitBucket::PlaceLookup).await;
+        let attempt = tokio::time::timeout(
+            Duration::from_secs(8),
+            client
+                .get(&url)
+                .header(reqwest::header::COOKIE, cookie_header)
+                .header(reqwest::header::USER_AGENT, "RobloxStudio/WinInet")
+                .send(),
+        )
+        .await;
+
+        match attempt {
+            Ok(Ok(r)) => {
+                if r.status().is_success() {
+                    resp_opt = Some(r);
+                    break;
+                } else if r.status().as_u16() == 429 {
+                    let wait_ms = crate::utils::extract_retry_after(&r, None).unwrap_or(2000);
+                    set_rate_limit(RateLimitBucket::PlaceLookup, Duration::from_millis(wait_ms));
+                    tokio::time::sleep(Duration::from_millis(wait_ms)).await;
+                } else {
+                    break;
+                }
+            }
+            _ => break,
+        }
+    }
+
+    let Some(resp) = resp_opt else {
+        return Vec::new();
+    };
+
+    let data: serde_json::Value = match resp.json().await {
+        Ok(d) => d,
+        Err(_) => return Vec::new(),
+    };
+
+    let universe_ids: Vec<String> = data
+        .get("universeIds")
+        .and_then(|v| v.as_array())
+        .map(|arr| arr.iter().filter_map(value_to_string).collect())
+        .unwrap_or_default();
+
+    if universe_ids.is_empty() {
+        return Vec::new();
+    }
+
+    // universeIds -> rootPlaceIds
+    let mut place_ids: Vec<String> = Vec::new();
+    for chunk in universe_ids.chunks(50) {
+        let ids_str = chunk.join(",");
+        let url2 = format!("https://games.roblox.com/v1/games?universeIds={ids_str}");
+        let resp2 = match tokio::time::timeout(
+            Duration::from_secs(8),
+            client
+                .get(&url2)
+                .header(reqwest::header::COOKIE, cookie_header)
+                .header(reqwest::header::USER_AGENT, "RobloxStudio/WinInet")
+                .send(),
+        )
+        .await
+        {
+            Ok(Ok(r)) if r.status().is_success() => r,
+            _ => continue,
+        };
+        if let Ok(data2) = resp2.json::<serde_json::Value>().await {
+            if let Some(arr) = data2.get("data").and_then(|d| d.as_array()) {
+                for game in arr {
+                    if let Some(pid) = game.get("rootPlaceId").and_then(value_to_string) {
+                        place_ids.push(pid);
+                    }
+                }
+            }
+        }
+    }
+
+    place_ids
+}
+
+/// Fetches groups the user belongs to where their rank is at least `min_rank`, sorted
+/// by rank descending and capped at `top_n`. Returns `(group_id, rank)` tuples.
+async fn fetch_user_high_rank_groups(
+    user_id: &str,
+    cookie_header: &str,
+    min_rank: u32,
+    top_n: usize,
+) -> Vec<(String, u32)> {
+    let client = crate::utils::get_http_client();
+    let mut groups: Vec<(String, u32)> = Vec::new();
+    let mut cursor = String::new();
+
+    for _ in 0..5 {
+        let mut url = format!(
+            "https://groups.roblox.com/v2/users/{user_id}/groups/roles?sortOrder=Asc&limit=50"
+        );
+        if !cursor.is_empty() {
+            url.push_str(&format!("&cursor={cursor}"));
+        }
+
+        let resp = match tokio::time::timeout(
+            Duration::from_secs(8),
+            client
+                .get(&url)
+                .header(reqwest::header::COOKIE, cookie_header)
+                .header(reqwest::header::USER_AGENT, "RobloxStudio/WinInet")
+                .send(),
+        )
+        .await
+        {
+            Ok(Ok(r)) if r.status().is_success() => r,
+            _ => break,
+        };
+
+        let data: serde_json::Value = match resp.json().await {
+            Ok(d) => d,
+            Err(_) => break,
+        };
+
+        let Some(entries) = data.get("data").and_then(|d| d.as_array()) else {
+            break;
+        };
+
+        for entry in entries {
+            let grp = entry.get("group").unwrap_or(&serde_json::Value::Null);
+            let role = entry.get("role").unwrap_or(&serde_json::Value::Null);
+            let Some(gid) = grp.get("id").and_then(value_to_string) else {
+                continue;
+            };
+            let rank = role.get("rank").and_then(serde_json::Value::as_u64).unwrap_or(0) as u32;
+            if rank >= min_rank {
+                groups.push((gid, rank));
+            }
+        }
+
+        cursor =
+            data.get("nextPageCursor").and_then(|c| c.as_str()).unwrap_or_default().to_string();
+        if cursor.is_empty() {
+            break;
+        }
+    }
+
+    groups.sort_by_key(|g| std::cmp::Reverse(g.1));
+    groups.truncate(top_n);
+    groups
+}
+
+/// Fetches root place IDs for a single group. Designed to be spawned concurrently
+/// across many groups - keeps its own rate limiting via short sleeps rather than
+/// the shared bucket to avoid contention from parallel callers.
+async fn fetch_group_place_ids_parallel(
+    group_id: String,
+    cookie_header: String,
+    limit: usize,
+) -> Vec<String> {
+    let client = crate::utils::get_http_client();
+    let mut place_ids: Vec<String> = Vec::new();
+    let mut cursor = String::new();
+
+    for _ in 0..5 {
+        if place_ids.len() >= limit {
+            break;
+        }
+
+        let mut url =
+            format!("https://games.roblox.com/v2/groups/{group_id}/games?sortOrder=Desc&limit=25");
+        if !cursor.is_empty() {
+            url.push_str(&format!("&cursor={cursor}"));
+        }
+
+        let resp = match tokio::time::timeout(
+            Duration::from_secs(8),
+            client
+                .get(&url)
+                .header(reqwest::header::COOKIE, cookie_header.as_str())
+                .header(reqwest::header::USER_AGENT, "RobloxStudio/WinInet")
+                .send(),
+        )
+        .await
+        {
+            Ok(Ok(r)) if r.status().is_success() => r,
+            _ => break,
+        };
+
+        let data: serde_json::Value = match resp.json().await {
+            Ok(d) => d,
+            Err(_) => break,
+        };
+
+        let Some(games) = data.get("data").and_then(|d| d.as_array()) else {
+            break;
+        };
+
+        for game in games {
+            if place_ids.len() >= limit {
+                break;
+            }
+            let pid = game
+                .get("rootPlace")
+                .and_then(|rp| rp.get("id"))
+                .or_else(|| game.get("rootPlaceId"))
+                .and_then(value_to_string);
+            if let Some(id) = pid {
+                place_ids.push(id);
+            }
+        }
+
+        cursor =
+            data.get("nextPageCursor").and_then(|c| c.as_str()).unwrap_or_default().to_string();
+        if cursor.is_empty() {
+            break;
+        }
+
+        // Brief inter-page pause to avoid hammering the same group's endpoint.
+        tokio::time::sleep(Duration::from_millis(150)).await;
+    }
+
+    place_ids
+}
+
 pub async fn get_place_ids_for_asset_creator(
     app: AppHandle,
     asset_id: String,
@@ -68,7 +298,19 @@ pub async fn get_place_ids_for_asset_creator(
     max_place_ids: Option<u32>,
     place_name: Option<String>,
 ) -> crate::error::Result<Vec<String>> {
-    let mut place_ids =
+    let cookie_header = build_roblox_cookie_header(&cookie);
+
+    // Fast path: asset-to-universe. This single API call resolves which universe(s)
+    // directly reference this asset - no creator lookup or game-list scraping needed.
+    // It is the highest-confidence source, so we try it first and only fall through
+    // to the creator-based path when it returns nothing.
+    let fast_ids = if cookie_header.is_empty() {
+        Vec::new()
+    } else {
+        asset_to_universe_fast_path(&asset_id, &cookie_header).await
+    };
+
+    let mut place_ids = if fast_ids.is_empty() {
         match get_asset_creator_for_asset(app.clone(), asset_id, cookie.clone()).await {
             Ok((creator_type, creator_id)) => get_place_id_from_creator(
                 app.clone(),
@@ -81,7 +323,10 @@ pub async fn get_place_ids_for_asset_creator(
             .await
             .unwrap_or_default(),
             Err(_) => Vec::new(),
-        };
+        }
+    } else {
+        fast_ids
+    };
 
     if let Some(studio_place_id) = crate::studio_bridge::bridge_data()
         .and_then(|d| d.try_read().ok().and_then(|g| g.studio_place_id.clone()))
@@ -450,6 +695,43 @@ pub async fn get_place_id_from_creator(
         }
     }
 
+    // Secondary discovery for user-owned assets: if the direct game list didn't fill
+    // the quota, also walk the user's high-rank group memberships and fetch their games
+    // in parallel. Mirrors the Python script's Path 2 fallback.
+    if !is_group && root_places.len() < max_results as usize {
+        let remaining = max_results as usize - root_places.len();
+        let high_rank_groups =
+            fetch_user_high_rank_groups(&creator_id, &cookie_header, 50, 15).await;
+
+        if !high_rank_groups.is_empty() {
+            // Spawn one task per group so all fetches run concurrently.
+            let handles: Vec<tokio::task::JoinHandle<Vec<String>>> = high_rank_groups
+                .into_iter()
+                .map(|(gid, _rank)| {
+                    let ch = cookie_header.clone();
+                    let lim = remaining;
+                    tokio::spawn(async move { fetch_group_place_ids_parallel(gid, ch, lim).await })
+                })
+                .collect();
+
+            for handle in handles {
+                if root_places.len() >= max_results as usize {
+                    break;
+                }
+                if let Ok(ids) = handle.await {
+                    for id in ids {
+                        if root_places.len() >= max_results as usize {
+                            break;
+                        }
+                        if seen_places.insert(id.clone()) {
+                            root_places.push((id, String::new()));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     if let Some(ref target_name) = place_name {
         let lower_target = target_name.to_lowercase();
         root_places.sort_by_cached_key(|(_, name)| {
@@ -717,7 +999,7 @@ pub async fn search_global_places(
 ) -> crate::error::Result<GlobalPlacesResponse> {
     let limit = limit.unwrap_or(20).min(50);
     let client = crate::utils::get_http_client();
-    let encoded_keyword = keyword.replace(" ", "%20");
+    let encoded_keyword = urlencoding::encode(&keyword);
     let url = format!(
         "https://games.roblox.com/v1/games/list?keyword={}&maxRows={}",
         encoded_keyword, limit

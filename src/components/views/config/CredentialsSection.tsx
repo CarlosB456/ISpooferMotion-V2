@@ -211,7 +211,7 @@ export default function CredentialsSection() {
             if (val) handleCookieDetectionChange(val);
           }}
         >
-          <SelectTrigger className="w-50 h-9">
+          <SelectTrigger className="w-48 h-9">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>

@@ -149,6 +149,7 @@ pub async fn initialize_remote_cache(
                                         "place_id": place_id
                                     });
                                     let _ = client.post(&pu_clone).json(&payload).send().await;
+                                    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
                                 }
                                 // Create a lock file so we never read their old local cache on startup again
                                 let _ = tokio::fs::write(&migrated_lock_path, "migrated").await;

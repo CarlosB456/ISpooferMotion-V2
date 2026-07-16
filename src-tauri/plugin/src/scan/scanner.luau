@@ -8,70 +8,9 @@
 ---
 --- To keep Studio responsive and avoid memory spikes on massive places, the
 --- scanner yields frequently and streams records back to the daemon in chunks.
-local SCAN_CHUNK_BYTES: number = 1000000
+local SCAN_CHUNK_BYTES: number = 500000
 local SCAN_MAX_TAGS_PER_OBJECT: number = 100
 local SCAN_MAX_TAG_BYTES: number = 100
-
-local ASSET_NAME_HINTS: { string } = {
-	"asset",
-	"anim",
-	"animation",
-	"sound",
-	"audio",
-	"music",
-	"mesh",
-	"image",
-	"texture",
-	"video",
-	"decal",
-	"icon",
-	"content",
-	"thumbnail",
-}
-
-local ASSET_ID_NAME_HINTS: { string } = {
-	"id",
-	"assetid",
-	"animationid",
-	"animid",
-	"soundid",
-	"audioid",
-	"musicid",
-	"meshid",
-	"imageid",
-	"textureid",
-	"videoid",
-	"decalid",
-	"iconid",
-	"contentid",
-	"thumbnailid",
-	"packageid",
-	"templateid",
-}
-
---- Removes special characters from a string so we can do fuzzy matching on names.
-local function compactName(value: string): string
-	return string.gsub(string.lower(value), "[%s_%-%./:]", "")
-end
-
---- Checks if an instance name implies it probably holds an asset ID (e.g. "WeaponMesh").
-local function nameLooksLikeAssetSlot(value: string): boolean
-	local compact = compactName(value)
-
-	for _, hint in ipairs(ASSET_ID_NAME_HINTS) do
-		if compact == hint or string.sub(compact, -#hint) == hint then
-			return true
-		end
-	end
-
-	for _, hint in ipairs(ASSET_NAME_HINTS) do
-		if string.find(compact, hint, 1, true) then
-			return true
-		end
-	end
-
-	return false
-end
 
 --- Scans all custom attributes on an instance for asset references.
 local function scanAttributeRecords(records: { Record }, obj: Instance)
@@ -85,21 +24,10 @@ local function scanAttributeRecords(records: { Record }, obj: Instance)
 
 	for key, value in pairs(attrs) do
 		if type(key) == "string" then
-			local keyLooksLikeAssetSlot = nameLooksLikeAssetSlot(key)
-			local normalized = contentValueToString(value, keyLooksLikeAssetSlot)
+			local normalized = contentValueToString(value)
 			if normalized then
-				if
-					keyLooksLikeAssetSlot
-					or isAssetFormat(value)
-					or stringContainsAssetReference(normalized)
-				then
-					addRecord(
-						records,
-						obj,
-						"__Attribute__:" .. key,
-						normalized,
-						keyLooksLikeAssetSlot
-					)
+				if isAssetFormat(value) or stringContainsAssetReference(normalized) then
+					addRecord(records, obj, "__Attribute__:" .. key, normalized, false)
 				end
 			end
 		end
@@ -133,11 +61,7 @@ local function scanTagRecords(records: { Record }, obj: Instance)
 
 	local hasAssetTag = false
 	for _, tag in ipairs(tags) do
-		if
-			isAssetFormat(tag)
-			or stringContainsAssetReference(tag)
-			or nameLooksLikeAssetSlot(tag)
-		then
+		if isAssetFormat(tag) or stringContainsAssetReference(tag) then
 			hasAssetTag = true
 			break
 		end
@@ -170,18 +94,13 @@ local function scanValueObjectRecord(records: { Record }, obj: Instance)
 		return
 	end
 
-	local nameLooksLikeAsset = nameLooksLikeAssetSlot(obj.Name)
-	local normalized = contentValueToString(val, nameLooksLikeAsset)
+	local normalized = contentValueToString(val)
 	if not normalized then
 		return
 	end
 
-	local shouldCapture = nameLooksLikeAsset
-		or isAssetFormat(val)
-		or stringContainsAssetReference(normalized)
-
-	if shouldCapture then
-		addRecord(records, obj, "Value", normalized, nameLooksLikeAsset)
+	if isAssetFormat(val) or stringContainsAssetReference(normalized) then
+		addRecord(records, obj, "Value", normalized, false)
 	end
 end
 
@@ -219,7 +138,7 @@ local function scanScriptSourceRecord(records: { Record }, obj: Instance)
 	end
 end
 
-local FLUSH_MAX_RETRIES: number = 3
+local FLUSH_MAX_RETRIES: number = 10
 local FLUSH_RETRY_WAIT: number = 1.5
 
 --- Attempts to push the current scan chunk to the daemon, retrying on failure.

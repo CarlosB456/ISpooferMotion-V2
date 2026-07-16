@@ -7,6 +7,8 @@ pub struct SpooferActionRequest {
     #[validate(length(min = 1))]
     pub assets: Option<String>,
     pub cookie: Option<String>,
+    #[serde(rename = "fallbackCookies")]
+    pub fallback_cookies: Option<Vec<String>>,
     #[serde(rename = "apiKey")]
     pub api_key: Option<String>,
     #[serde(rename = "groupId")]
@@ -23,9 +25,14 @@ pub struct SpooferActionRequest {
     #[serde(rename = "placeName")]
     pub place_name: Option<String>,
     pub concurrent: Option<bool>,
+    #[serde(rename = "concurrentDownloading")]
+    pub concurrent_downloading: Option<bool>,
     #[serde(rename = "maxConcurrency")]
     #[validate(range(min = 1, max = 100))]
     pub max_concurrency: Option<u32>,
+    #[serde(rename = "maxDownloadConcurrency")]
+    #[validate(range(min = 1, max = 100))]
+    pub max_download_concurrency: Option<u32>,
     #[serde(rename = "skipOwned")]
     pub skip_owned: Option<bool>,
     #[serde(rename = "excludedUserIds")]

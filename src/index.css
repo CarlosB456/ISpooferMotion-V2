@@ -256,15 +256,18 @@ input[type='number'] {
   * {
     @apply border-border outline-ring/50;
   }
+
   body {
     @apply text-foreground overflow-hidden;
     background-color: transparent;
   }
+
   #root {
     @apply bg-background;
     width: 100vw;
     height: 100vh;
   }
+
   html {
     @apply font-sans;
   }

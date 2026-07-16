@@ -227,6 +227,34 @@ function installDebugLogger() {
   window.ismLog = (level: LogLevel, message: string, notify?: boolean) => {
     addDebugLog(level, [message], 'ism', notify);
   };
+
+  if (isTauriRuntime()) {
+    import('@tauri-apps/api/event')
+      .then(({ listen }) => {
+        listen('log://log', (event: any) => {
+          const payload = event.payload;
+          if (!payload) return;
+
+          let level: LogLevel = 'info';
+          if (payload.level === 1) level = 'error';
+          else if (payload.level === 2) level = 'warn';
+          else if (payload.level === 3 || payload.level === 4 || payload.level === 5)
+            level = 'info';
+
+          const message = payload.message || JSON.stringify(payload);
+
+          // Prevent feedback loop: don't log messages that originated from JS append_debug_log
+          if (typeof message === 'string' && message.includes('[ui]')) return;
+          if (typeof message === 'string' && message.includes('[ism]')) return;
+          if (typeof message === 'string' && message.includes('[console]')) return;
+
+          addDebugLog(level, [message], 'ism');
+        }).catch((e) => {
+          console.error('Failed to listen to tauri-plugin-log:', e);
+        });
+      })
+      .catch((e) => console.error('Failed to load tauri events', e));
+  }
 }
 
 installDebugLogger();

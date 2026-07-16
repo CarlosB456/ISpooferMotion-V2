@@ -25,6 +25,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { useConfig } from '../../contexts/ConfigContext';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useStudioConnectionState } from '../../contexts/StudioConnectionContext';
+import { useConfigStore } from '../../stores/configStore';
 import { useSpooferStore } from '../../stores/spooferStore';
 import { cn } from '../../utils/cn';
 import { addDebugLog } from '../../utils/debugLogger';
@@ -694,7 +695,22 @@ export default function SpoofingView() {
       return;
     }
 
-    setLogs([]);
+    const store = useConfigStore.getState();
+    const downloaderName =
+      store.config.accounts.find((a) => {
+        const secrets = store.accountSecrets[a.id];
+        return secrets?.cookie === cookie;
+      })?.name || t('accounts.anonymousDownloader');
+
+    const uploaderName =
+      store.config.accounts.find((a) => {
+        const secrets = store.accountSecrets[a.id];
+        return secrets?.apiKey === apiKey;
+      })?.name || t('accounts.anonymousUploader');
+
+    setLogs([
+      `[INFO] Job initialized. Downloader: ${downloaderName} | Uploader: ${uploaderName}\n`,
+    ]);
     const apiKeyReady = await validateApiKeyForRun(apiKey, selectedUser);
     if (!apiKeyReady) return;
 
@@ -748,10 +764,18 @@ export default function SpoofingView() {
         ? ''
         : studioPlaceId || (await getStudioPlaceIdFallback());
 
+      const allAccounts = config.accounts || [];
+      const accountSecrets = useConfigStore.getState().accountSecrets;
+      const fallbackCookies = allAccounts
+        .filter((a) => a.isDownloader && a.id !== selectedUser)
+        .map((a) => accountSecrets[a.id]?.cookie)
+        .filter(Boolean) as string[];
+
       await invoke('run_spoofer_action', {
         data: {
           assets: JSON.stringify(finalAssetsPayload),
           cookie,
+          fallbackCookies: fallbackCookies.length > 0 ? fallbackCookies : null,
           apiKey,
           groupId: selectedGroup !== 'none' ? selectedGroup : null,
           spoofSounds,
@@ -761,7 +785,9 @@ export default function SpoofingView() {
 
           placeName: runContext?.placeName || loadedFileName,
           concurrent: config.advanced.concurrentSpoofing,
+          concurrentDownloading: config.advanced.concurrentDownloading,
           maxConcurrency: config.advanced.maxConcurrency,
+          maxDownloadConcurrency: config.advanced.maxDownloadConcurrency,
           skipOwned: config.advanced.skipOwned,
           excludedUserIds: config.advanced.excludedUserIds,
           excludedGroupIds: config.advanced.excludedGroupIds,

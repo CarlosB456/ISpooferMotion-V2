@@ -27,12 +27,12 @@ local function valueLooksLikePositiveAssetNumber(value: number): boolean
 	return #strVal >= 3 and #strVal <= 20
 end
 
---- Coerces various data types (Content, string, number) into a normalized string.
+--- Coerces various data types (Content, string) into a normalized string.
 ---
---- If `allowNumberAssetId` is true, plain numbers that look like asset IDs will
---- be converted into `rbxassetid://` format. We explicitly reject placeholder IDs
---- like `016666666666666` which Roblox sometimes returns for pending assets.
-local function contentValueToString(value: any, allowNumberAssetId: boolean?): string?
+--- We explicitly reject placeholder IDs like `016666666666666` which Roblox
+--- sometimes returns for pending assets. Raw numbers are intentionally NOT supported
+--- here to prevent blindly treating any integer property (like a timestamp) as an asset ID.
+local function contentValueToString(value: any): string?
 	if value == nil then
 		return nil
 	end
@@ -58,18 +58,12 @@ local function contentValueToString(value: any, allowNumberAssetId: boolean?): s
 		return if value ~= "" and value ~= "nil" then value else nil
 	end
 
-	if type(value) == "number" and allowNumberAssetId then
-		if not valueLooksLikePositiveAssetNumber(value) then
-			return nil
-		end
-		local strVal = tostring(math.floor(value))
-		if string.find(strVal, "016666666666666") or string.find(strVal, "16666666666666") then
-			return nil
-		end
-		return "rbxassetid://" .. strVal
-	end
-
 	return nil
+end
+
+--- Checks if a string is just the same digit repeating (e.g. 00000, 11111)
+local function isRepeatingDigits(str: string): boolean
+	return string.match(str, "^(%d)%1+$") ~= nil
 end
 
 --- Checks if a string contains any recognized Roblox asset URL format.
@@ -83,10 +77,14 @@ local function stringContainsAssetReference(val: string): boolean
 		or string.match(str, "roblox%.com/library/(%d+)")
 		or string.match(str, "roblox%.com/catalog/(%d+)")
 		or string.match(str, "create%.roblox%.com/marketplace/asset/(%d+)")
-		or string.match(str, "^%d+$")
 
 	if assetId then
-		return true
+		return not isRepeatingDigits(assetId)
+	end
+
+	-- Strict fallback for raw numbers inside strings
+	if string.match(str, "^%d+$") and #str >= 7 and #str <= 20 then
+		return not isRepeatingDigits(str)
 	end
 
 	return false
@@ -99,12 +97,13 @@ end
 local function isAssetFormat(val: any): boolean
 	if type(val) == "string" then
 		local lower = string.lower(val)
-		if string.match(lower, "^%d+$") and #lower >= 3 and #lower <= 20 then
-			return true
+		if string.match(lower, "^%d+$") and #lower >= 7 and #lower <= 20 then
+			return not isRepeatingDigits(lower)
 		end
 		return stringContainsAssetReference(lower)
 	elseif type(val) == "number" then
 		return valueLooksLikePositiveAssetNumber(val)
+			and not isRepeatingDigits(tostring(math.floor(val)))
 	elseif typeof(val) == "Content" then
 		local okUri, uri = pcall(function()
 			return val.Uri

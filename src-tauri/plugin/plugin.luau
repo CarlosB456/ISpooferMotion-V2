@@ -105,65 +105,188 @@ local function runManualReplacements(text: string)
 		for oldId, newId in pairs(mappings) do
 			if string.find(strVal, oldId, 1, true) then
 				local newVal = string.gsub(strVal, oldId, newId)
-				local assignOk, err = pcall(function()
-					(obj :: any)[prop] = newVal
-				end)
-				if assignOk then
-					replacedCount += 1
-					print(
-						string.format(
-							"[ISpooferMotion] Manual Swap: %s.%s (%s -> %s)",
-							obj.Name,
-							prop,
-							oldId,
-							newId
+
+				if obj:IsA("MeshPart") and (prop == "MeshId" or prop == "TextureID") then
+					-- We must use copyMeshPartInto to safely clone the MeshPart because MeshId cannot be assigned
+					local targetMeshUri = if prop == "MeshId" then newVal else nil
+					local targetTextureUri = if prop == "TextureID" then newVal else nil
+
+					-- Only pass the overrideTextureId if TextureID is actually changing, otherwise nil allows copyMeshPartInto to copy original
+					local createOk, createdPart = pcall(function()
+						-- If MeshId hasn't been changed yet, use the original
+						local mId = targetMeshUri or obj.MeshId
+						-- Coerce number to rbxassetid:// if it isn't already
+						if not string.match(mId, "^%a+://") and string.match(mId, "^%d+$") then
+							mId = "rbxassetid://" .. mId
+						end
+						return AssetService:CreateMeshPartAsync(mId, {
+							CollisionFidelity = obj.CollisionFidelity,
+							RenderFidelity = obj.RenderFidelity,
+						})
+					end)
+
+					local objStillValid = pcall(function()
+						return obj.Parent
+					end)
+					if not objStillValid or obj.Parent == nil then
+						if createOk and createdPart then
+							pcall(function()
+								createdPart:Destroy()
+							end)
+						end
+						break -- object was deleted during async yield, abort this property
+					end
+
+					local newPart: BasePart
+					if createOk and createdPart and createdPart:IsA("BasePart") then
+						newPart = createdPart
+					else
+						warn(
+							"[ISpooferMotion] Manual Swap: Failed to create MeshPart asynchronously. Falling back to Part+SpecialMesh."
 						)
-					)
+						local fallbackPart = Instance.new("Part")
+						local specialMesh = Instance.new("SpecialMesh")
+
+						local mId = targetMeshUri or obj.MeshId
+						if not string.match(mId, "^%a+://") and string.match(mId, "^%d+$") then
+							mId = "rbxassetid://" .. mId
+						end
+						specialMesh.MeshId = mId
+						specialMesh.Scale = Vector3.new(1, 1, 1)
+
+						local tId = targetTextureUri or obj.TextureID
+						if tId and tId ~= "" then
+							if not string.match(tId, "^%a+://") and string.match(tId, "^%d+$") then
+								tId = "rbxassetid://" .. tId
+							end
+							specialMesh.TextureId = tId
+						end
+
+						specialMesh.Parent = fallbackPart
+						newPart = fallbackPart
+					end
+
+					-- Safely copy properties and children
+					local copyOk, copyErr = pcall(function()
+						-- Ensure TextureID is formatted if it's changing
+						local formatTex = targetTextureUri
+						if
+							formatTex
+							and not string.match(formatTex, "^%a+://")
+							and string.match(formatTex, "^%d+$")
+						then
+							formatTex = "rbxassetid://" .. formatTex
+						end
+						copyMeshPartInto(obj, newPart, formatTex)
+					end)
+
+					if copyOk then
+						-- Swap parent
+						local parentOk = pcall(function()
+							newPart.Parent = obj.Parent
+						end)
+						if parentOk then
+							pcall(function()
+								obj:Destroy()
+							end)
+							replacedCount += 1
+							print(
+								string.format(
+									"[ISpooferMotion] Manual Swap: Recreated MeshPart %s",
+									newPart.Name
+								)
+							)
+						end
+					end
+					break
+				else
+					local assignOk, err = pcall(function()
+						-- For standard properties, just assign the new string
+						-- Roblox engine handles string -> Content coercion automatically
+						(obj :: any)[prop] = newVal
+					end)
+					if assignOk then
+						replacedCount += 1
+						print(
+							string.format(
+								"[ISpooferMotion] Manual Swap: %s.%s (%s -> %s)",
+								obj.Name,
+								prop,
+								oldId,
+								newId
+							)
+						)
+					end
 				end
 			end
 		end
 	end
 
 	local function processInstance(obj: Instance)
-		if obj:IsA("Decal") or obj:IsA("Texture") then
-			checkAndReplaceProperty(obj, "Texture")
+		-- Check all known asset properties using the API dump maps
+		local props = ASSET_PROPERTIES[obj.ClassName]
+		if props then
+			for _, prop in ipairs(props) do
+				checkAndReplaceProperty(obj, prop)
+			end
 		end
-		if obj:IsA("Animation") then
-			checkAndReplaceProperty(obj, "AnimationId")
+
+		local stringProps = STRING_SCAN_PROPERTIES[obj.ClassName]
+		if stringProps then
+			for _, prop in ipairs(stringProps) do
+				checkAndReplaceProperty(obj, prop)
+			end
 		end
-		if obj:IsA("Sound") then
-			checkAndReplaceProperty(obj, "SoundId")
-		end
-		if obj:IsA("MeshPart") then
-			checkAndReplaceProperty(obj, "TextureID")
-			checkAndReplaceProperty(obj, "MeshId")
-		end
-		if obj:IsA("SpecialMesh") or obj:IsA("FileMesh") then
-			checkAndReplaceProperty(obj, "TextureId")
-			checkAndReplaceProperty(obj, "MeshId")
-		end
-		if obj:IsA("SurfaceAppearance") then
-			checkAndReplaceProperty(obj, "ColorMap")
-			checkAndReplaceProperty(obj, "MetalnessMap")
-			checkAndReplaceProperty(obj, "NormalMap")
-			checkAndReplaceProperty(obj, "RoughnessMap")
-		end
-		if obj:IsA("ImageLabel") or obj:IsA("ImageButton") then
-			checkAndReplaceProperty(obj, "Image")
-		end
-		if obj:IsA("Shirt") then
-			checkAndReplaceProperty(obj, "ShirtTemplate")
-		end
-		if obj:IsA("Pants") then
-			checkAndReplaceProperty(obj, "PantsTemplate")
-		end
-		if obj:IsA("ShirtGraphic") then
-			checkAndReplaceProperty(obj, "Graphic")
-		end
-		if obj:IsA("CharacterMesh") then
-			checkAndReplaceProperty(obj, "MeshId")
-			checkAndReplaceProperty(obj, "BaseTextureId")
-			checkAndReplaceProperty(obj, "OverlayTextureId")
+
+		-- Handle Script source replacement safely
+		if obj:IsA("LuaSourceContainer") and obj.ClassName ~= "CoreScript" then
+			local ok, src = pcall(function()
+				return (obj :: any).Source
+			end)
+			if ok and src and type(src) == "string" then
+				local newSrc = src
+				local modified = false
+				for oldId, newId in pairs(mappings) do
+					-- Use safer patterns to avoid corrupting variable names
+
+					-- Replace plain numbers only if preceded by assignment, table syntax, or comma
+					local safePattern = "([=:{,]%s*)" .. oldId .. "(%f[%D])"
+					if string.find(newSrc, safePattern) then
+						newSrc = string.gsub(newSrc, safePattern, "%1" .. newId .. "%2")
+						modified = true
+					end
+
+					-- Explicit rbxassetid:// URI replacement
+					local rbxUriPattern = "rbxassetid://" .. oldId
+					if string.find(newSrc, rbxUriPattern, 1, true) then
+						newSrc = string.gsub(newSrc, rbxUriPattern, "rbxassetid://" .. newId)
+						modified = true
+					end
+
+					-- Explicit web URL replacement
+					local rbxUrlPattern = "(roblox%.com/[Aa]sset/%?[Ii][Dd]=)" .. oldId
+					if string.find(newSrc, rbxUrlPattern) then
+						newSrc = string.gsub(newSrc, rbxUrlPattern, "%1" .. newId)
+						modified = true
+					end
+				end
+
+				if modified then
+					local assignOk, err = pcall(function()
+						if ScriptEditorService then
+							ScriptEditorService:UpdateSourceAsync(obj :: any, function()
+								return newSrc
+							end)
+						else
+							(obj :: any).Source = newSrc
+						end
+					end)
+					if assignOk then
+						replacedCount += 1
+						print("[ISpooferMotion] Manual Swap: Updated Source in " .. obj.Name)
+					end
+				end
+			end
 		end
 	end
 

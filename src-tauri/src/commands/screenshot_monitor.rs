@@ -43,8 +43,8 @@ fn capture_matcher() -> &'static AhoCorasick {
 
 /// Spawns two background threads to detect potential screen captures.
 ///
-/// 1. A polling loop checking running process names against a known blacklist.
-/// 2. A global keyboard hook listening for Print Screen or Win+Shift+S.
+/// A polling loop checking running process names against a known blacklist.
+/// A global keyboard hook listening for Print Screen or Win+Shift+S.
 pub fn spawn_capture_monitor(app_handle: AppHandle) {
     let app_handle_poller = app_handle.clone();
     tauri::async_runtime::spawn(async move {
