@@ -233,6 +233,9 @@ export default function AssetExplorer({ isOpen, setIsOpen, onScanReceived }: Ass
         if (cancelled) return;
         setResolvedOwners((prev) => {
           const next = { ...prev };
+          for (const id of newIds) {
+            next[id] = { creatorId: '0', creatorType: 'None' };
+          }
           for (const item of resolved) {
             if (item.assetId && item.creatorId && item.creatorType) {
               next[item.assetId] = {
@@ -373,7 +376,33 @@ export default function AssetExplorer({ isOpen, setIsOpen, onScanReceived }: Ass
     if (stats.total === 0) return;
     if (stats.excluded === 0) return;
 
-    // Clear any pending log — ownership resolution may still be in progress
+    // Check if we are still scanning or parsing
+    const isScanning = scanStatus?.scanning || false;
+    const isParsing = parseState !== null;
+    if (isScanning || isParsing) return;
+
+    // Check if we have unresolved asset creators
+    const uniqueIds = new Set<string>();
+    const gatherIds = (nodes: RbxInstance[]) => {
+      for (const node of nodes) {
+        for (const asset of node.assets) {
+          const id = getAssetId(asset);
+          if (id && asset.type !== 'plugin' && !id.startsWith('RAW_KFS_')) {
+            uniqueIds.add(id);
+          }
+        }
+        if (node.children) gatherIds(node.children);
+      }
+    };
+    gatherIds(rootInstances);
+
+    const hasUnresolved = config.advanced.skipOwned && config.spoofing.cookie
+      ? Array.from(uniqueIds).some((id) => !resolvedOwners[id])
+      : false;
+
+    if (hasUnresolved) return;
+
+    // Clear any pending log
     if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
 
     debounceTimerRef.current = setTimeout(() => {
@@ -395,12 +424,12 @@ export default function AssetExplorer({ isOpen, setIsOpen, onScanReceived }: Ass
       const msg = `[INFO] Filtered ${stats.excluded} assets you already own (${parts}). Showing ${stats.displayed} remaining.\n`;
       setSpoofingLogs((prev) => appendSpoofingLog(prev, msg));
       logIsm('info', msg.trim(), false);
-    }, 2000); // Wait 2s for ownership resolution to stabilize
+    }, 1000); // Wait 1s for layout/renders to settle
 
     return () => {
       if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
     };
-  }, [stats, setSpoofingLogs]);
+  }, [stats, setSpoofingLogs, scanStatus, parseState, rootInstances, config, resolvedOwners]);
 
   const processStudioData = useCallback(
     (
