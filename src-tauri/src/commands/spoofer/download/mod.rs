@@ -233,7 +233,7 @@ pub async fn download_animation_asset_with_progress(
                 Ok(Ok(resp)) => resp,
                 Ok(Err(error)) => {
                     last_error = format!("Download request failed: {error}");
-                    if attempt < 2 {
+                    if attempt < 4 {
                         tokio::time::sleep(Duration::from_millis(1000 * (attempt + 1))).await;
                         continue;
                     }
@@ -241,7 +241,7 @@ pub async fn download_animation_asset_with_progress(
                 }
                 Err(_elapsed) => {
                     last_error = "Download request timed out.".to_string();
-                    if attempt < 2 {
+                    if attempt < 4 {
                         tokio::time::sleep(Duration::from_millis(1000 * (attempt + 1))).await;
                         continue;
                     }
@@ -320,6 +320,11 @@ pub async fn download_animation_asset_with_progress(
                 {
                     continue;
                 }
+            }
+
+            if status == reqwest::StatusCode::FORBIDDEN && attempt < 2 {
+                tokio::time::sleep(Duration::from_millis(1000 * (attempt + 1))).await;
+                continue;
             }
 
             if is_retryable_download_status(status) && attempt < 9 {

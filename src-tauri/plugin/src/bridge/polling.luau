@@ -270,7 +270,7 @@ function startPolling(): ()
 	task.spawn(function()
 		while polling do
 			local baseUrl = BASE_URL
-			if baseUrl and autoReplaceEnabled then
+			if baseUrl then
 				local patchOk, decoded = requestPollEndpoint(baseUrl, "/poll-replacements")
 
 				if not patchOk then

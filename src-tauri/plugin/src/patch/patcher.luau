@@ -557,13 +557,11 @@ local function applyPatches(patches: any)
 	)
 
 	-- Report failed patches back to the desktop app
-	if #failedPatchesList > 0 then
-		pcall(function()
-			postJson("/patch-results", {
-				failedPatches = failedPatchesList,
-			})
-		end)
-	end
+	pcall(function()
+		postJson("/patch-results", {
+			failedPatches = failedPatchesList,
+		})
+	end)
 
 	if succeeded > 0 then
 		setPluginGuiStatus("Replacements complete. Waiting for new scan or replacements...")
