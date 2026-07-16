@@ -17,7 +17,8 @@ This repository is a fork of [ISpooferMotion/ISpooferMotion-V2](https://github.c
   `[INFO] Filtered 6505 assets you already own (1375 animations, 894 sounds, 1495 images, 2741 meshes). Showing 15821 remaining.`
 * **Descriptive Totals:** The backend scan-complete notification (`server.rs`) and plugin log (`scanner.luau`) now report a breakdown of all discovered assets.
 
-### 3. 🎬 Resilient Animation Previews
+### 3. 🎬 Resilient Animation Previews (R6 & R15 Rig Compatibility)
+* **Roblox Rig Auto-Detection:** Fully supports both R6 and R15 rigs, automatically reconstructing their bone hierarchies, interpolating CFrames to render smooth 3D previews, and enabling manually toggling between R6/R15 rig styles.
 * **API Redirect Resolution:** Upgraded the Tauri Rust backend (`assets.rs`) to inspect Roblox API JSON payloads for direct asset location URLs (including `locations` array objects), resolving issues where animation preview asset retrievals would intermittently fail.
 
 ### 4. ⚡ Snippy Synchronization
