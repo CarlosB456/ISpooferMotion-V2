@@ -3,8 +3,10 @@ use std::collections::{HashMap, HashSet};
 use std::fs::{File, OpenOptions};
 use std::io::Write;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+use std::sync::Mutex;
 use tauri::{AppHandle, Emitter, Manager};
+use tokio::sync::Semaphore;
 
 use super::state::{begin_spoofer_job, finish_spoofer_job, wait_if_paused};
 use super::types::{AssetDetails, SpooferActionRequest};
@@ -13,6 +15,7 @@ use crate::commands::ipc::{append_log_entry, logging, redact_log_message};
 struct JobContext {
     job_id: String,
     cookie: String,
+    fallback_cookies: Option<Vec<String>>,
     api_key: String,
     group_id: Option<String>,
     upload_types: Vec<String>,
@@ -43,6 +46,9 @@ struct JobContext {
     asset_results: Mutex<Vec<serde_json::Value>>,
     log_file: Mutex<Option<File>>,
 
+    // Concurrency controls
+    download_semaphore: Arc<Semaphore>,
+
     // External handles
     client: reqwest::Client,
     app: AppHandle,
@@ -68,6 +74,12 @@ impl JobContext {
                 "level": level
             }),
         );
+
+        match level {
+            "error" => log::error!("[Spoofer] {}", redact_log_message(msg)),
+            "warn" => log::warn!("[Spoofer] {}", redact_log_message(msg)),
+            _ => log::info!("[Spoofer] {}", redact_log_message(msg)),
+        }
     }
 
     fn record_result(&self, result: serde_json::Value) {
@@ -236,6 +248,11 @@ pub async fn process_spoofer_action(
             }
         }
         let _ = app.emit("spoofer-log", serde_json::json!({ "message": msg, "level": level }));
+        match level {
+            "error" => log::error!("[Spoofer] {}", redact_log_message(msg)),
+            "warn" => log::warn!("[Spoofer] {}", redact_log_message(msg)),
+            _ => log::info!("[Spoofer] {}", redact_log_message(msg)),
+        }
     };
 
     temp_log("Starting spoofer job...", "info");
@@ -402,10 +419,17 @@ pub async fn process_spoofer_action(
         );
     }
 
-    let concurrent_enabled = data.concurrent.unwrap_or(false);
+    let concurrent_enabled = data.concurrent.unwrap_or(true);
+    let concurrent_downloading = data.concurrent_downloading.unwrap_or(true);
+
     let max_concurrency =
         data.max_concurrency.unwrap_or(if concurrent_enabled { 100 } else { 5 }).clamp(1, 100)
             as usize;
+    let max_download_concurrency = if concurrent_downloading {
+        data.max_download_concurrency.unwrap_or(max_concurrency as u32).clamp(1, 100) as usize
+    } else {
+        1
+    };
     crate::commands::spoofer::configure_adaptive_concurrency(max_concurrency);
 
     let mut excluded_users =
@@ -425,6 +449,7 @@ pub async fn process_spoofer_action(
     let ctx = Arc::new(JobContext {
         job_id: job_id.clone(),
         cookie,
+        fallback_cookies: data.fallback_cookies.clone(),
         api_key,
         group_id: data.group_id.clone(),
         upload_types: data.upload_types.clone().unwrap_or_else(|| {
@@ -458,6 +483,7 @@ pub async fn process_spoofer_action(
         replacements: dashmap::DashMap::new(),
         asset_results: Mutex::new(Vec::new()),
         log_file: Mutex::new(log_file_extracted),
+        download_semaphore: Arc::new(Semaphore::new(max_download_concurrency)),
         client,
         app: app.clone(),
     });
@@ -611,8 +637,9 @@ pub async fn process_spoofer_action(
                         Err(crate::error::AppError::Custom("Cannot spoof KeyframeSequences from binary .rbxl files. Please save the place as .rbxlx or use the Studio Plugin instead.".into()))
                     }
                 } else {
+                    let _dl_permit = ctx.download_semaphore.acquire().await.ok();
                     crate::commands::spoofer::download_animation_asset_with_progress(
-                        ctx.app.clone(), direct_url, ctx.cookie.clone(), file_path.clone(), format!("dl_{asset_id}"), exact_name.clone(), asset_id.clone(), Some(asset_type.clone()), place_id_arg, ctx.enable_archive_recovery, ctx.proxy_url.clone()
+                        ctx.app.clone(), direct_url, ctx.cookie.clone(), ctx.fallback_cookies.clone(), file_path.clone(), format!("dl_{asset_id}"), exact_name.clone(), asset_id.clone(), Some(asset_type.clone()), place_id_arg, ctx.enable_archive_recovery, ctx.proxy_url.clone()
                     ).await
                 };
 

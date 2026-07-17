@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { History, ScanLine, Settings, ChevronLeft, ChevronRight } from 'lucide-react';
+import { History, ScanLine, Settings, ChevronLeft, ChevronRight, Users } from 'lucide-react';
 
 import { useLanguage } from '../../contexts/LanguageContext';
 import { cn } from '../../utils/cn';
@@ -26,6 +26,7 @@ export default function Sidebar({
   const tabs = [
     { id: 'spoofing', label: t('nav.spoofing'), icon: <ScanLine size={18} /> },
     { id: 'activity', label: t('nav.activity'), icon: <History size={18} /> },
+    { id: 'accounts', label: 'Accounts', icon: <Users size={18} /> },
     { id: 'settings', label: t('nav.settings'), icon: <Settings size={18} /> },
   ];
 

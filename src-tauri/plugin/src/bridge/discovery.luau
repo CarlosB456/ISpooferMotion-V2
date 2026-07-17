@@ -98,21 +98,24 @@ local function discoverServer(): (boolean, boolean)
 	end
 	cancelled = true
 
-	local selectedHealth = nil
-	for _, result in ipairs(results) do
-		if result.startedAt > newestStartedAt then
-			newestUrl = result.url
-			newestStartedAt = result.startedAt
-			selectedHealth = result.health
+	table.sort(results, function(a, b)
+		return a.startedAt > b.startedAt
+	end)
+
+	if #results > 0 then
+		local best = results[1]
+		local changed = BASE_URL ~= best.url
+		BASE_URL = best.url
+
+		-- Update accent color if provided
+		if best.health and best.health.themeAccent then
+			if type(setThemeAccent) == "function" then
+				setThemeAccent(best.health.themeAccent)
+			end
 		end
+
+		return true, changed
 	end
 
-	if not newestUrl then
-		BASE_URL = nil
-		return false, false
-	end
-
-	local changed = BASE_URL ~= newestUrl
-	BASE_URL = newestUrl
-	return true, changed
+	return false, false
 end

@@ -22,7 +22,8 @@ pub async fn handle_studio_health(State(state): State<AppState>) -> Json<Value> 
         "synced": synced,
         "protocolVersion": STUDIO_PROTOCOL_VERSION,
         "scanStatus": guard.scan_status,
-        "studioPlaceId": guard.studio_place_id
+        "studioPlaceId": guard.studio_place_id,
+        "themeAccent": guard.theme_accent.clone()
     }))
 }
 

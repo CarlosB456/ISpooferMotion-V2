@@ -637,10 +637,7 @@ export default function AssetExplorer({ isOpen, setIsOpen, onScanReceived }: Ass
       !fileName.endsWith('.rbxm') &&
       !fileName.endsWith('.rbxmx')
     ) {
-      logIsm(
-        'warn',
-        `Only .rbxl, .rbxlx, .rbxm, and .rbxmx files are supported. Got: "${fileName}"`,
-      );
+      logIsm('warn', `Only .rbxl, .rbxlx files are supported. Got: "${fileName}"`);
       return;
     }
     setParsingFileName(fileName);

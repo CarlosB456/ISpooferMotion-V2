@@ -13,6 +13,10 @@ local CoreGui = game:GetService("CoreGui")
 local gui = nil
 local statusText = nil
 local logsScrollingFrame = nil
+local connectionStatusText = nil
+
+local currentAccentColor = Color3.fromHex("#10b981")
+local activeTabIndicators = {}
 
 --- Bootstraps the ScreenGui and injects it into CoreGui.
 ---
@@ -53,11 +57,113 @@ local function createPluginGui()
 	panelStroke.Thickness = 1
 	panelStroke.Parent = container
 
+	local containerGradient = Instance.new("UIGradient")
+	containerGradient.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Color3.fromHex("#111113")),
+		ColorSequenceKeypoint.new(1, Color3.fromHex("#09090b")),
+	})
+	containerGradient.Rotation = 45
+	containerGradient.Parent = container
+
 	local header = Instance.new("Frame")
 	header.Name = "Header"
 	header.Size = UDim2.new(1, 0, 0, 56)
 	header.BackgroundTransparency = 1
+	header.Active = true
 	header.Parent = container
+
+	-- Dragging Logic
+	local dragging = false
+	local dragInput = nil
+	local dragStart = nil
+	local startPos = nil
+
+	local function update(input)
+		local delta = input.Position - dragStart
+		container.Position = UDim2.new(
+			startPos.X.Scale,
+			startPos.X.Offset + delta.X,
+			startPos.Y.Scale,
+			startPos.Y.Offset + delta.Y
+		)
+	end
+
+	header.InputBegan:Connect(function(input)
+		if
+			input.UserInputType == Enum.UserInputType.MouseButton1
+			or input.UserInputType == Enum.UserInputType.Touch
+		then
+			dragging = true
+			dragStart = input.Position
+			startPos = container.Position
+
+			input.Changed:Connect(function()
+				if input.UserInputState == Enum.UserInputState.End then
+					dragging = false
+				end
+			end)
+		end
+	end)
+
+	header.InputChanged:Connect(function(input)
+		if
+			input.UserInputType == Enum.UserInputType.MouseMovement
+			or input.UserInputType == Enum.UserInputType.Touch
+		then
+			dragInput = input
+		end
+	end)
+
+	game:GetService("UserInputService").InputChanged:Connect(function(input)
+		if input == dragInput and dragging then
+			update(input)
+		end
+	end)
+
+	-- TweenService for animations
+	local TweenService = game:GetService("TweenService")
+	local tweenInfo = TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+	local rippleTweenInfo = TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+
+	--- Plays a ripple animation from the click position on a button.
+	--- The button must have ClipsDescendants = true to contain the circle.
+	local function ripple(button, x, y)
+		button.ClipsDescendants = true
+		local circle = Instance.new("Frame")
+		circle.Name = "Ripple"
+		circle.Size = UDim2.fromOffset(0, 0)
+
+		local localX = button.AbsoluteSize.X / 2
+		local localY = button.AbsoluteSize.Y / 2
+		if x and y then
+			localX = x - button.AbsolutePosition.X
+			localY = y - button.AbsolutePosition.Y
+		end
+
+		circle.Position = UDim2.fromOffset(localX, localY)
+		circle.AnchorPoint = Vector2.new(0.5, 0.5)
+		circle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+		circle.BackgroundTransparency = 0.75
+		circle.BorderSizePixel = 0
+		circle.ZIndex = button.ZIndex + 10
+		local circleCorner = Instance.new("UICorner")
+		circleCorner.CornerRadius = UDim.new(1, 0)
+		circleCorner.Parent = circle
+		circle.Parent = button
+		local targetSize = math.max(button.AbsoluteSize.X, button.AbsoluteSize.Y) * 2.5
+		TweenService:Create(circle, rippleTweenInfo, {
+			Size = UDim2.fromOffset(targetSize, targetSize),
+			BackgroundTransparency = 1,
+		}):Play()
+		task.delay(0.4, function()
+			circle:Destroy()
+		end)
+	end
+
+	--- Tweens a button's background color smoothly.
+	local function tweenBg(btn, color)
+		TweenService:Create(btn, tweenInfo, { BackgroundColor3 = color }):Play()
+	end
 
 	local icon = Instance.new("ImageLabel")
 	icon.Name = "Icon"
@@ -109,41 +215,27 @@ local function createPluginGui()
 
 	local copyLogsButton = Instance.new("TextButton")
 	copyLogsButton.Name = "CopyLogsButton"
-	copyLogsButton.Size = UDim2.fromOffset(100, 32)
-	copyLogsButton.Position = UDim2.new(1, -16, 0.5, 0)
+	copyLogsButton.Size = UDim2.fromOffset(92, 28)
+	copyLogsButton.Position = UDim2.new(1, -52, 0.5, 0)
 	copyLogsButton.AnchorPoint = Vector2.new(1, 0.5)
-	copyLogsButton.BackgroundColor3 = Color3.fromHex("#09090b")
+	copyLogsButton.BackgroundTransparency = 1
 	copyLogsButton.BorderSizePixel = 0
 	copyLogsButton.Font = Enum.Font.BuilderSansMedium
-	copyLogsButton.TextSize = 13
-	copyLogsButton.TextColor3 = Color3.fromHex("#fafafa")
+	copyLogsButton.TextSize = 12
+	copyLogsButton.TextColor3 = Color3.fromHex("#a1a1aa")
 	copyLogsButton.Text = "Export Logs"
 	copyLogsButton.AutoButtonColor = false
+	copyLogsButton.ClipsDescendants = true
 	copyLogsButton.Parent = header
 
-	local btnCorner = Instance.new("UICorner")
-	btnCorner.CornerRadius = UDim.new(0, 6)
-	btnCorner.Parent = copyLogsButton
-
-	local btnStroke = Instance.new("UIStroke")
-	btnStroke.Color = Color3.fromHex("#27272a")
-	btnStroke.Thickness = 1
-	btnStroke.Parent = copyLogsButton
-
 	copyLogsButton.MouseEnter:Connect(function()
-		copyLogsButton.BackgroundColor3 = Color3.fromHex("#27272a")
+		copyLogsButton.TextColor3 = Color3.fromHex("#fafafa")
 	end)
 	copyLogsButton.MouseLeave:Connect(function()
-		copyLogsButton.BackgroundColor3 = Color3.fromHex("#09090b")
+		copyLogsButton.TextColor3 = Color3.fromHex("#a1a1aa")
 	end)
-	copyLogsButton.MouseButton1Down:Connect(function()
-		copyLogsButton.BackgroundColor3 = Color3.fromHex("#18181b")
-	end)
-	copyLogsButton.MouseButton1Up:Connect(function()
-		copyLogsButton.BackgroundColor3 = Color3.fromHex("#27272a")
-	end)
-
 	copyLogsButton.MouseButton1Click:Connect(function()
+		ripple(copyLogsButton)
 		local logs = {}
 		if logsScrollingFrame then
 			for _, child in ipairs(logsScrollingFrame:GetChildren()) do
@@ -185,9 +277,44 @@ local function createPluginGui()
 			task.delay(1.5, function()
 				if copyLogsButton then
 					copyLogsButton.Text = "Export Logs"
+					copyLogsButton.TextColor3 = Color3.fromHex("#a1a1aa")
 				end
 			end)
 		end
+	end)
+
+	-- Removed header separator line per user request
+
+	local closeButton = Instance.new("TextButton")
+	closeButton.Name = "CloseButton"
+	closeButton.Size = UDim2.fromOffset(32, 32)
+	closeButton.Position = UDim2.new(1, -16, 0.5, 0)
+	closeButton.AnchorPoint = Vector2.new(1, 0.5)
+	closeButton.BackgroundTransparency = 1
+	closeButton.BorderSizePixel = 0
+	closeButton.Font = Enum.Font.BuilderSansExtraBold
+	closeButton.TextSize = 14
+	closeButton.TextColor3 = Color3.fromHex("#52525b")
+	closeButton.Text = "X"
+	closeButton.AutoButtonColor = false
+	closeButton.ClipsDescendants = true
+	closeButton.Parent = header
+
+	closeButton.MouseEnter:Connect(function()
+		TweenService:Create(closeButton, tweenInfo, { TextColor3 = Color3.fromHex("#ef4444") })
+			:Play()
+	end)
+	closeButton.MouseLeave:Connect(function()
+		TweenService:Create(closeButton, tweenInfo, { TextColor3 = Color3.fromHex("#52525b") })
+			:Play()
+	end)
+	closeButton.MouseButton1Click:Connect(function()
+		ripple(closeButton)
+		task.delay(0.1, function()
+			if gui then
+				gui.Enabled = false
+			end
+		end)
 	end)
 
 	-- Tab Bar
@@ -212,10 +339,11 @@ local function createPluginGui()
 		btn.BorderSizePixel = 0
 		btn.Font = Enum.Font.BuilderSansMedium
 		btn.TextSize = 13
-		btn.TextColor3 = isActive and Color3.fromHex("#ffffff") or Color3.fromHex("#a1a1aa")
+		btn.TextColor3 = isActive and Color3.fromHex("#ffffff") or Color3.fromHex("#71717a")
 		btn.Text = text
 		btn.AutoButtonColor = false
 		btn.LayoutOrder = order
+		btn.ClipsDescendants = true
 
 		local corner = Instance.new("UICorner")
 		corner.CornerRadius = UDim.new(0, 6)
@@ -226,19 +354,50 @@ local function createPluginGui()
 		stroke.Thickness = 1
 		stroke.Parent = btn
 
-		return btn
+		-- Active underline indicator
+		local indicator = Instance.new("Frame")
+		indicator.Name = "ActiveIndicator"
+		indicator.Size = UDim2.new(0.6, 0, 0, 2)
+		indicator.Position = UDim2.new(0.2, 0, 1, -3)
+		indicator.BackgroundColor3 = currentAccentColor
+		indicator.BackgroundTransparency = isActive and 0 or 1
+		indicator.BorderSizePixel = 0
+		local indCorner = Instance.new("UICorner")
+		indCorner.CornerRadius = UDim.new(1, 0)
+		indCorner.Parent = indicator
+		indicator.Parent = btn
+		table.insert(activeTabIndicators, indicator)
+
+		btn.MouseEnter:Connect(function()
+			if btn.BackgroundColor3 ~= Color3.fromHex("#18181b") then
+				tweenBg(btn, Color3.fromHex("#111114"))
+			end
+		end)
+		btn.MouseLeave:Connect(function()
+			if btn.BackgroundColor3 ~= Color3.fromHex("#18181b") then
+				tweenBg(btn, Color3.fromHex("#09090b"))
+			end
+		end)
+		btn.MouseButton1Click:Connect(function()
+			ripple(btn)
+		end)
+
+		return btn, indicator
 	end
 
-	local consoleTabBtn = createTabButton("ConsoleTab", "Console Logs", 1, true)
+	local consoleTabBtn, consoleIndicator = createTabButton("ConsoleTab", "Console", 1, true)
 	consoleTabBtn.Parent = tabBar
 
-	local manualTabBtn = createTabButton("ManualTab", "Manual Swap", 2, false)
+	local manualTabBtn, manualIndicator = createTabButton("ManualTab", "Manual Replace", 2, false)
 	manualTabBtn.Parent = tabBar
+
+	local settingsTabBtn, settingsIndicator = createTabButton("SettingsTab", "Settings", 3, false)
+	settingsTabBtn.Parent = tabBar
 
 	-- Containers
 	local contentArea = Instance.new("Frame")
 	contentArea.Name = "ContentArea"
-	contentArea.Size = UDim2.new(1, -32, 1, -104)
+	contentArea.Size = UDim2.new(1, -32, 1, -144)
 	contentArea.Position = UDim2.fromOffset(16, 96)
 	contentArea.BackgroundTransparency = 1
 	contentArea.Parent = container
@@ -247,12 +406,12 @@ local function createPluginGui()
 	local logsContainer = Instance.new("Frame")
 	logsContainer.Name = "LogsContainer"
 	logsContainer.Size = UDim2.fromScale(1, 1)
-	logsContainer.BackgroundColor3 = Color3.fromHex("#09090b")
+	logsContainer.BackgroundColor3 = Color3.fromHex("#0c0c0e")
 	logsContainer.BorderSizePixel = 0
 	logsContainer.Parent = contentArea
 
 	local logsCorner = Instance.new("UICorner")
-	logsCorner.CornerRadius = UDim.new(0, 6)
+	logsCorner.CornerRadius = UDim.new(0, 8)
 	logsCorner.Parent = logsContainer
 
 	local logsStroke = Instance.new("UIStroke")
@@ -308,7 +467,7 @@ local function createPluginGui()
 	local manualBox = Instance.new("TextBox")
 	manualBox.Name = "InputBox"
 	manualBox.Size = UDim2.new(1, 0, 1, -44)
-	manualBox.BackgroundColor3 = Color3.fromHex("#09090b")
+	manualBox.BackgroundColor3 = Color3.fromHex("#0c0c0e")
 	manualBox.BorderSizePixel = 0
 	manualBox.Font = Enum.Font.RobotoMono
 	manualBox.TextSize = 13
@@ -323,7 +482,7 @@ local function createPluginGui()
 	manualBox.Parent = manualContainer
 
 	local manualBoxCorner = Instance.new("UICorner")
-	manualBoxCorner.CornerRadius = UDim.new(0, 6)
+	manualBoxCorner.CornerRadius = UDim.new(0, 8)
 	manualBoxCorner.Parent = manualBox
 
 	local manualBoxStroke = Instance.new("UIStroke")
@@ -356,19 +515,19 @@ local function createPluginGui()
 	runBtnCorner.Parent = runManualBtn
 
 	runManualBtn.MouseEnter:Connect(function()
-		runManualBtn.BackgroundColor3 = Color3.fromHex("#3f3f46")
+		tweenBg(runManualBtn, Color3.fromHex("#3f3f46"))
 	end)
 	runManualBtn.MouseLeave:Connect(function()
-		runManualBtn.BackgroundColor3 = Color3.fromHex("#27272a")
+		tweenBg(runManualBtn, Color3.fromHex("#27272a"))
 	end)
 	runManualBtn.MouseButton1Down:Connect(function()
-		runManualBtn.BackgroundColor3 = Color3.fromHex("#18181b")
+		tweenBg(runManualBtn, Color3.fromHex("#18181b"))
 	end)
 	runManualBtn.MouseButton1Up:Connect(function()
-		runManualBtn.BackgroundColor3 = Color3.fromHex("#3f3f46")
+		tweenBg(runManualBtn, Color3.fromHex("#3f3f46"))
 	end)
-
 	runManualBtn.MouseButton1Click:Connect(function()
+		ripple(runManualBtn)
 		local txt = manualBox.Text
 		-- selene: allow(global_usage)
 		local _G_plugin = _G.ISpooferMotionPlugin
@@ -379,26 +538,230 @@ local function createPluginGui()
 		end
 	end)
 
+	-- SETTINGS CONTAINER
+	local settingsContainer = Instance.new("ScrollingFrame")
+	settingsContainer.Name = "SettingsContainer"
+	settingsContainer.Size = UDim2.fromScale(1, 1)
+	settingsContainer.BackgroundColor3 = Color3.fromHex("#09090b")
+	settingsContainer.BackgroundTransparency = 1
+	settingsContainer.BorderSizePixel = 0
+	settingsContainer.ScrollBarThickness = 6
+	settingsContainer.ScrollBarImageColor3 = Color3.fromHex("#27272a")
+	settingsContainer.CanvasSize = UDim2.new(0, 0, 0, 0)
+	settingsContainer.AutomaticCanvasSize = Enum.AutomaticSize.Y
+	settingsContainer.ScrollingEnabled = true
+	settingsContainer.Visible = false
+	settingsContainer.Parent = contentArea
+
+	local settingsList = Instance.new("UIListLayout")
+	settingsList.Parent = settingsContainer
+	settingsList.SortOrder = Enum.SortOrder.LayoutOrder
+	settingsList.Padding = UDim.new(0, 16)
+
+	local settingsPadding = Instance.new("UIPadding")
+	settingsPadding.PaddingLeft = UDim.new(0, 12)
+	settingsPadding.PaddingRight = UDim.new(0, 12)
+	settingsPadding.PaddingTop = UDim.new(0, 12)
+	settingsPadding.PaddingBottom = UDim.new(0, 12)
+	settingsPadding.Parent = settingsContainer
+
+	local function createSettingInput(order, key, labelText, descText, warningText, defaultValue)
+		local frame = Instance.new("Frame")
+		frame.Name = "Setting_" .. key
+		frame.Size = UDim2.new(1, 0, 0, 80)
+		frame.BackgroundTransparency = 1
+		frame.LayoutOrder = order
+		frame.Parent = settingsContainer
+
+		local label = Instance.new("TextLabel")
+		label.Name = "Label"
+		label.Size = UDim2.new(1, -120, 0, 20)
+		label.BackgroundTransparency = 1
+		label.Font = Enum.Font.BuilderSansBold
+		label.TextSize = 13
+		label.TextColor3 = Color3.fromHex("#fafafa")
+		label.TextXAlignment = Enum.TextXAlignment.Left
+		label.Text = labelText
+		label.Parent = frame
+
+		local desc = Instance.new("TextLabel")
+		desc.Name = "Description"
+		desc.Size = UDim2.new(1, -120, 0, 18)
+		desc.Position = UDim2.fromOffset(0, 22)
+		desc.BackgroundTransparency = 1
+		desc.Font = Enum.Font.BuilderSansMedium
+		desc.TextSize = 12
+		desc.TextColor3 = Color3.fromHex("#a1a1aa")
+		desc.TextXAlignment = Enum.TextXAlignment.Left
+		desc.TextYAlignment = Enum.TextYAlignment.Top
+		desc.TextWrapped = true
+		desc.Text = descText
+		desc.Parent = frame
+
+		local warning = Instance.new("TextLabel")
+		warning.Name = "Warning"
+		warning.Size = UDim2.new(1, -120, 0, 28)
+		warning.Position = UDim2.fromOffset(0, 44)
+		warning.BackgroundTransparency = 1
+		warning.Font = Enum.Font.BuilderSansMedium
+		warning.TextSize = 11
+		warning.TextColor3 = Color3.fromHex("#f97316") -- Orange 500
+		warning.TextXAlignment = Enum.TextXAlignment.Left
+		warning.TextYAlignment = Enum.TextYAlignment.Top
+		warning.TextWrapped = true
+		warning.Text = "⚠ " .. warningText
+		warning.Parent = frame
+
+		local inputContainer = Instance.new("Frame")
+		inputContainer.Size = UDim2.fromOffset(100, 32)
+		inputContainer.Position = UDim2.new(1, -100, 0, 24)
+		inputContainer.BackgroundColor3 = Color3.fromHex("#09090b")
+		inputContainer.Parent = frame
+
+		local inCorner = Instance.new("UICorner")
+		inCorner.CornerRadius = UDim.new(0, 6)
+		inCorner.Parent = inputContainer
+
+		local inStroke = Instance.new("UIStroke")
+		inStroke.Color = Color3.fromHex("#27272a")
+		inStroke.Thickness = 1
+		inStroke.Parent = inputContainer
+
+		local textBox = Instance.new("TextBox")
+		textBox.Size = UDim2.fromScale(1, 1)
+		textBox.BackgroundTransparency = 1
+		textBox.Font = Enum.Font.RobotoMono
+		textBox.TextSize = 13
+		textBox.TextColor3 = Color3.fromHex("#ffffff")
+
+		local currentVal = plugin:GetSetting(key)
+		if currentVal == nil then
+			currentVal = defaultValue
+		end
+		textBox.Text = tostring(currentVal)
+		textBox.Parent = inputContainer
+
+		textBox.FocusLost:Connect(function()
+			local num = tonumber(textBox.Text)
+			if num then
+				plugin:SetSetting(key, num)
+				inStroke.Color = Color3.fromHex("#10b981") -- flash green on save
+				task.delay(1, function()
+					inStroke.Color = Color3.fromHex("#27272a")
+				end)
+			else
+				textBox.Text = tostring(plugin:GetSetting(key) or defaultValue)
+				inStroke.Color = Color3.fromHex("#ef4444") -- flash red on invalid-
+				task.delay(1, function()
+					inStroke.Color = Color3.fromHex("#27272a")
+				end)
+			end
+		end)
+	end
+
+	createSettingInput(
+		-1,
+		"ISpooferMotion_PORT_START",
+		"Daemon Port Start",
+		"Starting port the plugin scans to discover the desktop daemon.",
+		"Lower: may miss the daemon if it binds above this port. Higher: narrows the scan range and may fail to connect.",
+		14285
+	)
+	createSettingInput(
+		2,
+		"ISpooferMotion_PORT_END",
+		"Daemon Port End",
+		"Ending port the plugin scans to discover the desktop daemon.",
+		"Lower than Port Start: scan will never succeed. Higher: scan takes longer but is more resilient to daemon port changes.",
+		14289
+	)
+	createSettingInput(
+		3,
+		"ISpooferMotion_SEND_CHUNK_SIZE",
+		"Scan Chunk Size",
+		"Max asset records packed into one HTTP request during a scan.",
+		"Lower: safer for huge games with slow HTTP, but scans take more round-trips. Higher: faster scans but may hit request size limits and cause errors.",
+		5000
+	)
+	createSettingInput(
+		4,
+		"ISpooferMotion_MAX_SCRIPT_BYTES",
+		"Max Script Size",
+		"Scripts larger than this (in bytes) are skipped entirely during scanning and patching.",
+		"Lower: large scripts with IDs inside them will be silently skipped and not replaced. Higher: very large scripts are read into memory - may crash Studio on low-RAM machines.",
+		8000000
+	)
+	createSettingInput(
+		5,
+		"ISpooferMotion_MAX_PATCHES",
+		"Max Patches Per Batch",
+		"Maximum number of asset replacements applied in one patch operation.",
+		"Lower: massive games may not get all IDs replaced in one run - re-run needed. Higher: very large batches can freeze Studio temporarily while changes are applied.",
+		10000
+	)
+	createSettingInput(
+		6,
+		"ISpooferMotion_MAX_HTTP_BODY",
+		"Max HTTP Body",
+		"Maximum byte size of a single outgoing HTTP payload to the daemon.",
+		"Lower: large scan payloads will be truncated or refused, causing incomplete scans. Higher: oversized payloads risk Studio memory spikes or timeouts on slow connections.",
+		10000000
+	)
+	createSettingInput(
+		7,
+		"ISpooferMotion_MAX_HTTP_RESP",
+		"Max HTTP Response",
+		"Maximum byte size accepted for a single HTTP response from the daemon.",
+		"Lower: large patch responses from the daemon will be rejected, causing failed replacements. Higher: very large responses consume more memory and may slow the UI.",
+		1000000
+	)
+
+	local restartNote = Instance.new("TextLabel")
+	restartNote.Name = "RestartNote"
+	restartNote.Size = UDim2.new(1, 0, 0, 40)
+	restartNote.BackgroundTransparency = 1
+	restartNote.LayoutOrder = 100
+	restartNote.Font = Enum.Font.BuilderSansMedium
+	restartNote.TextSize = 12
+	restartNote.TextColor3 = Color3.fromHex("#38bdf8")
+	restartNote.TextXAlignment = Enum.TextXAlignment.Center
+	restartNote.Text =
+		"Note: You may need to reload the plugin or restart Studio for some settings to take effect."
+	restartNote.Parent = settingsContainer
+
 	-- Tab Switching Logic
+	local ALL_TABS = {
+		{ btn = consoleTabBtn, ind = consoleIndicator },
+		{ btn = manualTabBtn, ind = manualIndicator },
+		{ btn = settingsTabBtn, ind = settingsIndicator },
+	}
+
 	local function switchTab(tab)
+		-- Deactivate all
+		for _, t in ipairs(ALL_TABS) do
+			tweenBg(t.btn, Color3.fromHex("#09090b"))
+			t.btn.TextColor3 = Color3.fromHex("#71717a")
+			TweenService:Create(t.ind, tweenInfo, { BackgroundTransparency = 1 }):Play()
+		end
+		logsContainer.Visible = false
+		manualContainer.Visible = false
+		settingsContainer.Visible = false
+
 		if tab == "console" then
-			consoleTabBtn.BackgroundColor3 = Color3.fromHex("#18181b")
+			tweenBg(consoleTabBtn, Color3.fromHex("#18181b"))
 			consoleTabBtn.TextColor3 = Color3.fromHex("#ffffff")
-			manualTabBtn.BackgroundColor3 = Color3.fromHex("#09090b")
-			manualTabBtn.TextColor3 = Color3.fromHex("#a1a1aa")
-
+			TweenService:Create(consoleIndicator, tweenInfo, { BackgroundTransparency = 0 }):Play()
 			logsContainer.Visible = true
-			manualContainer.Visible = false
-			copyLogsButton.Visible = true
-		else
-			manualTabBtn.BackgroundColor3 = Color3.fromHex("#18181b")
+		elseif tab == "manual" then
+			tweenBg(manualTabBtn, Color3.fromHex("#18181b"))
 			manualTabBtn.TextColor3 = Color3.fromHex("#ffffff")
-			consoleTabBtn.BackgroundColor3 = Color3.fromHex("#09090b")
-			consoleTabBtn.TextColor3 = Color3.fromHex("#a1a1aa")
-
-			logsContainer.Visible = false
+			TweenService:Create(manualIndicator, tweenInfo, { BackgroundTransparency = 0 }):Play()
 			manualContainer.Visible = true
-			copyLogsButton.Visible = false
+		elseif tab == "settings" then
+			tweenBg(settingsTabBtn, Color3.fromHex("#18181b"))
+			settingsTabBtn.TextColor3 = Color3.fromHex("#ffffff")
+			TweenService:Create(settingsIndicator, tweenInfo, { BackgroundTransparency = 0 }):Play()
+			settingsContainer.Visible = true
 		end
 	end
 
@@ -408,20 +771,38 @@ local function createPluginGui()
 	manualTabBtn.MouseButton1Click:Connect(function()
 		switchTab("manual")
 	end)
+	settingsTabBtn.MouseButton1Click:Connect(function()
+		switchTab("settings")
+	end)
+
+	connectionStatusText = Instance.new("TextLabel")
+	connectionStatusText.Name = "ConnectionStatusText"
+	connectionStatusText.Size = UDim2.new(1, 0, 0, 20)
+	connectionStatusText.Position = UDim2.new(0.5, 0, 1, -8)
+	connectionStatusText.AnchorPoint = Vector2.new(0.5, 1)
+	connectionStatusText.BackgroundTransparency = 1
+	connectionStatusText.Font = Enum.Font.BuilderSansMedium
+	connectionStatusText.TextSize = 13
+	connectionStatusText.TextColor3 = Color3.fromHex("#ef4444")
+	connectionStatusText.TextXAlignment = Enum.TextXAlignment.Center
+	connectionStatusText.Text = "Disconnected from Desktop App"
+	connectionStatusText.Parent = container
 
 	return gui
 end
 
 local logCounter = 0
+local logConnection = nil
 local LogService = game:GetService("LogService")
 
-LogService.MessageOut:Connect(function(message, messageType)
+logConnection = LogService.MessageOut:Connect(function(message, messageType)
 	if not logsScrollingFrame then
 		return
 	end
 
-	-- We want to show everything from ISpooferMotion
-	if string.find(message, "[ISpooferMotion]", 1, true) then
+	local isIsm = string.find(message, "[ISpooferMotion]", 1, true)
+
+	if isIsm then
 		logCounter += 1
 		local logLabel = Instance.new("TextLabel")
 		logLabel.Name = "Log_" .. logCounter
@@ -495,8 +876,14 @@ function hidePluginGui()
 		gui = nil
 		statusText = nil
 		logsScrollingFrame = nil
+		connectionStatusText = nil
 		-- Reset counter so eviction logic works correctly when the GUI is recreated.
 		logCounter = 0
+	end
+
+	if logConnection then
+		logConnection:Disconnect()
+		logConnection = nil
 	end
 end
 
@@ -507,5 +894,37 @@ function togglePluginGui()
 	end
 	if gui then
 		gui.Enabled = not gui.Enabled
+	end
+end
+
+--- Updates the visual connection status indicator
+function setConnectionStatus(isConnected)
+	if not gui then
+		createPluginGui()
+	end
+	if connectionStatusText then
+		if isConnected then
+			connectionStatusText.Text = "Connected to Desktop App"
+			connectionStatusText.TextColor3 = currentAccentColor
+		else
+			connectionStatusText.Text = "Disconnected from Desktop App"
+			connectionStatusText.TextColor3 = Color3.fromHex("#ef4444")
+		end
+	end
+end
+
+--- Updates the current accent color and applies it to relevant elements.
+function setThemeAccent(hex)
+	if hex and type(hex) == "string" then
+		pcall(function()
+			local c = Color3.fromHex(hex)
+			currentAccentColor = c
+			for _, ind in ipairs(activeTabIndicators) do
+				ind.BackgroundColor3 = c
+			end
+			if connectionStatusText and string.find(connectionStatusText.Text, "Connected") then
+				connectionStatusText.TextColor3 = c
+			end
+		end)
 	end
 end

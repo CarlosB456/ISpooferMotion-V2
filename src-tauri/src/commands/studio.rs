@@ -77,6 +77,13 @@ pub async fn push_to_studio(
     }
 }
 
+#[tauri::command]
+#[specta::specta]
+pub async fn set_plugin_theme_accent(color: String) -> Result<(), String> {
+    crate::studio_bridge::set_theme_accent(color).await;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

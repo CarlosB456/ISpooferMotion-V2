@@ -215,7 +215,7 @@ export default function ActivityView() {
                           {job.logFilePath && (
                             <button
                               type="button"
-                              onClick={(e) => handleOpenLog(job.logFilePath, e)}
+                              onClick={(e) => handleOpenLog(job.logFilePath!, e)}
                               className="flex items-center text-[13px] font-medium text-muted-foreground hover:text-foreground transition-colors"
                             >
                               <FileText size={14} className="mr-1.5" />
@@ -257,7 +257,9 @@ export default function ActivityView() {
                               </div>
                               <div className="flex items-center gap-3">
                                 {res.newId && (
-                                  <span className="font-mono text-green-500">→ {res.newId}</span>
+                                  <span className="font-mono text-green-500">
+                                    &rarr; {res.newId}
+                                  </span>
                                 )}
                                 {res.errorReason && (
                                   <span

@@ -20,7 +20,9 @@ export const AppConfigSchema = z.object({
     excludedUserIds: z.string().default(''),
     excludedGroupIds: z.string().default(''),
     concurrentSpoofing: z.boolean().default(true),
+    concurrentDownloading: z.boolean().default(true),
     maxConcurrency: z.number().default(50),
+    maxDownloadConcurrency: z.number().default(10),
     enableArchiveRecovery: z.boolean().default(false),
     proxyUrl: z.string().default(''),
   }),
@@ -56,6 +58,19 @@ export const AppConfigSchema = z.object({
       .default(['credentials', 'assetProcessing', 'routing', 'exclusions']),
     spoofingSections: z.array(z.string()).default(['targets', 'execution']),
   }),
+  accounts: z
+    .array(
+      z.object({
+        id: z.string(),
+        name: z.string(),
+        avatarUrl: z.string().optional(),
+        isDownloader: z.boolean().default(false),
+        isUploader: z.boolean().default(false),
+        cookieValidated: z.boolean().optional(),
+        apiKeyValidated: z.boolean().optional(),
+      }),
+    )
+    .default([]),
 });
 
 export type AppConfig = z.infer<typeof AppConfigSchema>;
@@ -77,7 +92,9 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
     excludedUserIds: '',
     excludedGroupIds: '',
     concurrentSpoofing: true,
+    concurrentDownloading: true,
     maxConcurrency: 100,
+    maxDownloadConcurrency: 10,
     enableArchiveRecovery: false,
     proxyUrl: '',
   },
@@ -111,6 +128,7 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
     configSections: ['credentials', 'assetProcessing', 'routing', 'exclusions'],
     spoofingSections: ['targets', 'execution'],
   },
+  accounts: [],
 };
 
 /**
@@ -146,6 +164,7 @@ const mergeSections = (savedSections: unknown, defaultSections: string[]) => {
 
 interface ConfigState {
   config: AppConfig;
+  accountSecrets: Record<string, { cookie?: string; apiKey?: string }>;
   updateConfig: <C extends keyof AppConfig, K extends keyof AppConfig[C]>(
     c: C,
     k: K,
@@ -155,6 +174,8 @@ interface ConfigState {
   resetConfig: () => void;
   loadSecrets: () => Promise<void>;
   saveSecrets: () => Promise<void>;
+  updateAccountSecret: (accountId: string, cookie?: string, apiKey?: string) => Promise<void>;
+  updateAccountsList: (accounts: AppConfig['accounts']) => void;
 }
 
 /**
@@ -188,6 +209,7 @@ export const useConfigStore = create<ConfigState>((set, get) => {
             DEFAULT_APP_CONFIG.ui.spoofingSections,
           ),
         },
+        accounts: p.accounts || DEFAULT_APP_CONFIG.accounts,
       };
       initConfig.spoofing.cookie = '';
       initConfig.spoofing.apiKey = '';
@@ -209,6 +231,7 @@ export const useConfigStore = create<ConfigState>((set, get) => {
 
   return {
     config: initConfig,
+    accountSecrets: {},
     updateConfig: (cat, key, val) => {
       set((state) => {
         const n = {
@@ -221,6 +244,13 @@ export const useConfigStore = create<ConfigState>((set, get) => {
       if (cat === 'spoofing' && (key === 'cookie' || key === 'apiKey')) {
         get().saveSecrets();
       }
+    },
+    updateAccountsList: (accounts) => {
+      set((state) => {
+        const n = { ...state.config, accounts };
+        saveToStorage(n);
+        return { config: n };
+      });
     },
     updateCategory: (cat, vals) => {
       set((state) => {
@@ -245,29 +275,29 @@ export const useConfigStore = create<ConfigState>((set, get) => {
           cookie?: string;
           apiKey?: string;
           profileCookies?: Record<string, string>;
+          accountSecrets?: Record<string, { cookie?: string; apiKey?: string }>;
         }
         const s: ProfileSecrets = await invoke('load_profile_secrets');
-        if (s && (s.cookie || s.apiKey)) {
-          set((state) => {
-            const selectedUser = state.config.spoofing.selectedUser;
-            const profileCookie =
-              selectedUser !== 'none' && typeof s.profileCookies?.[selectedUser] === 'string'
-                ? s.profileCookies[selectedUser]
-                : '';
-            return {
-              config: {
-                ...state.config,
-                spoofing: {
-                  ...state.config.spoofing,
-                  cookie:
-                    profileCookie ||
-                    (typeof s.cookie === 'string' ? s.cookie : state.config.spoofing.cookie),
-                  apiKey: typeof s.apiKey === 'string' ? s.apiKey : state.config.spoofing.apiKey,
-                },
+        set((state) => {
+          const selectedUser = state.config.spoofing.selectedUser;
+          const profileCookie =
+            selectedUser !== 'none' && typeof s.profileCookies?.[selectedUser] === 'string'
+              ? s.profileCookies[selectedUser]
+              : '';
+          return {
+            accountSecrets: s.accountSecrets || {},
+            config: {
+              ...state.config,
+              spoofing: {
+                ...state.config.spoofing,
+                cookie:
+                  profileCookie ||
+                  (typeof s.cookie === 'string' ? s.cookie : state.config.spoofing.cookie),
+                apiKey: typeof s.apiKey === 'string' ? s.apiKey : state.config.spoofing.apiKey,
               },
-            };
-          });
-        }
+            },
+          };
+        });
       } catch (e) {
         console.warn('Failed to load profile secrets from backend', e);
       }
@@ -276,7 +306,8 @@ export const useConfigStore = create<ConfigState>((set, get) => {
       if (!isTauriRuntime()) return;
       try {
         const { invoke } = await import('@tauri-apps/api/core');
-        const c = get().config.spoofing;
+        const state = get();
+        const c = state.config.spoofing;
         const profileCookies: Record<string, string> = {};
         if (c.selectedUser !== 'none' && c.cookie) {
           profileCookies[c.selectedUser] = c.cookie;
@@ -286,11 +317,22 @@ export const useConfigStore = create<ConfigState>((set, get) => {
             cookie: c.cookie,
             apiKey: c.apiKey,
             profileCookies,
+            accountSecrets: state.accountSecrets,
           },
         });
       } catch (e) {
         console.error('Failed to save secrets:', e);
       }
+    },
+    updateAccountSecret: async (accountId: string, cookie?: string, apiKey?: string) => {
+      set((state) => {
+        const newSecrets = { ...state.accountSecrets };
+        if (!newSecrets[accountId]) newSecrets[accountId] = {};
+        if (cookie !== undefined) newSecrets[accountId].cookie = cookie;
+        if (apiKey !== undefined) newSecrets[accountId].apiKey = apiKey;
+        return { accountSecrets: newSecrets };
+      });
+      await get().saveSecrets();
     },
   };
 });

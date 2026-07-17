@@ -22,7 +22,7 @@ pub use validation::{
 /// non-printable characters that cause `HeaderValue::from_str` to reject an
 /// otherwise valid token.
 pub(crate) fn sanitize_cookie_value(raw: &str) -> String {
-    raw.trim().chars().filter(|c| *c >= '\x20' && *c <= '\x7E').collect()
+    raw.trim().trim_matches('"').chars().filter(|c| *c >= '\x20' && *c <= '\x7E').collect()
 }
 
 #[derive(Deserialize)]

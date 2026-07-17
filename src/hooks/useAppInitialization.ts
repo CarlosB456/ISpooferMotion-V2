@@ -9,10 +9,10 @@ import { isTauriRuntime } from '../utils/tauriRuntime';
  * Bootstraps the ISpooferMotion React environment on startup.
  *
  * This hook is responsible for:
- * 1. Pinging the Roblox API to detect if the platform is down.
- * 2. Fetching remote killswitches (Maintenance Mode) from our config server.
- * 3. Starting the telemetry heartbeat.
- * 4. Registering global OS shortcuts (like Alt+I to summon the window).
+ * Pinging the Roblox API to detect if the platform is down.
+ * Fetching remote killswitches (Maintenance Mode) from our config server.
+ * Starting the telemetry heartbeat.
+ * Registering global OS shortcuts (like Alt+I to summon the window).
  */
 export function useAppInitialization() {
   const [maintenance, setMaintenance] = useState<{ mode: boolean; message: string }>({
@@ -21,7 +21,7 @@ export function useAppInitialization() {
   });
   const [isRobloxApiDown, setIsRobloxApiDown] = useState(false);
 
-  // 1. Check Roblox API Status
+  // Check Roblox API Status
   useEffect(() => {
     if (!isTauriRuntime()) return;
 
@@ -38,7 +38,7 @@ export function useAppInitialization() {
     return () => clearInterval(interval);
   }, []);
 
-  // 2. Fetch remote config (Maintenance Mode)
+  // Fetch remote config (Maintenance Mode)
   useEffect(() => {
     const fetchConfig = async () => {
       try {
@@ -66,7 +66,7 @@ export function useAppInitialization() {
     fetchConfig();
   }, []);
 
-  // 3. Heartbeat
+  // Heartbeat
   useEffect(() => {
     if (!isTauriRuntime()) return;
     const sendHeartbeat = async () => {
@@ -99,7 +99,7 @@ export function useAppInitialization() {
     return () => clearInterval(interval);
   }, []);
 
-  // 4. Global Shortcuts & Dragging Prevention
+  // Global Shortcuts & Dragging Prevention
   useEffect(() => {
     const preventDrag = (e: Event) => e.preventDefault();
     window.addEventListener('dragover', preventDrag);

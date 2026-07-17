@@ -472,6 +472,10 @@ pub async fn publish_asset_with_progress(
             }
 
             if status_code == 409 {
+                // Reset fallbacks so they can be tried again with the new payload if it also 400s
+                tried_type_fallback = false;
+                tried_name_fallback = false;
+
                 let mut mutable_buffer = if let Some(buf) = fallback_buffer.take() {
                     buf
                 } else {

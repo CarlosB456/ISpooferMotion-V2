@@ -581,6 +581,7 @@ pub async fn batch_download_assets_concurrent(
                     app,
                     task.direct_url,
                     cookie,
+                    None,
                     task.file_path,
                     task.transfer_id,
                     task.name,

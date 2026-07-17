@@ -33,16 +33,33 @@ export default function RoutingSection() {
       </div>
 
       {config.advanced.concurrentSpoofing && (
-        <div className="flex flex-col gap-1.5">
-          <Label>{t('settings.maxConcurrency')}</Label>
-          <Input
-            type="number"
-            value={config.advanced.maxConcurrency.toString()}
-            onChange={(e) =>
-              updateConfig('advanced', 'maxConcurrency', parseInt(e.target.value, 10) || 100)
-            }
-          />
-        </div>
+        <>
+          <div className="flex flex-col gap-1.5">
+            <Label>{t('settings.maxConcurrency')}</Label>
+            <Input
+              type="number"
+              value={config.advanced.maxConcurrency.toString()}
+              onChange={(e) =>
+                updateConfig('advanced', 'maxConcurrency', parseInt(e.target.value, 10) || 100)
+              }
+            />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label>{t('settings.maxDownloadConcurrency')}</Label>
+            <Input
+              type="number"
+              value={config.advanced.maxDownloadConcurrency.toString()}
+              onChange={(e) =>
+                updateConfig(
+                  'advanced',
+                  'maxDownloadConcurrency',
+                  parseInt(e.target.value, 10) || 10,
+                )
+              }
+            />
+          </div>
+        </>
       )}
     </div>
   );

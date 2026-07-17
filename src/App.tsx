@@ -18,6 +18,7 @@ const DebugConsole = lazy(() => import('./components/views/DebugConsole'));
 
 const SettingsView = lazy(() => import('./components/views/SettingsView'));
 const SpoofingView = lazy(() => import('./components/views/SpoofingView'));
+const AccountsView = lazy(() => import('./components/views/accounts/AccountsView'));
 
 /**
  * The root component of the ISpooferMotion React application.
@@ -84,6 +85,7 @@ export default function App() {
                 <AnimatePresence mode="wait" initial={false}>
                   {activeTab === 'spoofing' && <SpoofingView key="spoofing" />}
                   {activeTab === 'activity' && <ActivityView key="activity" />}
+                  {activeTab === 'accounts' && <AccountsView key="accounts" />}
                   {activeTab === 'settings' && <SettingsView key="settings" />}
                 </AnimatePresence>
               </Suspense>

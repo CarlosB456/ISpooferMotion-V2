@@ -5,10 +5,10 @@ import { relaunch } from '@tauri-apps/plugin-process';
 /**
  * Orchestrates the startup splash screen sequence.
  *
- * 1. Checks the GitHub Releases API for Tauri bundle updates.
- * 2. Prompts the user to download or skip if an update is found.
- * 3. Triggers the Rust backend to silently copy the `.rbxmx` plugin to Studio.
- * 4. Kills the splash window and boots the main React app.
+ * Checks the GitHub Releases API for Tauri bundle updates.
+ * Prompts the user to download or skip if an update is found.
+ * Triggers the Rust backend to silently copy the `.rbxmx` plugin to Studio.
+ * Kills the splash window and boots the main React app.
  */
 async function runSplashFlow() {
   const statusText = document.getElementById('status-text');
@@ -43,8 +43,9 @@ async function runSplashFlow() {
     const btnDownload = document.getElementById('btn-download');
 
     if (spinner && updateActions && btnSkip && btnDownload) {
-      spinner.style.display = 'none';
-      updateActions.style.display = 'flex';
+      spinner.classList.add('hidden');
+      updateActions.classList.remove('hidden');
+      updateActions.classList.add('flex');
 
       // Disable dragging on the buttons
       btnSkip.classList.remove('drag-region');
@@ -55,10 +56,11 @@ async function runSplashFlow() {
         btnDownload.onclick = () => resolve('download');
       });
 
-      updateActions.style.display = 'none';
+      updateActions.classList.add('hidden');
+      updateActions.classList.remove('flex');
 
       if (userChoice === 'download') {
-        spinner.style.display = 'block';
+        spinner.classList.remove('hidden');
         if (statusText) {
           statusText.innerText = `Downloading update v${update.version}...`;
         }
@@ -91,7 +93,7 @@ async function runSplashFlow() {
         return; // App will restart, no need to continue
       } else {
         // Skip was clicked, continue to normal flow
-        spinner.style.display = 'block';
+        spinner.classList.remove('hidden');
       }
     }
   }

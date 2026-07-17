@@ -9,9 +9,9 @@
 --- Manages the main communication loops with the daemon.
 ---
 --- This module runs three concurrent loops:
---- 1. Discovery/Health: Keeps the connection alive and reconnects if dropped.
---- 2. Scan Poller: Waits for the daemon to request a workspace scan.
---- 3. Patch Poller: Waits for targeted replacements from the daemon.
+--- Discovery/Health: Keeps the connection alive and reconnects if dropped.
+--- Scan Poller: Waits for the daemon to request a workspace scan.
+--- Patch Poller: Waits for targeted replacements from the daemon.
 
 --- Helper to hit a polling endpoint and return the parsed JSON response.
 local function requestPollEndpoint(baseUrl: string, endpoint: string): (boolean, any, number?)
@@ -229,6 +229,7 @@ function startPolling(): ()
 				lastDiscovery = os.clock()
 				if connected and changed and BASE_URL then
 					logToPlugin("[ISpooferMotion] Connected to " .. BASE_URL)
+					setConnectionStatus(true)
 					setPluginGuiStatus("Waiting for scan or replacements...")
 					task.spawn(fetchApiDumpProperties)
 				end
@@ -245,6 +246,7 @@ function startPolling(): ()
 
 				if not pollOk then
 					logToPlugin("[Warning] " .. "[ISpooferMotion] Lost connection to " .. baseUrl)
+					setConnectionStatus(false)
 					setPluginGuiStatus("Lost connection; reconnecting...")
 					BASE_URL = nil
 					-- Also clear autoReplace so stale patches are not applied on reconnect.
@@ -275,6 +277,7 @@ function startPolling(): ()
 
 				if not patchOk then
 					logToPlugin("[Warning] " .. "[ISpooferMotion] Lost connection to " .. baseUrl)
+					setConnectionStatus(false)
 					BASE_URL = nil
 					-- Clear autoReplace so we don't immediately re-apply on reconnect.
 					autoReplaceEnabled = false
